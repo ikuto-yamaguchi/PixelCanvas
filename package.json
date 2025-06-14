@@ -1,0 +1,26 @@
+{
+  "name": "pixel-canvas",
+  "version": "1.0.0",
+  "description": "PixelCanvas MVP application",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'Build script placeholder - configure based on your framework'",
+    "test": "echo 'Test script placeholder - configure based on your testing setup'",
+    "dev": "echo 'Development server placeholder - configure based on your framework'",
+    "start": "echo 'Start script placeholder - configure based on your framework'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/pixel-canvas.git"
+  },
+  "keywords": [
+    "pixel",
+    "canvas",
+    "drawing",
+    "supabase"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

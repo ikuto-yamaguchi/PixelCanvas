@@ -1,0 +1,54 @@
+# A string used to distinguish different Supabase projects on the same machine.
+# Not required if you have a single project.
+project_id = "lgvjdefkyeuvquzckkvb"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+enabled = true
+port = 54320
+external_url = "http://localhost:54321"
+jwt_expiry = 3600
+refresh_token_rotation_enabled = true
+secure_password_change_enabled = false
+enable_registrations = true
+enable_phone_signup = true
+enable_phone_autoconfirm = false
+enable_manual_linking = false
+
+[db]
+port = 54322
+major_version = 15
+
+[edge_functions]
+enabled = true
+port = 54323
+inspector_port = 8083
+
+[inbucket]
+enabled = true
+port = 54324
+
+[realtime]
+enabled = true
+port = 54325
+ip_version = "ipv4"
+
+[storage]
+enabled = true
+port = 54326
+file_size_limit = "50MiB"
+image_transformation = {
+  enabled = true
+}
+
+[analytics]
+enabled = false
+port = 54327
+vector_port = 54328
+gql_port = 54329
