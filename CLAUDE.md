@@ -65,3 +65,10 @@ curl -X POST -H "Authorization: Bearer sbp_015b2158d74b1624eec097e0d445b207cd5eb
 
 curl -X POST -H "Authorization: Bearer sbp_015b2158d74b1624eec097e0d445b207cd5ebf04" -H "Content-Type: application/json" -d '{"query": "DROP TABLE IF EXISTS public.sample_messages;")}' https://api.supabase.com/v1/projects/lgvjdefkyeuvquzckkvb/database/query
 ```
+
+## PixelCanvas開発ルール
+**重要**: ドキュメント先行開発を厳守すること
+1. 実装前に必ず設計書・仕様書を確認し、必要に応じて更新する
+2. 設計変更が必要な場合は、まずドキュメントを修正してから実装に移る
+3. 各実装ステップは DEVELOPMENT_FLOW.md に従って進める
+4. フロントエンドのサイズ制限を厳守（JS合計 < 25KB）

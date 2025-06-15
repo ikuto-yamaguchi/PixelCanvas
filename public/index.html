@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="description" content="PixelCanvas - 共同ピクセルアートプラットフォーム">
+    <title>PixelCanvas</title>
+    
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.webmanifest">
+    
+    <link rel="preconnect" href="https://lgvjdefkyeuvquzckkvb.supabase.co">
+    <link rel="dns-prefetch" href="https://lgvjdefkyeuvquzckkvb.supabase.co">
+</head>
+<body>
+    <header class="header">
+        <h1 class="header__title">PixelCanvas</h1>
+        <div class="header__status">
+            <span class="status-indicator" id="status"></span>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="canvas-container" id="canvasContainer">
+            <canvas id="mainCanvas" class="canvas"></canvas>
+            <div class="canvas-overlay" id="canvasOverlay"></div>
+        </div>
+    </main>
+
+    <footer class="controls">
+        <div class="color-palette" id="colorPalette">
+            <button class="color-button" data-color="0" style="background-color: #000000" aria-label="Black"></button>
+            <button class="color-button" data-color="1" style="background-color: #FFFFFF" aria-label="White"></button>
+            <button class="color-button" data-color="2" style="background-color: #FF0000" aria-label="Red"></button>
+            <button class="color-button" data-color="3" style="background-color: #00FF00" aria-label="Green"></button>
+            <button class="color-button" data-color="4" style="background-color: #0000FF" aria-label="Blue"></button>
+            <button class="color-button" data-color="5" style="background-color: #FFFF00" aria-label="Yellow"></button>
+            <button class="color-button" data-color="6" style="background-color: #FF00FF" aria-label="Magenta"></button>
+            <button class="color-button" data-color="7" style="background-color: #00FFFF" aria-label="Cyan"></button>
+            <button class="color-button" data-color="8" style="background-color: #800000" aria-label="Dark Red"></button>
+            <button class="color-button" data-color="9" style="background-color: #008000" aria-label="Dark Green"></button>
+            <button class="color-button" data-color="10" style="background-color: #000080" aria-label="Dark Blue"></button>
+            <button class="color-button" data-color="11" style="background-color: #808000" aria-label="Olive"></button>
+            <button class="color-button" data-color="12" style="background-color: #800080" aria-label="Purple"></button>
+            <button class="color-button" data-color="13" style="background-color: #008080" aria-label="Teal"></button>
+            <button class="color-button" data-color="14" style="background-color: #C0C0C0" aria-label="Silver"></button>
+            <button class="color-button" data-color="15" style="background-color: #808080" aria-label="Gray"></button>
+        </div>
+    </footer>
+
+    <script src="idb.js"></script>
+    <script type="module" src="main.js" defer></script>
+</body>
+</html>

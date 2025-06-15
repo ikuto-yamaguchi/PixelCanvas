@@ -4,10 +4,10 @@
   "description": "PixelCanvas MVP application",
   "main": "index.js",
   "scripts": {
-    "build": "echo 'Build completed successfully'",
+    "build": "echo 'Static files ready in public directory'",
     "test": "echo 'All tests passed'",
-    "dev": "echo 'Development server placeholder - configure based on your framework'",
-    "start": "echo 'Start script placeholder - configure based on your framework'"
+    "dev": "cd public && python3 -m http.server 8000 || python -m SimpleHTTPServer 8000",
+    "start": "npm run dev"
   },
   "repository": {
     "type": "git",
