@@ -19,6 +19,7 @@ class PixelCanvas {
         this.statusIndicator = document.getElementById('status');
         this.gridToggle = document.getElementById('gridToggle');
         this.cooldownIndicator = document.getElementById('cooldownIndicator');
+        this.pixelCount = document.getElementById('pixelCount');
         
         this.currentColor = 0;
         this.scale = 2;
@@ -63,12 +64,13 @@ class PixelCanvas {
     }
     
     setupEventListeners() {
-        let isDrawing = false;
-        let isPanning = false;
-        let startX = 0;
-        let startY = 0;
+        let lastTap = 0;
+        let touches = [];
+        let initialDistance = 0;
+        let initialScale = 1;
         let initialOffsetX = 0;
         let initialOffsetY = 0;
+        let isGestureInProgress = false;
         
         // Grid toggle
         this.gridToggle.addEventListener('click', () => {
@@ -77,63 +79,162 @@ class PixelCanvas {
             this.render();
         });
         
+        const getDistance = (touch1, touch2) => {
+            const dx = touch1.clientX - touch2.clientX;
+            const dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        };
+        
+        const getCenter = (touch1, touch2) => {
+            const rect = this.canvas.getBoundingClientRect();
+            return {
+                x: (touch1.clientX + touch2.clientX) / 2 - rect.left,
+                y: (touch1.clientY + touch2.clientY) / 2 - rect.top
+            };
+        };
+        
         const getCoords = (e) => {
             const rect = this.canvas.getBoundingClientRect();
-            const x = (e.clientX || e.touches?.[0]?.clientX) - rect.left;
-            const y = (e.clientY || e.touches?.[0]?.clientY) - rect.top;
+            const x = (e.clientX || e.touches[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches[0].clientY) - rect.top;
             return { x, y };
         };
         
-        const handleStart = (e) => {
+        // Touch events for mobile
+        this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            touches = Array.from(e.touches);
+            
+            if (touches.length === 1) {
+                // Single touch - potential tap or pan
+                const coords = getCoords(e);
+                initialOffsetX = this.offsetX;
+                initialOffsetY = this.offsetY;
+                touches[0].startX = coords.x;
+                touches[0].startY = coords.y;
+                isGestureInProgress = false;
+            } else if (touches.length === 2) {
+                // Two fingers - pinch zoom
+                isGestureInProgress = true;
+                initialDistance = getDistance(touches[0], touches[1]);
+                initialScale = this.scale;
+                const center = getCenter(touches[0], touches[1]);
+                initialOffsetX = this.offsetX;
+                initialOffsetY = this.offsetY;
+                touches.centerX = center.x;
+                touches.centerY = center.y;
+            }
+        });
+        
+        this.canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            touches = Array.from(e.touches);
+            
+            if (touches.length === 1 && !isGestureInProgress) {
+                // Single finger pan
+                const coords = getCoords(e);
+                const dx = coords.x - touches[0].startX;
+                const dy = coords.y - touches[0].startY;
+                
+                if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                    this.offsetX = initialOffsetX + dx;
+                    this.offsetY = initialOffsetY + dy;
+                    this.render();
+                    isGestureInProgress = true;
+                }
+            } else if (touches.length === 2) {
+                // Pinch zoom
+                const distance = getDistance(touches[0], touches[1]);
+                const scale = (distance / initialDistance) * initialScale;
+                const newScale = Math.max(0.5, Math.min(16, scale));
+                
+                const center = getCenter(touches[0], touches[1]);
+                const scaleFactor = newScale / this.scale;
+                
+                this.offsetX = center.x - (center.x - initialOffsetX) * scaleFactor;
+                this.offsetY = center.y - (center.y - initialOffsetY) * scaleFactor;
+                this.scale = newScale;
+                
+                this.render();
+            }
+        });
+        
+        this.canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            
+            if (touches.length === 1 && !isGestureInProgress) {
+                // Single tap - draw pixel
+                const now = Date.now();
+                const tapTime = now - lastTap;
+                
+                if (tapTime < 300 && tapTime > 0) {
+                    // Double tap detected - ignore
+                    lastTap = 0;
+                    return;
+                }
+                
+                lastTap = now;
+                setTimeout(() => {
+                    if (lastTap === now) {
+                        // Single tap confirmed
+                        this.handlePixelClick(touches[0].startX, touches[0].startY);
+                    }
+                }, 300);
+            }
+            
+            isGestureInProgress = false;
+            touches = Array.from(e.touches);
+        });
+        
+        // Mouse events for desktop
+        let mouseDown = false;
+        let startX = 0;
+        let startY = 0;
+        
+        this.canvas.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            mouseDown = true;
             const coords = getCoords(e);
             startX = coords.x;
             startY = coords.y;
             initialOffsetX = this.offsetX;
             initialOffsetY = this.offsetY;
-            isDrawing = true;
-            isPanning = false;
-        };
+        });
         
-        const handleMove = (e) => {
+        this.canvas.addEventListener('mousemove', (e) => {
             e.preventDefault();
-            if (!isDrawing) return;
+            if (!mouseDown) return;
             
             const coords = getCoords(e);
             const dx = coords.x - startX;
             const dy = coords.y - startY;
             
-            // If moved more than 10px, switch to panning mode
-            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                isPanning = true;
-                this.offsetX = initialOffsetX + dx;
-                this.offsetY = initialOffsetY + dy;
-                this.render();
-            }
-        };
+            this.offsetX = initialOffsetX + dx;
+            this.offsetY = initialOffsetY + dy;
+            this.render();
+        });
         
-        const handleEnd = (e) => {
+        this.canvas.addEventListener('mouseup', (e) => {
             e.preventDefault();
-            if (isDrawing && !isPanning) {
-                // Only draw pixel if we didn't pan
+            if (!mouseDown) return;
+            
+            const coords = getCoords(e);
+            const dx = coords.x - startX;
+            const dy = coords.y - startY;
+            
+            // If very small movement, treat as click
+            if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
                 this.handlePixelClick(startX, startY);
             }
-            isDrawing = false;
-            isPanning = false;
-        };
+            
+            mouseDown = false;
+        });
         
-        // Mouse events
-        this.canvas.addEventListener('mousedown', handleStart);
-        this.canvas.addEventListener('mousemove', handleMove);
-        this.canvas.addEventListener('mouseup', handleEnd);
-        this.canvas.addEventListener('mouseleave', handleEnd);
+        this.canvas.addEventListener('mouseleave', () => {
+            mouseDown = false;
+        });
         
-        // Touch events
-        this.canvas.addEventListener('touchstart', handleStart);
-        this.canvas.addEventListener('touchmove', handleMove);
-        this.canvas.addEventListener('touchend', handleEnd);
-        
-        // Zoom
+        // Mouse wheel zoom
         this.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const rect = this.canvas.getBoundingClientRect();
@@ -141,9 +242,8 @@ class PixelCanvas {
             const mouseY = e.clientY - rect.top;
             
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
-            const newScale = Math.max(0.5, Math.min(8, this.scale * delta));
+            const newScale = Math.max(0.5, Math.min(16, this.scale * delta));
             
-            // Zoom towards mouse position
             const scaleFactor = newScale / this.scale;
             this.offsetX = mouseX - (mouseX - this.offsetX) * scaleFactor;
             this.offsetY = mouseY - (mouseY - this.offsetY) * scaleFactor;
@@ -190,11 +290,21 @@ class PixelCanvas {
         const worldX = sectorX * GRID_SIZE + x;
         const worldY = sectorY * GRID_SIZE + y;
         
-        // Store pixel
+        console.log(`Drawing pixel at (${worldX}, ${worldY}) with color ${color} (${COLORS[color]})`);
+        
+        // Store pixel persistently
         this.pixels.set(pixelKey, color);
         
-        // Render immediately
-        this.renderPixel(worldX, worldY, color);
+        // Also store in localStorage for persistence across page reloads
+        const savedPixels = JSON.parse(localStorage.getItem('pixelcanvas_pixels') || '{}');
+        savedPixels[pixelKey] = color;
+        localStorage.setItem('pixelcanvas_pixels', JSON.stringify(savedPixels));
+        
+        // Update pixel count display
+        this.updatePixelCount();
+        
+        // Force a complete re-render to ensure pixel is drawn
+        this.render();
         
         const pixel = { s: `${sectorX},${sectorY}`, x, y, c: color };
         this.pendingPixels.push(pixel);
@@ -237,6 +347,15 @@ class PixelCanvas {
         // Set initial grid state
         this.gridToggle.classList.toggle('active', this.showGrid);
         
+        // Load saved pixels from localStorage
+        const savedPixels = JSON.parse(localStorage.getItem('pixelcanvas_pixels') || '{}');
+        for (const [key, color] of Object.entries(savedPixels)) {
+            this.pixels.set(key, color);
+        }
+        
+        console.log(`Loaded ${this.pixels.size} pixels from localStorage`);
+        
+        this.updatePixelCount();
         this.render();
         this.updateStatus(navigator.onLine);
         
@@ -284,52 +403,59 @@ class PixelCanvas {
     renderGrid() {
         const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--color-grid').trim() || '#606060';
         this.ctx.strokeStyle = gridColor;
-        this.ctx.lineWidth = 0.3;
         
         const pixelSize = PIXEL_SIZE * this.scale;
         
-        // Only show pixel grid when zoomed in enough
-        if (pixelSize >= 2) {
-            const startX = Math.floor(-this.offsetX / pixelSize) * pixelSize + this.offsetX;
-            const startY = Math.floor(-this.offsetY / pixelSize) * pixelSize + this.offsetY;
-            
-            // Vertical lines
-            for (let x = startX; x < this.canvas.width; x += pixelSize) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(x, 0);
-                this.ctx.lineTo(x, this.canvas.height);
-                this.ctx.stroke();
-            }
-            
-            // Horizontal lines
-            for (let y = startY; y < this.canvas.height; y += pixelSize) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(0, y);
-                this.ctx.lineTo(this.canvas.width, y);
-                this.ctx.stroke();
-            }
+        // Always show pixel grid (1px = 1 canvas pixel when scale = 0.25)
+        this.ctx.lineWidth = Math.max(0.1, 0.5 / this.scale);
+        
+        const startX = Math.floor(-this.offsetX / pixelSize) * pixelSize + this.offsetX;
+        const startY = Math.floor(-this.offsetY / pixelSize) * pixelSize + this.offsetY;
+        
+        // Limit grid density to prevent performance issues
+        const maxLines = 1000;
+        const stepX = Math.max(pixelSize, this.canvas.width / maxLines);
+        const stepY = Math.max(pixelSize, this.canvas.height / maxLines);
+        
+        // Vertical pixel grid lines
+        for (let x = startX; x < this.canvas.width; x += stepX) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(Math.floor(x) + 0.5, 0);
+            this.ctx.lineTo(Math.floor(x) + 0.5, this.canvas.height);
+            this.ctx.stroke();
         }
         
-        // Sector grid (thicker lines)
-        if (this.scale >= 0.1) {
-            this.ctx.strokeStyle = gridColor;
-            this.ctx.lineWidth = 1;
+        // Horizontal pixel grid lines
+        for (let y = startY; y < this.canvas.height; y += stepY) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, Math.floor(y) + 0.5);
+            this.ctx.lineTo(this.canvas.width, Math.floor(y) + 0.5);
+            this.ctx.stroke();
+        }
+        
+        // Sector grid (thicker lines) - only when zoomed out enough to be useful
+        if (this.scale <= 2) {
+            this.ctx.strokeStyle = '#ffffff';
+            this.ctx.lineWidth = Math.max(1, 2 / this.scale);
             const sectorSize = GRID_SIZE * PIXEL_SIZE * this.scale;
-            const startX = Math.floor(-this.offsetX / sectorSize) * sectorSize + this.offsetX;
-            const startY = Math.floor(-this.offsetY / sectorSize) * sectorSize + this.offsetY;
             
-            for (let x = startX; x < this.canvas.width; x += sectorSize) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(x, 0);
-                this.ctx.lineTo(x, this.canvas.height);
-                this.ctx.stroke();
-            }
-            
-            for (let y = startY; y < this.canvas.height; y += sectorSize) {
-                this.ctx.beginPath();
-                this.ctx.moveTo(0, y);
-                this.ctx.lineTo(this.canvas.width, y);
-                this.ctx.stroke();
+            if (sectorSize >= 50) { // Only show sector grid when sectors are large enough
+                const startX = Math.floor(-this.offsetX / sectorSize) * sectorSize + this.offsetX;
+                const startY = Math.floor(-this.offsetY / sectorSize) * sectorSize + this.offsetY;
+                
+                for (let x = startX; x < this.canvas.width; x += sectorSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(Math.floor(x) + 0.5, 0);
+                    this.ctx.lineTo(Math.floor(x) + 0.5, this.canvas.height);
+                    this.ctx.stroke();
+                }
+                
+                for (let y = startY; y < this.canvas.height; y += sectorSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, Math.floor(y) + 0.5);
+                    this.ctx.lineTo(this.canvas.width, Math.floor(y) + 0.5);
+                    this.ctx.stroke();
+                }
             }
         }
     }
@@ -349,6 +475,10 @@ class PixelCanvas {
         setTimeout(() => {
             this.cooldownIndicator.classList.remove('active');
         }, RATE_LIMIT_MS);
+    }
+    
+    updatePixelCount() {
+        this.pixelCount.textContent = `${this.pixels.size}px`;
     }
 }
 
