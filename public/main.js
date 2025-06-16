@@ -15,7 +15,7 @@ const STOCK_RECOVER_MS = 1000;
 // Supabase configuration
 const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
-const SECTOR_EXPANSION_THRESHOLD = 0.001; // 0.1% filled for testing (normally 0.7)
+const SECTOR_EXPANSION_THRESHOLD = 0.7; // 70% filled
 
 class PixelCanvas {
     constructor() {
@@ -30,8 +30,8 @@ class PixelCanvas {
         
         this.currentColor = 0;
         this.scale = 2;
-        this.offsetX = 0;
-        this.offsetY = 0;
+        this.offsetX = 400; // Center on sector (0,0)
+        this.offsetY = 300; // Center on sector (0,0)
         this.sectors = new Map();
         this.pendingPixels = [];
         this.pixels = new Map(); // Store drawn pixels
