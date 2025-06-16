@@ -15,7 +15,7 @@ const STOCK_RECOVER_MS = 1000;
 // Supabase configuration
 const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
-const SECTOR_EXPANSION_THRESHOLD = 0.7; // 70% filled
+const SECTOR_EXPANSION_THRESHOLD = 0.0001; // 0.01% filled (7 pixels) for testing
 
 class PixelCanvas {
     constructor() {
@@ -499,6 +499,11 @@ class PixelCanvas {
         
         // Set up real-time subscription (optional)
         // this.setupRealtimeSubscription();
+        
+        // Test expansion feature
+        if (window.location.hash === '#test') {
+            setTimeout(() => this.testExpansion(), 2000);
+        }
         
         window.addEventListener('online', () => {
             this.updateStatus(true);
@@ -1035,6 +1040,31 @@ class PixelCanvas {
         }
     }
     
+    async testExpansion() {
+        console.log('🧪 Starting expansion test...');
+        
+        // Draw pixels in center of sector (0,0)
+        const centerX = 128; // Center of 256x256 sector
+        const centerY = 128;
+        
+        for (let i = 0; i < 10; i++) {
+            const x = centerX + (i % 3) * 2 - 2;
+            const y = centerY + Math.floor(i / 3) * 2 - 2;
+            
+            console.log(`Drawing test pixel at (${x}, ${y})`);
+            this.drawPixel(0, 0, x, y, Math.floor(Math.random() * 16));
+            
+            // Add to local count
+            const count = this.sectorPixelCounts.get('0,0') || 0;
+            this.sectorPixelCounts.set('0,0', count + 1);
+            
+            // Small delay between pixels
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        console.log('✅ Test complete! Expansion should have triggered.');
+    }
+    
     updatePixelCount() {
         // This method is no longer used - stock display is handled by updateStockDisplay
         // Keep for compatibility but don't override stock display
@@ -1043,7 +1073,9 @@ class PixelCanvas {
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => new PixelCanvas());
+    document.addEventListener('DOMContentLoaded', () => {
+        window.pixelCanvas = new PixelCanvas();
+    });
 } else {
-    new PixelCanvas();
+    window.pixelCanvas = new PixelCanvas();
 }
