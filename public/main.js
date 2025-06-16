@@ -30,6 +30,7 @@ class PixelCanvas {
         this.pixels = new Map(); // Store drawn pixels
         this.showGrid = true;
         this.lastDrawTime = 0;
+        this.cooldownTimeout = null;
         
         this.init();
     }
@@ -64,20 +65,33 @@ class PixelCanvas {
     }
     
     setupEventListeners() {
-        let lastTap = 0;
-        let touches = [];
-        let initialDistance = 0;
-        let initialScale = 1;
-        let initialOffsetX = 0;
-        let initialOffsetY = 0;
-        let isGestureInProgress = false;
-        
         // Grid toggle
         this.gridToggle.addEventListener('click', () => {
             this.showGrid = !this.showGrid;
             this.gridToggle.classList.toggle('active', this.showGrid);
             this.render();
         });
+        
+        // Common coordinate helper
+        const getCoords = (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches?.[0]?.clientX) - rect.left;
+            const y = (e.clientY || e.touches?.[0]?.clientY) - rect.top;
+            return { x, y };
+        };
+        
+        // Touch state for mobile
+        let touchState = {
+            startTime: 0,
+            startX: 0,
+            startY: 0,
+            initialOffsetX: 0,
+            initialOffsetY: 0,
+            initialScale: 1,
+            initialDistance: 0,
+            moved: false,
+            touches: 0
+        };
         
         const getDistance = (touch1, touch2) => {
             const dx = touch1.clientX - touch2.clientX;
@@ -93,145 +107,136 @@ class PixelCanvas {
             };
         };
         
-        const getCoords = (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const x = (e.clientX || e.touches[0].clientX) - rect.left;
-            const y = (e.clientY || e.touches[0].clientY) - rect.top;
-            return { x, y };
-        };
-        
-        // Touch events for mobile
+        // TOUCH EVENTS - Simple and reliable
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            touches = Array.from(e.touches);
             
-            if (touches.length === 1) {
-                // Single touch - potential tap or pan
+            touchState.touches = e.touches.length;
+            touchState.startTime = Date.now();
+            touchState.moved = false;
+            
+            if (e.touches.length === 1) {
+                // Single touch
                 const coords = getCoords(e);
-                initialOffsetX = this.offsetX;
-                initialOffsetY = this.offsetY;
-                touches[0].startX = coords.x;
-                touches[0].startY = coords.y;
-                isGestureInProgress = false;
-            } else if (touches.length === 2) {
-                // Two fingers - pinch zoom
-                isGestureInProgress = true;
-                initialDistance = getDistance(touches[0], touches[1]);
-                initialScale = this.scale;
-                const center = getCenter(touches[0], touches[1]);
-                initialOffsetX = this.offsetX;
-                initialOffsetY = this.offsetY;
-                touches.centerX = center.x;
-                touches.centerY = center.y;
+                touchState.startX = coords.x;
+                touchState.startY = coords.y;
+                touchState.initialOffsetX = this.offsetX;
+                touchState.initialOffsetY = this.offsetY;
+            } else if (e.touches.length === 2) {
+                // Two finger gesture
+                touchState.initialDistance = getDistance(e.touches[0], e.touches[1]);
+                touchState.initialScale = this.scale;
+                const center = getCenter(e.touches[0], e.touches[1]);
+                touchState.centerX = center.x;
+                touchState.centerY = center.y;
+                touchState.initialOffsetX = this.offsetX;
+                touchState.initialOffsetY = this.offsetY;
             }
         });
         
         this.canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            touches = Array.from(e.touches);
             
-            if (touches.length === 1 && !isGestureInProgress) {
+            if (e.touches.length === 1 && touchState.touches === 1) {
                 // Single finger pan
                 const coords = getCoords(e);
-                const dx = coords.x - touches[0].startX;
-                const dy = coords.y - touches[0].startY;
+                const dx = coords.x - touchState.startX;
+                const dy = coords.y - touchState.startY;
                 
-                if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-                    this.offsetX = initialOffsetX + dx;
-                    this.offsetY = initialOffsetY + dy;
+                if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                    touchState.moved = true;
+                    this.offsetX = touchState.initialOffsetX + dx;
+                    this.offsetY = touchState.initialOffsetY + dy;
                     this.render();
-                    isGestureInProgress = true;
                 }
-            } else if (touches.length === 2) {
-                // Pinch zoom
-                const distance = getDistance(touches[0], touches[1]);
-                const scale = (distance / initialDistance) * initialScale;
+            } else if (e.touches.length === 2 && touchState.touches === 2) {
+                // Two finger pinch zoom
+                const distance = getDistance(e.touches[0], e.touches[1]);
+                const scale = (distance / touchState.initialDistance) * touchState.initialScale;
                 const newScale = Math.max(0.5, Math.min(16, scale));
                 
-                const center = getCenter(touches[0], touches[1]);
+                const center = getCenter(e.touches[0], e.touches[1]);
                 const scaleFactor = newScale / this.scale;
                 
-                this.offsetX = center.x - (center.x - initialOffsetX) * scaleFactor;
-                this.offsetY = center.y - (center.y - initialOffsetY) * scaleFactor;
+                this.offsetX = center.x - (center.x - touchState.initialOffsetX) * scaleFactor;
+                this.offsetY = center.y - (center.y - touchState.initialOffsetY) * scaleFactor;
                 this.scale = newScale;
                 
                 this.render();
+                touchState.moved = true;
             }
         });
         
         this.canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
             
-            if (touches.length === 1 && !isGestureInProgress) {
-                // Single tap - draw pixel
-                const now = Date.now();
-                const tapTime = now - lastTap;
+            // Only handle tap if it was a single touch that didn't move
+            if (touchState.touches === 1 && !touchState.moved) {
+                const tapDuration = Date.now() - touchState.startTime;
                 
-                if (tapTime < 300 && tapTime > 0) {
-                    // Double tap detected - ignore
-                    lastTap = 0;
-                    return;
+                // Quick tap (less than 200ms) = draw pixel
+                if (tapDuration < 200) {
+                    this.handlePixelClick(touchState.startX, touchState.startY);
                 }
-                
-                lastTap = now;
-                setTimeout(() => {
-                    if (lastTap === now) {
-                        // Single tap confirmed
-                        this.handlePixelClick(touches[0].startX, touches[0].startY);
-                    }
-                }, 300);
             }
             
-            isGestureInProgress = false;
-            touches = Array.from(e.touches);
+            // Reset touch state
+            touchState.touches = e.touches.length;
+            if (e.touches.length === 0) {
+                touchState.moved = false;
+            }
         });
         
-        // Mouse events for desktop
-        let mouseDown = false;
-        let startX = 0;
-        let startY = 0;
+        // MOUSE EVENTS - Keep existing logic for desktop
+        let mouseState = {
+            down: false,
+            startX: 0,
+            startY: 0,
+            initialOffsetX: 0,
+            initialOffsetY: 0
+        };
         
         this.canvas.addEventListener('mousedown', (e) => {
             e.preventDefault();
-            mouseDown = true;
+            mouseState.down = true;
             const coords = getCoords(e);
-            startX = coords.x;
-            startY = coords.y;
-            initialOffsetX = this.offsetX;
-            initialOffsetY = this.offsetY;
+            mouseState.startX = coords.x;
+            mouseState.startY = coords.y;
+            mouseState.initialOffsetX = this.offsetX;
+            mouseState.initialOffsetY = this.offsetY;
         });
         
         this.canvas.addEventListener('mousemove', (e) => {
             e.preventDefault();
-            if (!mouseDown) return;
+            if (!mouseState.down) return;
             
             const coords = getCoords(e);
-            const dx = coords.x - startX;
-            const dy = coords.y - startY;
+            const dx = coords.x - mouseState.startX;
+            const dy = coords.y - mouseState.startY;
             
-            this.offsetX = initialOffsetX + dx;
-            this.offsetY = initialOffsetY + dy;
+            this.offsetX = mouseState.initialOffsetX + dx;
+            this.offsetY = mouseState.initialOffsetY + dy;
             this.render();
         });
         
         this.canvas.addEventListener('mouseup', (e) => {
             e.preventDefault();
-            if (!mouseDown) return;
+            if (!mouseState.down) return;
             
             const coords = getCoords(e);
-            const dx = coords.x - startX;
-            const dy = coords.y - startY;
+            const dx = coords.x - mouseState.startX;
+            const dy = coords.y - mouseState.startY;
             
             // If very small movement, treat as click
             if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
-                this.handlePixelClick(startX, startY);
+                this.handlePixelClick(mouseState.startX, mouseState.startY);
             }
             
-            mouseDown = false;
+            mouseState.down = false;
         });
         
         this.canvas.addEventListener('mouseleave', () => {
-            mouseDown = false;
+            mouseState.down = false;
         });
         
         // Mouse wheel zoom
@@ -471,8 +476,21 @@ class PixelCanvas {
     }
     
     showCooldown() {
+        // Remove any existing animation
+        this.cooldownIndicator.classList.remove('active');
+        
+        // Force a reflow to ensure the class is removed
+        this.cooldownIndicator.offsetHeight;
+        
+        // Start the new animation
         this.cooldownIndicator.classList.add('active');
-        setTimeout(() => {
+        
+        // Clear any existing timeout
+        if (this.cooldownTimeout) {
+            clearTimeout(this.cooldownTimeout);
+        }
+        
+        this.cooldownTimeout = setTimeout(() => {
             this.cooldownIndicator.classList.remove('active');
         }, RATE_LIMIT_MS);
     }
