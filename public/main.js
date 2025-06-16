@@ -9,6 +9,8 @@ const COLORS = [
 ];
 
 const RATE_LIMIT_MS = 1000;
+const MAX_PIXEL_STOCK = 10;
+const STOCK_RECOVER_MS = 1000;
 
 class PixelCanvas {
     constructor() {
@@ -29,8 +31,9 @@ class PixelCanvas {
         this.pendingPixels = [];
         this.pixels = new Map(); // Store drawn pixels
         this.showGrid = true;
-        this.lastDrawTime = 0;
-        this.cooldownTimeout = null;
+        this.pixelStock = MAX_PIXEL_STOCK; // Start with full stock
+        this.lastStockUpdate = Date.now();
+        this.stockRecoveryInterval = null;
         
         this.init();
     }
@@ -319,10 +322,9 @@ class PixelCanvas {
     }
     
     handlePixelClick(x, y) {
-        const now = Date.now();
-        if (now - this.lastDrawTime < RATE_LIMIT_MS) {
-            // Still in cooldown, don't reset the animation
-            return;
+        // Check if we have pixels in stock
+        if (this.pixelStock <= 0) {
+            return; // No pixels available
         }
         
         const worldX = Math.floor((x - this.offsetX) / (PIXEL_SIZE * this.scale));
@@ -335,10 +337,10 @@ class PixelCanvas {
         
         // Successfully draw pixel
         this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
-        this.lastDrawTime = now;
         
-        // Start cooldown animation only after successful draw
-        this.startCooldown();
+        // Consume one pixel from stock
+        this.pixelStock--;
+        this.updateStockDisplay();
     }
     
     drawPixel(sectorX, sectorY, x, y, color) {
@@ -356,8 +358,7 @@ class PixelCanvas {
         savedPixels[pixelKey] = color;
         localStorage.setItem('pixelcanvas_pixels', JSON.stringify(savedPixels));
         
-        // Update pixel count display
-        this.updatePixelCount();
+        // Pixel count display is handled by updateStockDisplay()
         
         // Force a complete re-render to ensure pixel is drawn
         this.render();
@@ -403,8 +404,9 @@ class PixelCanvas {
         // Set initial grid state
         this.gridToggle.classList.toggle('active', this.showGrid);
         
-        // Initialize cooldown indicator to ready state (green)
-        this.cooldownIndicator.classList.remove('cooldown');
+        // Initialize stock system
+        this.updateStockDisplay();
+        this.startStockRecovery();
         
         // Load saved pixels from localStorage
         const savedPixels = JSON.parse(localStorage.getItem('pixelcanvas_pixels') || '{}');
@@ -529,29 +531,33 @@ class PixelCanvas {
         }
     }
     
-    startCooldown() {
-        // Clear any existing timeout first
-        if (this.cooldownTimeout) {
-            clearTimeout(this.cooldownTimeout);
+    startStockRecovery() {
+        // Clear any existing interval
+        if (this.stockRecoveryInterval) {
+            clearInterval(this.stockRecoveryInterval);
         }
         
-        // Remove any existing cooldown class
-        this.cooldownIndicator.classList.remove('cooldown');
+        // Start recovery interval
+        this.stockRecoveryInterval = setInterval(() => {
+            if (this.pixelStock < MAX_PIXEL_STOCK) {
+                this.pixelStock++;
+                this.updateStockDisplay();
+            }
+        }, STOCK_RECOVER_MS);
+    }
+    
+    updateStockDisplay() {
+        // Update the visual indicator
+        const percentage = (this.pixelStock / MAX_PIXEL_STOCK) * 100;
+        this.cooldownIndicator.style.background = `linear-gradient(to right, #4ade80 ${percentage}%, var(--color-border) ${percentage}%)`;
         
-        // Force a reflow to ensure the class is removed before re-adding
-        this.cooldownIndicator.offsetHeight;
-        
-        // Start the cooldown animation
-        this.cooldownIndicator.classList.add('cooldown');
-        
-        // Remove the cooldown class after the animation completes
-        this.cooldownTimeout = setTimeout(() => {
-            this.cooldownIndicator.classList.remove('cooldown');
-        }, RATE_LIMIT_MS);
+        // Update pixel count to show stock
+        this.pixelCount.textContent = `${this.pixelStock}/${MAX_PIXEL_STOCK}`;
     }
     
     updatePixelCount() {
-        this.pixelCount.textContent = `${this.pixels.size}px`;
+        // This method is no longer used - stock display is handled by updateStockDisplay
+        // Keep for compatibility but don't override stock display
     }
 }
 

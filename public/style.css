@@ -82,31 +82,10 @@ body {
 .cooldown-indicator {
     width: 80px;
     height: 4px;
-    background-color: #4ade80;
+    background: linear-gradient(to right, #4ade80 100%, var(--color-border) 100%);
     border-radius: 2px;
-    overflow: hidden;
-    position: relative;
-    transition: background-color 0.2s;
-}
-
-.cooldown-indicator.cooldown {
-    background-color: var(--color-border);
-}
-
-.cooldown-indicator.cooldown::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    background-color: #4ade80;
-    border-radius: 2px;
-    animation: cooldown 1s linear forwards;
-}
-
-@keyframes cooldown {
-    from { width: 0%; }
-    to { width: 100%; }
+    border: 1px solid var(--color-border);
+    transition: background 0.2s;
 }
 
 .status-indicator {
