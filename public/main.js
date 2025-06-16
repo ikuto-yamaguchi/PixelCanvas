@@ -14,7 +14,7 @@ const STOCK_RECOVER_MS = 1000;
 
 // Supabase configuration
 const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3NzU4MjcsImV4cCI6MjA1MDM1MTgyN30.P3_wT9nTUhsNmnzRp7I6O2g9UNyh7zEBH4rNkrjP3nk';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
 const SECTOR_EXPANSION_THRESHOLD = 0.7; // 70% filled
 
 class PixelCanvas {
@@ -391,27 +391,40 @@ class PixelCanvas {
     
     async sendPixel(pixel) {
         try {
-            // Send to Supabase
+            console.log('Sending pixel to Supabase:', pixel);
+            
+            const payload = {
+                sector_x: parseInt(pixel.s.split(',')[0]),
+                sector_y: parseInt(pixel.s.split(',')[1]),
+                local_x: pixel.x,
+                local_y: pixel.y,
+                color: pixel.c
+            };
+            
+            console.log('Payload:', payload);
+            
+            // Send to Supabase using UPSERT to handle duplicates
             const response = await fetch(`${SUPABASE_URL}/rest/v1/pixels`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'apikey': SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    'Prefer': 'return=minimal'
+                    'Prefer': 'resolution=merge-duplicates'
                 },
-                body: JSON.stringify({
-                    sector_x: parseInt(pixel.s.split(',')[0]),
-                    sector_y: parseInt(pixel.s.split(',')[1]),
-                    local_x: pixel.x,
-                    local_y: pixel.y,
-                    color: pixel.c
-                })
+                body: JSON.stringify(payload)
             });
             
+            console.log('Response status:', response.status);
+            
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorText = await response.text();
+                console.error('Supabase error response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
+            
+            const result = await response.json();
+            console.log('Pixel saved successfully:', result);
             
             // Update sector pixel count
             await this.updateSectorCount(pixel.s, 1);
@@ -593,6 +606,8 @@ class PixelCanvas {
     
     async loadPixelsFromSupabase() {
         try {
+            console.log('Loading pixels from Supabase...');
+            
             const response = await fetch(`${SUPABASE_URL}/rest/v1/pixels?select=*`, {
                 headers: {
                     'apikey': SUPABASE_ANON_KEY,
@@ -601,16 +616,19 @@ class PixelCanvas {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorText = await response.text();
+                console.error('Failed to load pixels:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
             
             const pixels = await response.json();
-            console.log(`Loading ${pixels.length} pixels from Supabase`);
+            console.log(`Successfully loaded ${pixels.length} pixels from Supabase:`, pixels);
             
             // Convert to our internal format
             for (const pixel of pixels) {
                 const key = `${pixel.sector_x},${pixel.sector_y},${pixel.local_x},${pixel.local_y}`;
                 this.pixels.set(key, pixel.color);
+                console.log(`Added pixel: ${key} = color ${pixel.color}`);
                 
                 // Track sector
                 const sectorKey = `${pixel.sector_x},${pixel.sector_y}`;
@@ -620,6 +638,7 @@ class PixelCanvas {
             // Load sector counts
             await this.loadSectorCounts();
             
+            console.log(`Total pixels in memory: ${this.pixels.size}`);
             this.render();
             
         } catch (error) {
