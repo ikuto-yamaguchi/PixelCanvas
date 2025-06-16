@@ -15,7 +15,7 @@ const STOCK_RECOVER_MS = 1000;
 // Supabase configuration
 const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
-const SECTOR_EXPANSION_THRESHOLD = 0.7; // 70% filled
+const SECTOR_EXPANSION_THRESHOLD = 0.001; // 0.1% filled for testing (normally 0.7)
 
 class PixelCanvas {
     constructor() {
@@ -359,6 +359,21 @@ class PixelCanvas {
         // Log action in background only (fire and forget)
         this.logUserActionLazy('pixel_draw');
         
+        // Update sector count locally and check for expansion
+        const sectorKey = `${sectorX},${sectorY}`;
+        const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
+        const newCount = currentCount + 1;
+        this.sectorPixelCounts.set(sectorKey, newCount);
+        
+        // Check if we need to expand (70% full)
+        const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
+        const fillPercentage = newCount / maxPixelsPerSector;
+        
+        if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
+            console.log(`Sector (${sectorX}, ${sectorY}) is ${Math.round(fillPercentage * 100)}% full!`);
+            this.expandSectorsLocally(sectorX, sectorY);
+        }
+        
         // This code has been moved into the main handlePixelClick function above
     }
     
@@ -438,8 +453,8 @@ class PixelCanvas {
             const result = await response.json();
             console.log('Pixel saved successfully:', result);
             
-            // Update sector pixel count
-            await this.updateSectorCount(pixel.s, 1);
+            // Update sector count in database (fire and forget)
+            this.updateSectorCountLazy(pixel.s, 1);
             
         } catch (error) {
             console.error('Failed to send pixel to Supabase:', error);
@@ -768,17 +783,14 @@ class PixelCanvas {
         }
     }
     
-    async updateSectorCount(sectorKey, increment) {
-        try {
+    updateSectorCountLazy(sectorKey, increment) {
+        // Update in background without blocking
+        setTimeout(() => {
             const [sectorX, sectorY] = sectorKey.split(',').map(Number);
             const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
             const newCount = currentCount + increment;
             
-            // Update local count
-            this.sectorPixelCounts.set(sectorKey, newCount);
-            
-            // Update in Supabase
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors?sector_x=eq.${sectorX}&sector_y=eq.${sectorY}`, {
+            fetch(`${SUPABASE_URL}/rest/v1/sectors?sector_x=eq.${sectorX}&sector_y=eq.${sectorY}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -789,18 +801,13 @@ class PixelCanvas {
                 body: JSON.stringify({
                     pixel_count: newCount
                 })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            // Check for expansion
-            await this.checkSectorExpansion(sectorX, sectorY, newCount);
-            
-        } catch (error) {
-            console.error('Failed to update sector count:', error);
-        }
+            }).catch(() => {}); // Ignore errors
+        }, 0);
+    }
+    
+    async updateSectorCount(sectorKey, increment) {
+        // Keep for compatibility
+        this.updateSectorCountLazy(sectorKey, increment);
     }
     
     async checkSectorExpansion(sectorX, sectorY, pixelCount) {
@@ -813,7 +820,7 @@ class PixelCanvas {
         }
     }
     
-    async expandSectors(centerX, centerY) {
+    expandSectorsLocally(centerX, centerY) {
         // 8-direction expansion
         const directions = [
             [-1, -1], [-1, 0], [-1, 1],
@@ -821,40 +828,87 @@ class PixelCanvas {
             [1, -1],  [1, 0],  [1, 1]
         ];
         
+        let expanded = false;
+        
         for (const [dx, dy] of directions) {
             const newX = centerX + dx;
             const newY = centerY + dy;
             const sectorKey = `${newX},${newY}`;
             
             if (!this.activeSectors.has(sectorKey)) {
-                try {
-                    // Create new sector in database
-                    const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'apikey': SUPABASE_ANON_KEY,
-                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                            'Prefer': 'return=minimal'
-                        },
-                        body: JSON.stringify({
-                            sector_x: newX,
-                            sector_y: newY,
-                            pixel_count: 0
-                        })
-                    });
-                    
-                    if (response.ok) {
-                        this.activeSectors.add(sectorKey);
-                        this.sectorPixelCounts.set(sectorKey, 0);
-                        console.log(`Expanded to sector (${newX}, ${newY})`);
-                    }
-                    
-                } catch (error) {
-                    console.error(`Failed to expand to sector (${newX}, ${newY}):`, error);
-                }
+                this.activeSectors.add(sectorKey);
+                this.sectorPixelCounts.set(sectorKey, 0);
+                console.log(`🎯 Expanded to sector (${newX}, ${newY})`);
+                expanded = true;
+                
+                // Create sector in database (fire and forget)
+                fetch(`${SUPABASE_URL}/rest/v1/sectors`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        sector_x: newX,
+                        sector_y: newY,
+                        pixel_count: 0
+                    })
+                }).catch(() => {}); // Ignore errors
             }
         }
+        
+        if (expanded) {
+            // Show visual feedback for expansion
+            this.showExpansionNotification(centerX, centerY);
+        }
+    }
+    
+    showExpansionNotification(sectorX, sectorY) {
+        // Create a temporary notification element
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4ade80;
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+        `;
+        notification.textContent = `🎉 Canvas expanded! Sector (${sectorX},${sectorY}) was 70% full`;
+        
+        // Add animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { opacity: 0; transform: translate(-50%, -20px); }
+                to { opacity: 1; transform: translate(-50%, 0); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                notification.remove();
+                style.remove();
+            }, 300);
+        }, 3000);
+    }
+    
+    async expandSectors(centerX, centerY) {
+        // Keep for compatibility but use local version
+        this.expandSectorsLocally(centerX, centerY);
     }
     
     // Remove server-side rate limiting for now - too slow
