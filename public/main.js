@@ -329,10 +329,17 @@ class PixelCanvas {
         buttons[0].classList.add('active');
     }
     
-    handlePixelClick(x, y) {
+    async handlePixelClick(x, y) {
         // Check if we have pixels in stock
         if (this.pixelStock <= 0) {
             return; // No pixels available
+        }
+        
+        // Check server-side rate limiting
+        const canDraw = await this.checkRateLimit();
+        if (!canDraw) {
+            console.log('Rate limited by server');
+            return;
         }
         
         const worldX = Math.floor((x - this.offsetX) / (PIXEL_SIZE * this.scale));
@@ -344,16 +351,19 @@ class PixelCanvas {
         const localY = ((worldY % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
         
         // Successfully draw pixel
-        this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
+        await this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
         
         // Consume one pixel from stock
         this.pixelStock--;
         this.lastStockUpdate = Date.now();
         this.updateStockDisplay();
         this.saveStockState(); // Save immediately when stock is consumed
+        
+        // Log the action to server
+        await this.logUserAction('pixel_draw');
     }
     
-    drawPixel(sectorX, sectorY, x, y, color) {
+    async drawPixel(sectorX, sectorY, x, y, color) {
         const pixelKey = `${sectorX},${sectorY},${x},${y}`;
         const worldX = sectorX * GRID_SIZE + x;
         const worldY = sectorY * GRID_SIZE + y;
@@ -377,9 +387,9 @@ class PixelCanvas {
         this.pendingPixels.push(pixel);
         
         if (navigator.onLine) {
-            this.sendPixel(pixel);
+            await this.sendPixel(pixel);
         } else {
-            this.queuePixel(pixel);
+            await this.queuePixel(pixel);
         }
     }
     
@@ -842,6 +852,72 @@ class PixelCanvas {
                     console.error(`Failed to expand to sector (${newX}, ${newY}):`, error);
                 }
             }
+        }
+    }
+    
+    async checkRateLimit() {
+        try {
+            // Get user's IP address (approximation)
+            const ipResponse = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipResponse.json();
+            const userIP = ipData.ip;
+            
+            // Check recent actions from this IP in the last minute
+            const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+            
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/user_actions?ip_address=eq.${userIP}&created_at=gte.${oneMinuteAgo}&action_type=eq.pixel_draw&select=count`, {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            });
+            
+            if (!response.ok) {
+                console.warn('Rate limit check failed, allowing action');
+                return true; // Fail open
+            }
+            
+            const actions = await response.json();
+            const recentActions = actions.length;
+            
+            console.log(`Recent actions from IP ${userIP}: ${recentActions}`);
+            
+            // Allow maximum 10 pixels per minute per IP
+            return recentActions < 10;
+            
+        } catch (error) {
+            console.error('Rate limit check failed:', error);
+            return true; // Fail open on error
+        }
+    }
+    
+    async logUserAction(actionType) {
+        try {
+            // Get user's IP address
+            const ipResponse = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipResponse.json();
+            
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/user_actions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    ip_address: ipData.ip,
+                    device_id: this.deviceId,
+                    action_type: actionType
+                })
+            });
+            
+            if (!response.ok) {
+                console.warn('Failed to log user action');
+            }
+            
+        } catch (error) {
+            console.error('Failed to log user action:', error);
         }
     }
     
