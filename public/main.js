@@ -42,6 +42,7 @@ class PixelCanvas {
         this.activeSectors = new Set(['0,0']); // Track active sectors
         this.sectorPixelCounts = new Map(); // Track pixel count per sector
         this.deviceId = this.generateDeviceId(); // Unique device identifier
+        this.drawingInProgress = false; // Prevent concurrent drawing
         
         this.init();
     }
@@ -330,40 +331,67 @@ class PixelCanvas {
     }
     
     async handlePixelClick(x, y) {
+        // Prevent concurrent drawing operations
+        if (this.drawingInProgress) {
+            console.log('Drawing already in progress, ignoring click');
+            return;
+        }
+        
         // Check if we have pixels in stock (client-side)
         if (this.pixelStock <= 0) {
             console.log('No pixels in client stock');
             return; // No pixels available
         }
         
-        // Check server-side rate limiting
-        const canDraw = await this.checkRateLimit();
-        if (!canDraw) {
-            console.log('Rate limited by server - syncing client stock');
-            // Sync client stock with server
-            await this.syncWithServerStock();
-            return;
+        // Reserve a pixel immediately to prevent double-spending
+        this.pixelStock--;
+        this.updateStockDisplay();
+        this.saveStockState();
+        
+        // Set drawing in progress
+        this.drawingInProgress = true;
+        
+        try {
+            // Check server-side rate limiting (async, but don't block UI)
+            const serverCheckPromise = this.checkRateLimit();
+            
+            // Continue with drawing immediately for responsive UI
+            const worldX = Math.floor((x - this.offsetX) / (PIXEL_SIZE * this.scale));
+            const worldY = Math.floor((y - this.offsetY) / (PIXEL_SIZE * this.scale));
+            
+            const sectorX = Math.floor(worldX / GRID_SIZE);
+            const sectorY = Math.floor(worldY / GRID_SIZE);
+            const localX = ((worldX % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
+            const localY = ((worldY % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
+            
+            // Draw immediately for responsive feedback
+            await this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
+            
+            // Check server result in background
+            const canDraw = await serverCheckPromise;
+            if (!canDraw) {
+                console.log('Server rejected draw - syncing stock');
+                // Restore the pixel since server rejected it
+                this.pixelStock++;
+                this.updateStockDisplay();
+                this.saveStockState();
+                // TODO: Could undo the pixel here if needed
+            }
+            
+            // Log the action to server
+            this.logUserAction('pixel_draw'); // Don't await - let it run in background
+            
+        } catch (error) {
+            console.error('Error during pixel drawing:', error);
+            // Restore pixel on error
+            this.pixelStock++;
+            this.updateStockDisplay();
+            this.saveStockState();
+        } finally {
+            this.drawingInProgress = false;
         }
         
-        const worldX = Math.floor((x - this.offsetX) / (PIXEL_SIZE * this.scale));
-        const worldY = Math.floor((y - this.offsetY) / (PIXEL_SIZE * this.scale));
-        
-        const sectorX = Math.floor(worldX / GRID_SIZE);
-        const sectorY = Math.floor(worldY / GRID_SIZE);
-        const localX = ((worldX % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
-        const localY = ((worldY % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
-        
-        // Successfully draw pixel
-        await this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
-        
-        // Consume one pixel from stock
-        this.pixelStock--;
-        this.lastStockUpdate = Date.now();
-        this.updateStockDisplay();
-        this.saveStockState(); // Save immediately when stock is consumed
-        
-        // Log the action to server
-        await this.logUserAction('pixel_draw');
+        // This code has been moved into the main handlePixelClick function above
     }
     
     async drawPixel(sectorX, sectorY, x, y, color) {
@@ -696,7 +724,9 @@ class PixelCanvas {
     }
     
     updateStockDisplay() {
-        // Update the visual indicator
+        // Ensure stock never goes negative
+        this.pixelStock = Math.max(0, Math.min(MAX_PIXEL_STOCK, this.pixelStock));
+        
         const percentage = (this.pixelStock / MAX_PIXEL_STOCK) * 100;
         this.cooldownIndicator.style.background = `linear-gradient(to right, #4ade80 ${percentage}%, var(--color-border) ${percentage}%)`;
         
