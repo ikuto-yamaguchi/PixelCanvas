@@ -321,7 +321,7 @@ class PixelCanvas {
     handlePixelClick(x, y) {
         const now = Date.now();
         if (now - this.lastDrawTime < RATE_LIMIT_MS) {
-            this.showCooldown();
+            // Still in cooldown, don't reset the animation
             return;
         }
         
@@ -333,9 +333,12 @@ class PixelCanvas {
         const localX = ((worldX % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
         const localY = ((worldY % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
         
+        // Successfully draw pixel
         this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
         this.lastDrawTime = now;
-        this.showCooldown();
+        
+        // Start cooldown animation only after successful draw
+        this.startCooldown();
     }
     
     drawPixel(sectorX, sectorY, x, y, color) {
@@ -399,6 +402,9 @@ class PixelCanvas {
     loadInitialData() {
         // Set initial grid state
         this.gridToggle.classList.toggle('active', this.showGrid);
+        
+        // Initialize cooldown indicator to ready state (green)
+        this.cooldownIndicator.classList.remove('cooldown');
         
         // Load saved pixels from localStorage
         const savedPixels = JSON.parse(localStorage.getItem('pixelcanvas_pixels') || '{}');
@@ -523,23 +529,24 @@ class PixelCanvas {
         }
     }
     
-    showCooldown() {
-        // Remove any existing animation
-        this.cooldownIndicator.classList.remove('active');
-        
-        // Force a reflow to ensure the class is removed
-        this.cooldownIndicator.offsetHeight;
-        
-        // Start the new animation
-        this.cooldownIndicator.classList.add('active');
-        
-        // Clear any existing timeout
+    startCooldown() {
+        // Clear any existing timeout first
         if (this.cooldownTimeout) {
             clearTimeout(this.cooldownTimeout);
         }
         
+        // Remove any existing cooldown class
+        this.cooldownIndicator.classList.remove('cooldown');
+        
+        // Force a reflow to ensure the class is removed before re-adding
+        this.cooldownIndicator.offsetHeight;
+        
+        // Start the cooldown animation
+        this.cooldownIndicator.classList.add('cooldown');
+        
+        // Remove the cooldown class after the animation completes
         this.cooldownTimeout = setTimeout(() => {
-            this.cooldownIndicator.classList.remove('active');
+            this.cooldownIndicator.classList.remove('cooldown');
         }, RATE_LIMIT_MS);
     }
     
