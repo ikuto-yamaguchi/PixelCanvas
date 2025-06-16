@@ -12,6 +12,11 @@ const RATE_LIMIT_MS = 1000;
 const MAX_PIXEL_STOCK = 10;
 const STOCK_RECOVER_MS = 1000;
 
+// Supabase configuration
+const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ3NzU4MjcsImV4cCI6MjA1MDM1MTgyN30.P3_wT9nTUhsNmnzRp7I6O2g9UNyh7zEBH4rNkrjP3nk';
+const SECTOR_EXPANSION_THRESHOLD = 0.7; // 70% filled
+
 class PixelCanvas {
     constructor() {
         this.canvas = document.getElementById('mainCanvas');
@@ -34,6 +39,8 @@ class PixelCanvas {
         this.pixelStock = MAX_PIXEL_STOCK; // Start with full stock
         this.lastStockUpdate = Date.now();
         this.stockRecoveryInterval = null;
+        this.activeSectors = new Set(['0,0']); // Track active sectors
+        this.sectorPixelCounts = new Map(); // Track pixel count per sector
         
         this.init();
     }
@@ -384,12 +391,33 @@ class PixelCanvas {
     
     async sendPixel(pixel) {
         try {
-            await fetch('/api/draw', {
+            // Send to Supabase
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/pixels`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(pixel)
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    sector_x: parseInt(pixel.s.split(',')[0]),
+                    sector_y: parseInt(pixel.s.split(',')[1]),
+                    local_x: pixel.x,
+                    local_y: pixel.y,
+                    color: pixel.c
+                })
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            // Update sector pixel count
+            await this.updateSectorCount(pixel.s, 1);
+            
         } catch (error) {
+            console.error('Failed to send pixel to Supabase:', error);
             this.queuePixel(pixel);
         }
     }
@@ -408,7 +436,13 @@ class PixelCanvas {
         this.updateStockDisplay();
         this.startStockRecovery();
         
-        // Load saved pixels from localStorage
+        // Initialize sector (0,0) if not exists
+        this.sectorPixelCounts.set('0,0', 0);
+        
+        // Load pixels from Supabase
+        this.loadPixelsFromSupabase();
+        
+        // Also load from localStorage as backup
         const savedPixels = JSON.parse(localStorage.getItem('pixelcanvas_pixels') || '{}');
         for (const [key, color] of Object.entries(savedPixels)) {
             this.pixels.set(key, color);
@@ -416,9 +450,11 @@ class PixelCanvas {
         
         console.log(`Loaded ${this.pixels.size} pixels from localStorage`);
         
-        this.updatePixelCount();
         this.render();
         this.updateStatus(navigator.onLine);
+        
+        // Set up real-time subscription (optional)
+        // this.setupRealtimeSubscription();
         
         window.addEventListener('online', () => {
             this.updateStatus(true);
@@ -553,6 +589,155 @@ class PixelCanvas {
         
         // Update pixel count to show stock
         this.pixelCount.textContent = `${this.pixelStock}/${MAX_PIXEL_STOCK}`;
+    }
+    
+    async loadPixelsFromSupabase() {
+        try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/pixels?select=*`, {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const pixels = await response.json();
+            console.log(`Loading ${pixels.length} pixels from Supabase`);
+            
+            // Convert to our internal format
+            for (const pixel of pixels) {
+                const key = `${pixel.sector_x},${pixel.sector_y},${pixel.local_x},${pixel.local_y}`;
+                this.pixels.set(key, pixel.color);
+                
+                // Track sector
+                const sectorKey = `${pixel.sector_x},${pixel.sector_y}`;
+                this.activeSectors.add(sectorKey);
+            }
+            
+            // Load sector counts
+            await this.loadSectorCounts();
+            
+            this.render();
+            
+        } catch (error) {
+            console.error('Failed to load pixels from Supabase:', error);
+        }
+    }
+    
+    async loadSectorCounts() {
+        try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors?select=*`, {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const sectors = await response.json();
+            for (const sector of sectors) {
+                const key = `${sector.sector_x},${sector.sector_y}`;
+                this.sectorPixelCounts.set(key, sector.pixel_count);
+            }
+            
+        } catch (error) {
+            console.error('Failed to load sector counts:', error);
+        }
+    }
+    
+    async updateSectorCount(sectorKey, increment) {
+        try {
+            const [sectorX, sectorY] = sectorKey.split(',').map(Number);
+            const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
+            const newCount = currentCount + increment;
+            
+            // Update local count
+            this.sectorPixelCounts.set(sectorKey, newCount);
+            
+            // Update in Supabase
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors?sector_x=eq.${sectorX}&sector_y=eq.${sectorY}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    pixel_count: newCount
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            // Check for expansion
+            await this.checkSectorExpansion(sectorX, sectorY, newCount);
+            
+        } catch (error) {
+            console.error('Failed to update sector count:', error);
+        }
+    }
+    
+    async checkSectorExpansion(sectorX, sectorY, pixelCount) {
+        const maxPixelsPerSector = GRID_SIZE * GRID_SIZE; // 256 * 256
+        const fillPercentage = pixelCount / maxPixelsPerSector;
+        
+        if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
+            console.log(`Sector (${sectorX}, ${sectorY}) is ${Math.round(fillPercentage * 100)}% full. Expanding...`);
+            await this.expandSectors(sectorX, sectorY);
+        }
+    }
+    
+    async expandSectors(centerX, centerY) {
+        // 8-direction expansion
+        const directions = [
+            [-1, -1], [-1, 0], [-1, 1],
+            [0, -1],           [0, 1],
+            [1, -1],  [1, 0],  [1, 1]
+        ];
+        
+        for (const [dx, dy] of directions) {
+            const newX = centerX + dx;
+            const newY = centerY + dy;
+            const sectorKey = `${newX},${newY}`;
+            
+            if (!this.activeSectors.has(sectorKey)) {
+                try {
+                    // Create new sector in database
+                    const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            sector_x: newX,
+                            sector_y: newY,
+                            pixel_count: 0
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        this.activeSectors.add(sectorKey);
+                        this.sectorPixelCounts.set(sectorKey, 0);
+                        console.log(`Expanded to sector (${newX}, ${newY})`);
+                    }
+                    
+                } catch (error) {
+                    console.error(`Failed to expand to sector (${newX}, ${newY}):`, error);
+                }
+            }
+        }
     }
     
     updatePixelCount() {
