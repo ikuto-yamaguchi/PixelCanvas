@@ -16,7 +16,13 @@
 <body>
     <header class="header">
         <h1 class="header__title">PixelCanvas</h1>
-        <div class="header__status">
+        <div class="header__controls">
+            <button class="grid-toggle" id="gridToggle" aria-label="Toggle Grid">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 2h6v6H2V2zm10 0h6v6h-6V2zM2 12h6v6H2v-6zm10 0h6v6h-6v-6z" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            </button>
+            <div class="cooldown-indicator" id="cooldownIndicator"></div>
             <span class="status-indicator" id="status"></span>
         </div>
     </header>
