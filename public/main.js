@@ -36,11 +36,12 @@ class PixelCanvas {
         this.pendingPixels = [];
         this.pixels = new Map(); // Store drawn pixels
         this.showGrid = true;
-        this.pixelStock = MAX_PIXEL_STOCK; // Start with full stock
-        this.lastStockUpdate = Date.now();
+        // Initialize pixel stock with proper persistence
+        this.initializePixelStock();
         this.stockRecoveryInterval = null;
         this.activeSectors = new Set(['0,0']); // Track active sectors
         this.sectorPixelCounts = new Map(); // Track pixel count per sector
+        this.deviceId = this.generateDeviceId(); // Unique device identifier
         
         this.init();
     }
@@ -347,7 +348,9 @@ class PixelCanvas {
         
         // Consume one pixel from stock
         this.pixelStock--;
+        this.lastStockUpdate = Date.now();
         this.updateStockDisplay();
+        this.saveStockState(); // Save immediately when stock is consumed
     }
     
     drawPixel(sectorX, sectorY, x, y, color) {
@@ -448,6 +451,9 @@ class PixelCanvas {
         // Initialize stock system
         this.updateStockDisplay();
         this.startStockRecovery();
+        
+        // Save stock state periodically
+        setInterval(() => this.saveStockState(), 5000); // Save every 5 seconds
         
         // Initialize sector (0,0) if not exists
         this.sectorPixelCounts.set('0,0', 0);
@@ -580,6 +586,84 @@ class PixelCanvas {
         }
     }
     
+    generateDeviceId() {
+        // Create a semi-persistent device identifier
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('Device fingerprint', 2, 2);
+        
+        const fingerprint = [
+            canvas.toDataURL(),
+            navigator.userAgent,
+            navigator.language,
+            screen.width + 'x' + screen.height,
+            new Date().getTimezoneOffset(),
+            navigator.hardwareConcurrency || 0
+        ].join('|');
+        
+        // Create a hash from the fingerprint
+        let hash = 0;
+        for (let i = 0; i < fingerprint.length; i++) {
+            const char = fingerprint.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        
+        return 'device_' + Math.abs(hash).toString(36);
+    }
+    
+    initializePixelStock() {
+        const now = Date.now();
+        
+        // Get saved state from multiple storage locations with device ID
+        const sessionKey = `pixelcanvas_session_${this.deviceId}`;
+        const localKey = `pixelcanvas_stock_${this.deviceId}`;
+        
+        const sessionData = JSON.parse(sessionStorage.getItem(sessionKey) || '{}');
+        const localData = JSON.parse(localStorage.getItem(localKey) || '{}');
+        
+        // Use the most restrictive data (lowest stock, most recent update)
+        let savedStock = MAX_PIXEL_STOCK;
+        let lastUpdate = now - (24 * 60 * 60 * 1000); // Default to 24h ago for new users
+        
+        if (sessionData.stock !== undefined && sessionData.lastUpdate) {
+            savedStock = Math.min(savedStock, sessionData.stock);
+            lastUpdate = Math.max(lastUpdate, sessionData.lastUpdate);
+        }
+        
+        if (localData.stock !== undefined && localData.lastUpdate) {
+            savedStock = Math.min(savedStock, localData.stock);
+            lastUpdate = Math.max(lastUpdate, localData.lastUpdate);
+        }
+        
+        // Calculate natural recovery since last update
+        const timePassed = now - lastUpdate;
+        const recoveredPixels = Math.floor(timePassed / STOCK_RECOVER_MS);
+        
+        this.pixelStock = Math.min(MAX_PIXEL_STOCK, savedStock + recoveredPixels);
+        this.lastStockUpdate = now;
+        
+        console.log(`Device ID: ${this.deviceId}`);
+        console.log(`Initialized stock: ${this.pixelStock}/${MAX_PIXEL_STOCK} (recovered ${recoveredPixels} pixels)`);
+    }
+    
+    saveStockState() {
+        const stockData = {
+            stock: this.pixelStock,
+            lastUpdate: this.lastStockUpdate,
+            deviceId: this.deviceId
+        };
+        
+        // Save to both session and local storage with device-specific keys
+        const sessionKey = `pixelcanvas_session_${this.deviceId}`;
+        const localKey = `pixelcanvas_stock_${this.deviceId}`;
+        
+        sessionStorage.setItem(sessionKey, JSON.stringify(stockData));
+        localStorage.setItem(localKey, JSON.stringify(stockData));
+    }
+    
     startStockRecovery() {
         // Clear any existing interval
         if (this.stockRecoveryInterval) {
@@ -590,7 +674,9 @@ class PixelCanvas {
         this.stockRecoveryInterval = setInterval(() => {
             if (this.pixelStock < MAX_PIXEL_STOCK) {
                 this.pixelStock++;
+                this.lastStockUpdate = Date.now();
                 this.updateStockDisplay();
+                this.saveStockState(); // Save immediately when stock changes
             }
         }, STOCK_RECOVER_MS);
     }
