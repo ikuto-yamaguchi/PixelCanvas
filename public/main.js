@@ -92,7 +92,9 @@ class PixelCanvas {
             initialCenterX: 0,
             initialCenterY: 0,
             moved: false,
-            touches: 0
+            touches: 0,
+            wasMultiTouch: false,
+            gestureEndTime: 0
         };
         
         const getDistance = (touch1, touch2) => {
@@ -113,19 +115,32 @@ class PixelCanvas {
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             
+            const now = Date.now();
+            const previousTouches = touchState.touches;
             touchState.touches = e.touches.length;
-            touchState.startTime = Date.now();
+            touchState.startTime = now;
+            
+            // If we just ended a multi-touch gesture, ignore single touch for a short time
+            if (previousTouches > 1 && e.touches.length === 1 && (now - touchState.gestureEndTime < 200)) {
+                touchState.moved = true; // Prevent this from being treated as a tap
+                return;
+            }
+            
             touchState.moved = false;
             
             if (e.touches.length === 1) {
-                // Single touch
-                const coords = getCoords(e);
-                touchState.startX = coords.x;
-                touchState.startY = coords.y;
-                touchState.initialOffsetX = this.offsetX;
-                touchState.initialOffsetY = this.offsetY;
+                // Single touch - but only reset position if not coming from multi-touch
+                if (previousTouches <= 1) {
+                    const coords = getCoords(e);
+                    touchState.startX = coords.x;
+                    touchState.startY = coords.y;
+                    touchState.initialOffsetX = this.offsetX;
+                    touchState.initialOffsetY = this.offsetY;
+                }
+                touchState.wasMultiTouch = false;
             } else if (e.touches.length === 2) {
                 // Two finger gesture
+                touchState.wasMultiTouch = true;
                 touchState.initialDistance = getDistance(e.touches[0], e.touches[1]);
                 touchState.initialScale = this.scale;
                 const center = getCenter(e.touches[0], e.touches[1]);
@@ -139,8 +154,9 @@ class PixelCanvas {
         this.canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
             
-            if (e.touches.length === 1 && touchState.touches === 1) {
-                // Single finger pan
+            // Only handle movement if the touch count matches what we started with
+            if (e.touches.length === 1 && touchState.touches === 1 && !touchState.wasMultiTouch) {
+                // Single finger pan - only if not coming from multi-touch
                 const coords = getCoords(e);
                 const dx = coords.x - touchState.startX;
                 const dy = coords.y - touchState.startY;
@@ -175,9 +191,11 @@ class PixelCanvas {
         this.canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
             
-            // Only handle tap if it was a single touch that didn't move
-            if (touchState.touches === 1 && !touchState.moved) {
-                const tapDuration = Date.now() - touchState.startTime;
+            const now = Date.now();
+            
+            // Only handle tap if it was a single touch that didn't move and wasn't multi-touch
+            if (touchState.touches === 1 && !touchState.moved && !touchState.wasMultiTouch) {
+                const tapDuration = now - touchState.startTime;
                 
                 // Quick tap (less than 200ms) = draw pixel
                 if (tapDuration < 200) {
@@ -185,10 +203,35 @@ class PixelCanvas {
                 }
             }
             
-            // Reset touch state
+            // If we're ending a multi-touch gesture, record the time
+            if (touchState.touches > 1 && e.touches.length <= 1) {
+                touchState.gestureEndTime = now;
+                touchState.wasMultiTouch = true;
+            }
+            
+            // Update touch count
+            const previousTouches = touchState.touches;
             touchState.touches = e.touches.length;
+            
+            // Reset movement state only when all touches are gone
             if (e.touches.length === 0) {
                 touchState.moved = false;
+                touchState.wasMultiTouch = false;
+            }
+            
+            // If going from 2+ touches to 1 touch, reset single touch state
+            if (previousTouches > 1 && e.touches.length === 1) {
+                setTimeout(() => {
+                    if (touchState.touches === 1) {
+                        const coords = getCoords(e);
+                        touchState.startX = coords.x;
+                        touchState.startY = coords.y;
+                        touchState.initialOffsetX = this.offsetX;
+                        touchState.initialOffsetY = this.offsetY;
+                        touchState.moved = false;
+                        touchState.wasMultiTouch = false;
+                    }
+                }, 100);
             }
         });
         
