@@ -330,15 +330,18 @@ class PixelCanvas {
     }
     
     async handlePixelClick(x, y) {
-        // Check if we have pixels in stock
+        // Check if we have pixels in stock (client-side)
         if (this.pixelStock <= 0) {
+            console.log('No pixels in client stock');
             return; // No pixels available
         }
         
         // Check server-side rate limiting
         const canDraw = await this.checkRateLimit();
         if (!canDraw) {
-            console.log('Rate limited by server');
+            console.log('Rate limited by server - syncing client stock');
+            // Sync client stock with server
+            await this.syncWithServerStock();
             return;
         }
         
@@ -463,6 +466,7 @@ class PixelCanvas {
         this.startStockRecovery();
         
         // Save stock state periodically
+        setTimeout(() => this.syncWithServerStock(), 1000); // Sync with server on startup
         setInterval(() => this.saveStockState(), 5000); // Save every 5 seconds
         
         // Initialize sector (0,0) if not exists
@@ -857,15 +861,29 @@ class PixelCanvas {
     
     async checkRateLimit() {
         try {
-            // Get user's IP address (approximation)
+            // Get user's IP address
             const ipResponse = await fetch('https://api.ipify.org?format=json');
             const ipData = await ipResponse.json();
             const userIP = ipData.ip;
             
-            // Check recent actions from this IP in the last minute
-            const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+            // Check server-side stock for this IP
+            const serverStock = await this.getServerSideStock(userIP);
             
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/user_actions?ip_address=eq.${userIP}&created_at=gte.${oneMinuteAgo}&action_type=eq.pixel_draw&select=count`, {
+            console.log(`Server-side stock for IP ${userIP}: ${serverStock}`);
+            
+            // Allow if server has stock available
+            return serverStock > 0;
+            
+        } catch (error) {
+            console.error('Rate limit check failed:', error);
+            return true; // Fail open on error
+        }
+    }
+    
+    async getServerSideStock(ipAddress) {
+        try {
+            // Get the last 10 actions from this IP
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/user_actions?ip_address=eq.${ipAddress}&action_type=eq.pixel_draw&order=created_at.desc&limit=10`, {
                 headers: {
                     'apikey': SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
@@ -873,21 +891,39 @@ class PixelCanvas {
             });
             
             if (!response.ok) {
-                console.warn('Rate limit check failed, allowing action');
-                return true; // Fail open
+                return MAX_PIXEL_STOCK; // Fail open
             }
             
             const actions = await response.json();
-            const recentActions = actions.length;
             
-            console.log(`Recent actions from IP ${userIP}: ${recentActions}`);
+            if (actions.length === 0) {
+                // No previous actions, full stock
+                return MAX_PIXEL_STOCK;
+            }
             
-            // Allow maximum 10 pixels per minute per IP
-            return recentActions < 10;
+            // Calculate stock based on time since actions
+            const now = Date.now();
+            let stock = MAX_PIXEL_STOCK - actions.length;
+            
+            // Add recovery based on time since oldest action
+            if (actions.length === MAX_PIXEL_STOCK) {
+                const oldestAction = new Date(actions[actions.length - 1].created_at).getTime();
+                const timePassed = now - oldestAction;
+                const recovered = Math.floor(timePassed / STOCK_RECOVER_MS);
+                stock = Math.min(MAX_PIXEL_STOCK, recovered);
+            } else {
+                // If less than 10 actions, calculate based on newest action
+                const newestAction = new Date(actions[0].created_at).getTime();
+                const timePassed = now - newestAction;
+                const recovered = Math.floor(timePassed / STOCK_RECOVER_MS);
+                stock = Math.min(MAX_PIXEL_STOCK, stock + recovered);
+            }
+            
+            return Math.max(0, stock);
             
         } catch (error) {
-            console.error('Rate limit check failed:', error);
-            return true; // Fail open on error
+            console.error('Failed to get server-side stock:', error);
+            return MAX_PIXEL_STOCK; // Fail open
         }
     }
     
@@ -914,10 +950,33 @@ class PixelCanvas {
             
             if (!response.ok) {
                 console.warn('Failed to log user action');
+            } else {
+                console.log('Action logged successfully:', actionType);
             }
             
         } catch (error) {
             console.error('Failed to log user action:', error);
+        }
+    }
+    
+    async syncWithServerStock() {
+        try {
+            const ipResponse = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipResponse.json();
+            const serverStock = await this.getServerSideStock(ipData.ip);
+            
+            // Use the lower of client or server stock
+            const syncedStock = Math.min(this.pixelStock, serverStock);
+            
+            if (syncedStock !== this.pixelStock) {
+                console.log(`Syncing stock: client ${this.pixelStock} -> server ${serverStock} = ${syncedStock}`);
+                this.pixelStock = syncedStock;
+                this.updateStockDisplay();
+                this.saveStockState();
+            }
+            
+        } catch (error) {
+            console.error('Failed to sync with server stock:', error);
         }
     }
     
