@@ -20,7 +20,7 @@
 html, body {
     height: 100%;
     overflow: hidden;
-    touch-action: none;
+    touch-action: manipulation;
 }
 
 body {
@@ -140,6 +140,8 @@ body {
     image-rendering: crisp-edges;
     cursor: crosshair;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .canvas-overlay {
@@ -205,6 +207,23 @@ body {
     }
 }
 
+/* Improvements for mobile devices viewing desktop version */
+@media (max-width: 768px) and (orientation: landscape) {
+    .header {
+        height: 44px;
+    }
+    
+    .controls {
+        height: 70px;
+    }
+    
+    .color-palette {
+        grid-template-columns: repeat(8, 1fr);
+        max-width: 90vw;
+    }
+}
+
+/* Desktop styles */
 @media (min-width: 768px) {
     .header__title {
         font-size: 20px;
@@ -213,6 +232,16 @@ body {
     .color-button {
         min-width: 40px;
         min-height: 40px;
+    }
+}
+
+/* High DPI mobile devices */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .canvas {
+        image-rendering: pixelated;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: crisp-edges;
     }
 }
 

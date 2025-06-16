@@ -89,6 +89,8 @@ class PixelCanvas {
             initialOffsetY: 0,
             initialScale: 1,
             initialDistance: 0,
+            initialCenterX: 0,
+            initialCenterY: 0,
             moved: false,
             touches: 0
         };
@@ -127,8 +129,8 @@ class PixelCanvas {
                 touchState.initialDistance = getDistance(e.touches[0], e.touches[1]);
                 touchState.initialScale = this.scale;
                 const center = getCenter(e.touches[0], e.touches[1]);
-                touchState.centerX = center.x;
-                touchState.centerY = center.y;
+                touchState.initialCenterX = center.x;
+                touchState.initialCenterY = center.y;
                 touchState.initialOffsetX = this.offsetX;
                 touchState.initialOffsetY = this.offsetY;
             }
@@ -152,14 +154,17 @@ class PixelCanvas {
             } else if (e.touches.length === 2 && touchState.touches === 2) {
                 // Two finger pinch zoom
                 const distance = getDistance(e.touches[0], e.touches[1]);
-                const scale = (distance / touchState.initialDistance) * touchState.initialScale;
-                const newScale = Math.max(0.5, Math.min(16, scale));
+                const scaleChange = distance / touchState.initialDistance;
+                const newScale = Math.max(0.5, Math.min(16, touchState.initialScale * scaleChange));
                 
-                const center = getCenter(e.touches[0], e.touches[1]);
-                const scaleFactor = newScale / this.scale;
+                // Use the initial center point for consistent zoom behavior
+                const centerX = touchState.initialCenterX;
+                const centerY = touchState.initialCenterY;
                 
-                this.offsetX = center.x - (center.x - touchState.initialOffsetX) * scaleFactor;
-                this.offsetY = center.y - (center.y - touchState.initialOffsetY) * scaleFactor;
+                // Calculate new offset to zoom towards the initial center
+                const scaleFactor = newScale / touchState.initialScale;
+                this.offsetX = centerX - (centerX - touchState.initialOffsetX) * scaleFactor;
+                this.offsetY = centerY - (centerY - touchState.initialOffsetY) * scaleFactor;
                 this.scale = newScale;
                 
                 this.render();
