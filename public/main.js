@@ -42,7 +42,8 @@ class PixelCanvas {
         this.activeSectors = new Set(['0,0']); // Track active sectors
         this.sectorPixelCounts = new Map(); // Track pixel count per sector
         this.deviceId = this.generateDeviceId(); // Unique device identifier
-        this.drawingInProgress = false; // Prevent concurrent drawing
+        this.cachedIP = null; // Cache IP address
+        this.ipCacheTime = 0; // IP cache timestamp
         
         this.init();
     }
@@ -331,70 +332,37 @@ class PixelCanvas {
     }
     
     async handlePixelClick(x, y) {
-        // Prevent concurrent drawing operations
-        if (this.drawingInProgress) {
-            console.log('Drawing already in progress, ignoring click');
+        // Check if we have pixels in stock (client-side only)
+        if (this.pixelStock <= 0) {
+            console.log('No pixels in client stock');
             return;
         }
         
-        // Check if we have pixels in stock (client-side)
-        if (this.pixelStock <= 0) {
-            console.log('No pixels in client stock');
-            return; // No pixels available
-        }
+        // Calculate coordinates immediately
+        const worldX = Math.floor((x - this.offsetX) / (PIXEL_SIZE * this.scale));
+        const worldY = Math.floor((y - this.offsetY) / (PIXEL_SIZE * this.scale));
         
-        // Reserve a pixel immediately to prevent double-spending
+        const sectorX = Math.floor(worldX / GRID_SIZE);
+        const sectorY = Math.floor(worldY / GRID_SIZE);
+        const localX = ((worldX % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
+        const localY = ((worldY % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
+        
+        // Draw immediately - no waiting, no checks
+        this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
+        
+        // Consume pixel after successful draw
         this.pixelStock--;
+        this.lastStockUpdate = Date.now();
         this.updateStockDisplay();
         this.saveStockState();
         
-        // Set drawing in progress
-        this.drawingInProgress = true;
-        
-        try {
-            // Check server-side rate limiting (async, but don't block UI)
-            const serverCheckPromise = this.checkRateLimit();
-            
-            // Continue with drawing immediately for responsive UI
-            const worldX = Math.floor((x - this.offsetX) / (PIXEL_SIZE * this.scale));
-            const worldY = Math.floor((y - this.offsetY) / (PIXEL_SIZE * this.scale));
-            
-            const sectorX = Math.floor(worldX / GRID_SIZE);
-            const sectorY = Math.floor(worldY / GRID_SIZE);
-            const localX = ((worldX % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
-            const localY = ((worldY % GRID_SIZE) + GRID_SIZE) % GRID_SIZE;
-            
-            // Draw immediately for responsive feedback
-            await this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
-            
-            // Check server result in background
-            const canDraw = await serverCheckPromise;
-            if (!canDraw) {
-                console.log('Server rejected draw - syncing stock');
-                // Restore the pixel since server rejected it
-                this.pixelStock++;
-                this.updateStockDisplay();
-                this.saveStockState();
-                // TODO: Could undo the pixel here if needed
-            }
-            
-            // Log the action to server
-            this.logUserAction('pixel_draw'); // Don't await - let it run in background
-            
-        } catch (error) {
-            console.error('Error during pixel drawing:', error);
-            // Restore pixel on error
-            this.pixelStock++;
-            this.updateStockDisplay();
-            this.saveStockState();
-        } finally {
-            this.drawingInProgress = false;
-        }
+        // Log action in background only (fire and forget)
+        this.logUserActionLazy('pixel_draw');
         
         // This code has been moved into the main handlePixelClick function above
     }
     
-    async drawPixel(sectorX, sectorY, x, y, color) {
+    drawPixel(sectorX, sectorY, x, y, color) {
         const pixelKey = `${sectorX},${sectorY},${x},${y}`;
         const worldX = sectorX * GRID_SIZE + x;
         const worldY = sectorY * GRID_SIZE + y;
@@ -418,9 +386,9 @@ class PixelCanvas {
         this.pendingPixels.push(pixel);
         
         if (navigator.onLine) {
-            await this.sendPixel(pixel);
+            this.sendPixel(pixel); // Fire and forget
         } else {
-            await this.queuePixel(pixel);
+            this.queuePixel(pixel); // Fire and forget
         }
     }
     
@@ -494,7 +462,7 @@ class PixelCanvas {
         this.startStockRecovery();
         
         // Save stock state periodically
-        setTimeout(() => this.syncWithServerStock(), 1000); // Sync with server on startup
+        // setTimeout(() => this.syncWithServerStock(), 1000); // Skip server sync - too slow
         setInterval(() => this.saveStockState(), 5000); // Save every 5 seconds
         
         // Initialize sector (0,0) if not exists
@@ -889,25 +857,9 @@ class PixelCanvas {
         }
     }
     
+    // Remove server-side rate limiting for now - too slow
     async checkRateLimit() {
-        try {
-            // Get user's IP address
-            const ipResponse = await fetch('https://api.ipify.org?format=json');
-            const ipData = await ipResponse.json();
-            const userIP = ipData.ip;
-            
-            // Check server-side stock for this IP
-            const serverStock = await this.getServerSideStock(userIP);
-            
-            console.log(`Server-side stock for IP ${userIP}: ${serverStock}`);
-            
-            // Allow if server has stock available
-            return serverStock > 0;
-            
-        } catch (error) {
-            console.error('Rate limit check failed:', error);
-            return true; // Fail open on error
-        }
+        return true; // Always allow for performance
     }
     
     async getServerSideStock(ipAddress) {
@@ -957,36 +909,55 @@ class PixelCanvas {
         }
     }
     
-    async logUserAction(actionType) {
+    async getCachedIP() {
+        const now = Date.now();
+        // Cache IP for 5 minutes
+        if (this.cachedIP && (now - this.ipCacheTime) < 300000) {
+            return this.cachedIP;
+        }
+        
         try {
-            // Get user's IP address
             const ipResponse = await fetch('https://api.ipify.org?format=json');
             const ipData = await ipResponse.json();
-            
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/user_actions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    'Prefer': 'return=minimal'
-                },
-                body: JSON.stringify({
-                    ip_address: ipData.ip,
-                    device_id: this.deviceId,
-                    action_type: actionType
-                })
-            });
-            
-            if (!response.ok) {
-                console.warn('Failed to log user action');
-            } else {
-                console.log('Action logged successfully:', actionType);
-            }
-            
+            this.cachedIP = ipData.ip;
+            this.ipCacheTime = now;
+            return this.cachedIP;
         } catch (error) {
-            console.error('Failed to log user action:', error);
+            console.error('Failed to get IP:', error);
+            return 'unknown';
         }
+    }
+    
+    // Lazy logging - don't block UI
+    logUserActionLazy(actionType) {
+        // Run in background without blocking
+        setTimeout(async () => {
+            try {
+                const ip = await this.getCachedIP();
+                
+                fetch(`${SUPABASE_URL}/rest/v1/user_actions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        ip_address: ip,
+                        device_id: this.deviceId,
+                        action_type: actionType
+                    })
+                });
+            } catch (error) {
+                // Ignore errors in background
+            }
+        }, 0);
+    }
+    
+    async logUserAction(actionType) {
+        // Keep for compatibility but use lazy version
+        this.logUserActionLazy(actionType);
     }
     
     async syncWithServerStock() {
