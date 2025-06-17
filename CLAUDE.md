@@ -72,3 +72,4 @@ curl -X POST -H "Authorization: Bearer sbp_015b2158d74b1624eec097e0d445b207cd5eb
 2. 設計変更が必要な場合は、まずドキュメントを修正してから実装に移る
 3. 各実装ステップは DEVELOPMENT_FLOW.md に従って進める
 4. フロントエンドのサイズ制限を厳守（JS合計 < 25KB）
+5. **修正完了後は必ずGithubにpushすること** - サーバーに変更を反映するため
