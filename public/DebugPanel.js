@@ -5,11 +5,16 @@ export class DebugPanel {
     constructor() {
         this.debugLogs = [];
         this.logsFrozen = false;
-        this.isVisible = false;
+        this.isVisible = true; // Start visible to show all errors immediately
         
         this.createDebugPanel();
         this.createButtons();
         this.setupEventListeners();
+        this.interceptConsole();
+        
+        // Show panel immediately
+        this.panel.style.display = 'block';
+        this.log('🐛 Debug Panel initialized - capturing all console output');
     }
     
     createDebugPanel() {
@@ -20,16 +25,18 @@ export class DebugPanel {
             top: 10px;
             left: 10px;
             width: calc(100vw - 20px);
-            max-height: 200px;
-            background: rgba(0, 0, 0, 0.9);
+            max-height: 50vh;
+            background: rgba(0, 0, 0, 0.95);
             color: #00ff00;
             font-family: monospace;
-            font-size: 10px;
-            padding: 30px 10px 10px 10px;
+            font-size: 11px;
+            padding: 35px 10px 10px 10px;
             border-radius: 5px;
             z-index: 10000;
             overflow-y: auto;
-            display: none;
+            display: block;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            border: 1px solid #333;
         `;
         document.body.appendChild(this.panel);
     }
@@ -43,7 +50,7 @@ export class DebugPanel {
     
     createToggleButton() {
         this.toggleButton = document.createElement('button');
-        this.toggleButton.textContent = '🐛';
+        this.toggleButton.textContent = '❌'; // Start with X since panel is visible
         this.toggleButton.style.cssText = `
             position: fixed;
             top: 10px;
@@ -130,10 +137,27 @@ export class DebugPanel {
     updateDisplay() {
         if (!this.panel) return;
         
-        const content = this.debugLogs.slice(-50).join('\n');
-        this.panel.innerHTML = `
-            <div style="padding-top: 20px;">${content.replace(/\n/g, '<br>')}</div>
-        `;
+        // Show more logs for debugging (last 100 instead of 50)
+        const content = this.debugLogs.slice(-100).join('\n');
+        const contentDiv = document.createElement('div');
+        contentDiv.style.paddingTop = '20px';
+        contentDiv.style.wordBreak = 'break-word';
+        contentDiv.style.whiteSpace = 'pre-wrap';
+        
+        // Color code different log types
+        const colorizedContent = content
+            .replace(/\[ERROR\]/g, '<span style="color: #ff4444;">[ERROR]</span>')
+            .replace(/\[WARN\]/g, '<span style="color: #ffaa00;">[WARN]</span>')
+            .replace(/\[LOG\]/g, '<span style="color: #44ff44;">[LOG]</span>')
+            .replace(/\[INFO\]/g, '<span style="color: #4488ff;">[INFO]</span>')
+            .replace(/\[UNCAUGHT ERROR\]/g, '<span style="color: #ff0000; font-weight: bold;">[UNCAUGHT ERROR]</span>')
+            .replace(/\[UNHANDLED REJECTION\]/g, '<span style="color: #ff0000; font-weight: bold;">[UNHANDLED REJECTION]</span>');
+        
+        contentDiv.innerHTML = colorizedContent.replace(/\n/g, '<br>');
+        
+        // Clear panel and add content
+        this.panel.innerHTML = '';
+        this.panel.appendChild(contentDiv);
         
         // Re-append buttons
         this.panel.appendChild(this.copyButton);
@@ -211,6 +235,54 @@ export class DebugPanel {
     clearLogs() {
         this.debugLogs = [];
         this.updateDisplay();
+    }
+    
+    interceptConsole() {
+        // Store original console methods
+        this.originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info
+        };
+        
+        // Override console methods to capture all logs
+        console.log = (...args) => {
+            this.originalConsole.log(...args);
+            this.log(`[LOG] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}`);
+        };
+        
+        console.error = (...args) => {
+            this.originalConsole.error(...args);
+            this.log(`[ERROR] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}`);
+        };
+        
+        console.warn = (...args) => {
+            this.originalConsole.warn(...args);
+            this.log(`[WARN] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}`);
+        };
+        
+        console.info = (...args) => {
+            this.originalConsole.info(...args);
+            this.log(`[INFO] ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}`);
+        };
+        
+        // Capture unhandled errors
+        window.addEventListener('error', (event) => {
+            this.log(`[UNCAUGHT ERROR] ${event.error?.stack || event.message} at ${event.filename}:${event.lineno}`);
+        });
+        
+        // Capture unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            this.log(`[UNHANDLED REJECTION] ${event.reason?.stack || event.reason}`);
+        });
+    }
+    
+    restoreConsole() {
+        console.log = this.originalConsole.log;
+        console.error = this.originalConsole.error;
+        console.warn = this.originalConsole.warn;
+        console.info = this.originalConsole.info;
     }
     
     // Utility method for other modules to access logging

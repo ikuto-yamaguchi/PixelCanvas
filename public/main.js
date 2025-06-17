@@ -29,31 +29,67 @@ class PixelCanvas {
         this.logicalWidth = 0;
         this.logicalHeight = 0;
         
-        // Initialize modules
+        // Initialize debug panel first to catch all errors
         this.debugPanel = DebugPanel.getInstance();
-        this.pixelStorage = new PixelStorage(this);
-        this.viewportController = new ViewportController(this);
-        this.renderEngine = new RenderEngine(this.canvas, this.ctx, this);
-        this.sectorManager = new SectorManager(this);
-        this.networkManager = new NetworkManager(this);
-        this.eventHandlers = new EventHandlers(this.canvas, this);
+        this.debugPanel.log('🚀 PixelCanvas constructor starting...');
         
-        // Delegate properties for backward compatibility
-        this.pixels = this.pixelStorage.pixels;
-        this.pixelStock = this.pixelStorage.pixelStock;
-        
-        this.init();
+        try {
+            // Initialize modules
+            this.debugPanel.log('📦 Initializing PixelStorage...');
+            this.pixelStorage = new PixelStorage(this);
+            
+            this.debugPanel.log('📦 Initializing ViewportController...');
+            this.viewportController = new ViewportController(this);
+            
+            this.debugPanel.log('📦 Initializing RenderEngine...');
+            this.renderEngine = new RenderEngine(this.canvas, this.ctx, this);
+            
+            this.debugPanel.log('📦 Initializing SectorManager...');
+            this.sectorManager = new SectorManager(this);
+            
+            this.debugPanel.log('📦 Initializing NetworkManager...');
+            this.networkManager = new NetworkManager(this);
+            
+            this.debugPanel.log('📦 Initializing EventHandlers...');
+            this.eventHandlers = new EventHandlers(this.canvas, this);
+            
+            // Delegate properties for backward compatibility
+            this.pixels = this.pixelStorage.pixels;
+            this.pixelStock = this.pixelStorage.pixelStock;
+            
+            this.debugPanel.log('✅ All modules initialized successfully');
+            this.init();
+        } catch (error) {
+            this.debugPanel.log(`❌ Initialization failed: ${error.message}`);
+            console.error('Initialization error:', error);
+        }
     }
     
     init() {
-        this.setupCanvas();
-        this.renderEngine.setupColorPalette();
-        this.loadInitialData();
-        this.setupOnlineStatusHandling();
-        this.registerServiceWorker();
-        
-        // Center viewport on active sectors
-        this.viewportController.centerViewportOnActiveSectors();
+        try {
+            this.debugPanel.log('🔧 Setting up canvas...');
+            this.setupCanvas();
+            
+            this.debugPanel.log('🎨 Setting up color palette...');
+            this.renderEngine.setupColorPalette();
+            
+            this.debugPanel.log('📡 Setting up online status handling...');
+            this.setupOnlineStatusHandling();
+            
+            this.debugPanel.log('⚙️ Registering service worker...');
+            this.registerServiceWorker();
+            
+            this.debugPanel.log('📊 Loading initial data...');
+            this.loadInitialData();
+            
+            this.debugPanel.log('📍 Centering viewport on active sectors...');
+            this.viewportController.centerViewportOnActiveSectors();
+            
+            this.debugPanel.log('✅ PixelCanvas initialization complete!');
+        } catch (error) {
+            this.debugPanel.log(`❌ Init failed: ${error.message}`);
+            console.error('Init error:', error);
+        }
     }
     
     setupCanvas() {
@@ -224,13 +260,30 @@ class PixelCanvas {
     }
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+// Initialize when DOM is ready with error catching
+function initializePixelCanvas() {
+    try {
+        console.log('🌍 Initializing PixelCanvas application...');
         window.pixelCanvas = new PixelCanvas();
-    });
+        console.log('✅ PixelCanvas application started successfully');
+    } catch (error) {
+        console.error('❌ Failed to initialize PixelCanvas:', error);
+        document.body.innerHTML = `
+            <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                        background: #ff4444; color: white; padding: 20px; border-radius: 10px; 
+                        font-family: Arial, sans-serif; text-align: center; z-index: 99999;">
+                <h2>❌ PixelCanvas Failed to Load</h2>
+                <p>Error: ${error.message}</p>
+                <p><small>Check console for details</small></p>
+            </div>
+        `;
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializePixelCanvas);
 } else {
-    window.pixelCanvas = new PixelCanvas();
+    initializePixelCanvas();
 }
 
 // Export for testing
