@@ -538,14 +538,19 @@ class PixelCanvas {
         setInterval(() => this.saveStockState(), 5000); // Save every 5 seconds
         
         // Initialize sector (0,0) as the starting active sector
+        this.mobileLog(`🔧 INIT: Before adding (0,0) - Active: ${Array.from(this.activeSectors).join(',')}`);
         this.activeSectors.add('0,0');
         this.sectorPixelCounts.set('0,0', 0);
+        this.mobileLog(`🔧 INIT: After adding (0,0) - Active: ${Array.from(this.activeSectors).join(',')}`);
         
         // Load pixels from Supabase
         this.loadPixelsFromSupabase();
         
         // Load sector counts and check for expansion
         this.loadSectorCounts();
+        
+        // Clean up any inconsistencies in activeSectors after loading
+        setTimeout(() => this.cleanupActiveSectors(), 2000);
         
         // Setup realtime subscription
         this.setupRealtimeSubscription();
@@ -1460,18 +1465,10 @@ class PixelCanvas {
             this.sectorPixelCounts.set(sectorKey, currentCount + 1);
         }
         
-        // Check expansion for each sector
+        // Do NOT expand here - let checkLoadedSectorsForExpansion handle it
+        // This prevents automatic expansion during fallback processing
         for (const [sectorKey, count] of this.sectorPixelCounts) {
-            const [sectorX, sectorY] = sectorKey.split(',').map(Number);
             console.log(`Calculated sector ${sectorKey}: ${count} pixels`);
-            if (count > 0) {
-                const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
-                const fillPercentage = count / maxPixelsPerSector;
-                if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
-                    console.log(`🔄 Initial expansion needed for calculated sector (${sectorX}, ${sectorY}) with ${count} pixels`);
-                    this.expandSectorsLocally(sectorX, sectorY);
-                }
-            }
         }
     }
     
@@ -1531,10 +1528,11 @@ class PixelCanvas {
         
         // Check each sector with pixels
         for (const [sectorKey, pixelCount] of sectorCounts) {
-            // Skip if this sector is already active
+            // If this sector has pixels but is in activeSectors, remove it
+            // (activeSectors should only contain empty sectors)
             if (this.activeSectors.has(sectorKey)) {
-                this.mobileLog(`⏭️ Skip ${sectorKey} - already active`);
-                continue;
+                this.activeSectors.delete(sectorKey);
+                this.mobileLog(`🗑️ Removed ${sectorKey} from activeSectors (has pixels)`);
             }
             
             // Check if expansion is needed
@@ -1562,8 +1560,34 @@ class PixelCanvas {
         
         this.mobileLog(`🔍 === END CHECK ===`);
         
+        // Clean up activeSectors to ensure consistency
+        this.cleanupActiveSectors();
+        
         // Also schedule async check for completeness (for database validation)
         this.debounceExpansionCheck();
+    }
+    
+    cleanupActiveSectors() {
+        // Remove any sectors from activeSectors that have pixels
+        // activeSectors should only contain empty sectors available for drawing
+        const sectorsToRemove = [];
+        
+        for (const sectorKey of this.activeSectors) {
+            const pixelCount = this.sectorPixelCounts.get(sectorKey) || 0;
+            if (pixelCount > 0) {
+                sectorsToRemove.push(sectorKey);
+            }
+        }
+        
+        for (const sectorKey of sectorsToRemove) {
+            this.activeSectors.delete(sectorKey);
+            this.mobileLog(`🧹 Cleanup: Removed ${sectorKey} from activeSectors (${this.sectorPixelCounts.get(sectorKey)} pixels)`);
+        }
+        
+        if (sectorsToRemove.length > 0) {
+            this.mobileLog(`🧹 Cleanup complete: Removed ${sectorsToRemove.length} sectors from activeSectors`);
+            this.mobileLog(`🧹 Active sectors now: ${Array.from(this.activeSectors).join(',')}`);
+        }
     }
     
     async checkVisibleSectorsForExpansion() {
@@ -1609,9 +1633,11 @@ class PixelCanvas {
             
             // Check each sector with pixels
             for (const [sectorKey, pixelCount] of sectorCounts) {
-                // Skip if this sector is already active
+                // If this sector has pixels but is in activeSectors, remove it
+                // (activeSectors should only contain empty sectors)
                 if (this.activeSectors.has(sectorKey)) {
-                    continue;
+                    this.activeSectors.delete(sectorKey);
+                    console.log(`🗑️ Viewport check: Removed ${sectorKey} from activeSectors (has pixels)`);
                 }
                 
                 // Check if expansion is needed
@@ -1634,6 +1660,9 @@ class PixelCanvas {
             } else {
                 console.log(`📍 No sectors in visible range need expansion`);
             }
+            
+            // Clean up activeSectors to ensure consistency
+            this.cleanupActiveSectors();
             
         } catch (error) {
             console.error('Failed to check visible sectors for expansion:', error);
@@ -1685,13 +1714,20 @@ class PixelCanvas {
     }
     
     expandSectorsLocally(centerX, centerY) {
-        console.log(`🎯 Starting expansion from sector (${centerX}, ${centerY})`);
+        this.mobileLog(`🎯 EXPANSION START: Center (${centerX}, ${centerY})`);
+        this.mobileLog(`🎯 Active before expansion: ${Array.from(this.activeSectors).join(',')}`);
         
         // The center sector is the one that triggered expansion - it already has pixels
-        // so we should NOT add it to activeSectors. We only expand to empty neighbors.
+        // so we should REMOVE it from activeSectors since it's no longer empty.
         const centerKey = `${centerX},${centerY}`;
         const centerPixelCount = this.sectorPixelCounts.get(centerKey) || 0;
-        console.log(`🎯 Center sector (${centerX}, ${centerY}) has ${centerPixelCount} pixels`)
+        this.mobileLog(`🎯 Center sector (${centerX}, ${centerY}) has ${centerPixelCount} pixels`);
+        
+        // Remove center sector from activeSectors since it now has pixels
+        if (this.activeSectors.has(centerKey)) {
+            this.activeSectors.delete(centerKey);
+            this.mobileLog(`🗑️ Removed ${centerKey} from activeSectors (has pixels)`);
+        }
         
         // 8-direction expansion
         const directions = [
@@ -1733,15 +1769,15 @@ class PixelCanvas {
         
         // Expansion is successful if any surrounding sectors were added
         if (expanded) {
-            console.log(`🎯 Expansion completed. ${centerPixelCount} pixels in center triggered expansion`);
-            console.log(`🎯 New active sectors:`, Array.from(this.activeSectors));
+            this.mobileLog(`🎯 EXPANSION DONE: ${centerPixelCount} pixels triggered expansion`);
+            this.mobileLog(`🎯 Active after expansion: ${Array.from(this.activeSectors).join(',')}`);
             // Show visual feedback for expansion
             this.showExpansionNotification(centerX, centerY);
             // Update UI immediately
             this.render();
             this.constrainViewport();
         } else {
-            console.log(`🎯 No expansion needed - all surrounding sectors already active`);
+            this.mobileLog(`🎯 No expansion needed - all surrounding sectors already active`);
         }
     }
     
