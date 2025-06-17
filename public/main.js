@@ -396,17 +396,30 @@ class PixelCanvas {
         
         // Update sector count locally and check for expansion
         const sectorKey = `${sectorX},${sectorY}`;
-        const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
-        const newCount = currentCount + 1;
-        this.sectorPixelCounts.set(sectorKey, newCount);
         
-        // Check if we need to expand (70% full)
+        // Count actual pixels in this sector (more accurate than sectorPixelCounts)
+        let actualCount = 0;
+        for (const [key, color] of this.pixels) {
+            const [pSectorX, pSectorY] = key.split(',').map(Number);
+            if (pSectorX === sectorX && pSectorY === sectorY) {
+                actualCount++;
+            }
+        }
+        
+        console.log(`🔍 Sector (${sectorX}, ${sectorY}) after drawing: ${actualCount} pixels (including new pixel)`);
+        this.sectorPixelCounts.set(sectorKey, actualCount);
+        
+        // Check if we need to expand
         const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
-        const fillPercentage = newCount / maxPixelsPerSector;
+        const fillPercentage = actualCount / maxPixelsPerSector;
         
         if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
-            console.log(`Sector (${sectorX}, ${sectorY}) is ${Math.round(fillPercentage * 100)}% full!`);
+            console.log(`🎯 EXPANSION TRIGGERED: Sector (${sectorX}, ${sectorY}) is ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels)!`);
+            console.log(`🎯 Before expansion - Active sectors:`, Array.from(this.activeSectors));
             this.expandSectorsLocally(sectorX, sectorY);
+            console.log(`🎯 After expansion - Active sectors:`, Array.from(this.activeSectors));
+        } else {
+            console.log(`📊 Sector (${sectorX}, ${sectorY}): ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels) - threshold not reached`);
         }
         
         // This code has been moved into the main handlePixelClick function above
@@ -1385,6 +1398,15 @@ class PixelCanvas {
     }
     
     expandSectorsLocally(centerX, centerY) {
+        console.log(`🎯 Starting expansion from sector (${centerX}, ${centerY})`);
+        
+        // First, ensure the center sector itself is active
+        const centerKey = `${centerX},${centerY}`;
+        if (!this.activeSectors.has(centerKey)) {
+            this.activeSectors.add(centerKey);
+            console.log(`🎯 Center sector (${centerX}, ${centerY}) activated`);
+        }
+        
         // 8-direction expansion
         const directions = [
             [-1, -1], [-1, 0], [-1, 1],
@@ -1424,8 +1446,14 @@ class PixelCanvas {
         }
         
         if (expanded) {
+            console.log(`🎯 Expansion completed. New active sectors:`, Array.from(this.activeSectors));
             // Show visual feedback for expansion
             this.showExpansionNotification(centerX, centerY);
+            // Update UI immediately
+            this.render();
+            this.constrainViewport();
+        } else {
+            console.log(`🎯 No expansion needed - all surrounding sectors already active`);
         }
     }
     
