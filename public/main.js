@@ -1117,13 +1117,33 @@ class PixelCanvas {
         this.copyButton.addEventListener('click', () => this.copyLogsToClipboard());
         this.debugPanel.appendChild(this.copyButton);
         
+        // Add freeze button
+        this.freezeButton = document.createElement('button');
+        this.freezeButton.textContent = '❄️ Freeze';
+        this.freezeButton.style.cssText = `
+            position: absolute;
+            top: 5px;
+            right: 85px;
+            background: #333;
+            color: white;
+            border: 1px solid #666;
+            border-radius: 3px;
+            padding: 5px 8px;
+            font-size: 10px;
+            cursor: pointer;
+            z-index: 10002;
+        `;
+        this.logsFrozen = false;
+        this.freezeButton.addEventListener('click', () => this.toggleFreezeLogs());
+        this.debugPanel.appendChild(this.freezeButton);
+        
         // Add clear button
         this.clearButton = document.createElement('button');
         this.clearButton.textContent = '🗑️ Clear';
         this.clearButton.style.cssText = `
             position: absolute;
             top: 5px;
-            right: 85px;
+            right: 155px;
             background: #333;
             color: white;
             border: 1px solid #666;
@@ -1161,10 +1181,15 @@ class PixelCanvas {
         document.body.appendChild(this.debugToggle);
         
         this.debugLogs = [];
-        this.maxDebugLogs = 50;
+        this.maxDebugLogs = 200; // Increase log retention
     }
     
     mobileLog(message) {
+        // Skip logging if frozen
+        if (this.logsFrozen) {
+            return;
+        }
+        
         // Add timestamp
         const timestamp = new Date().toLocaleTimeString();
         const logEntry = `[${timestamp}] ${message}`;
@@ -1241,7 +1266,18 @@ class PixelCanvas {
         }, 2000);
     }
     
+    toggleFreezeLogs() {
+        this.logsFrozen = !this.logsFrozen;
+        this.freezeButton.textContent = this.logsFrozen ? '🔥 Unfreeze' : '❄️ Freeze';
+        this.freezeButton.style.background = this.logsFrozen ? '#ef4444' : '#333';
+    }
+    
     clearLogs() {
+        if (this.logsFrozen) {
+            alert('Logs are frozen. Unfreeze first to clear.');
+            return;
+        }
+        
         this.debugLogs = [];
         if (this.debugPanel) {
             const contentDiv = this.debugPanel.querySelector('.debug-content');
@@ -1506,6 +1542,7 @@ class PixelCanvas {
         this.mobileLog(`🔍 === CHECKING LOADED SECTORS ===`);
         this.mobileLog(`🔍 Pixels: ${this.pixels.size}, Active: ${Array.from(this.activeSectors).join(',')}`);
         this.mobileLog(`🔍 Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%`);
+        this.mobileLog(`🔍 SectorCounts: ${this.sectorPixelCounts.size} entries`);
         
         // Count pixels by sector from loaded pixels
         const sectorCounts = new Map();
@@ -1522,6 +1559,11 @@ class PixelCanvas {
             const percentage = (count / maxPixels * 100).toFixed(2);
             const exceedsThreshold = count / maxPixels >= SECTOR_EXPANSION_THRESHOLD;
             this.mobileLog(`🔍 ${sectorKey}: ${count}px (${percentage}%) Active:${isActive} Exceeds:${exceedsThreshold}`);
+            
+            // Flag problematic sectors for detailed analysis
+            if (exceedsThreshold && isActive) {
+                this.mobileLog(`⚠️ PROBLEM: ${sectorKey} exceeds threshold but is still marked as active!`);
+            }
         }
         
         let expandedAny = false;
@@ -1545,6 +1587,10 @@ class PixelCanvas {
             if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
                 const [sectorX, sectorY] = sectorKey.split(',').map(Number);
                 this.mobileLog(`🔄 *** EXPANDING ${sectorKey} ***`);
+                
+                // Log detailed expansion debugging
+                this.logSectorExpansionDetails(sectorX, sectorY, pixelCount);
+                
                 this.expandSectorsLocally(sectorX, sectorY);
                 expandedAny = true;
             } else {
@@ -1565,6 +1611,32 @@ class PixelCanvas {
         
         // Also schedule async check for completeness (for database validation)
         this.debounceExpansionCheck();
+    }
+    
+    logSectorExpansionDetails(centerX, centerY, pixelCount) {
+        // Log detailed information about sector expansion
+        const centerKey = `${centerX},${centerY}`;
+        this.mobileLog(`🔍 EXPANSION DETAILS for ${centerKey}:`);
+        this.mobileLog(`  - Pixels: ${pixelCount}`);
+        this.mobileLog(`  - In activeSectors: ${this.activeSectors.has(centerKey)}`);
+        this.mobileLog(`  - In sectorPixelCounts: ${this.sectorPixelCounts.has(centerKey)}`);
+        
+        // Check all 8 neighbors
+        const directions = [
+            [-1, -1], [-1, 0], [-1, 1],
+            [0, -1],           [0, 1],
+            [1, -1],  [1, 0],  [1, 1]
+        ];
+        
+        this.mobileLog(`🔍 NEIGHBOR STATUS:`);
+        for (const [dx, dy] of directions) {
+            const newX = centerX + dx;
+            const newY = centerY + dy;
+            const neighborKey = `${newX},${newY}`;
+            const isActive = this.activeSectors.has(neighborKey);
+            const pixelCount = this.sectorPixelCounts.get(neighborKey) || 0;
+            this.mobileLog(`  ${neighborKey}: Active=${isActive}, Pixels=${pixelCount}`);
+        }
     }
     
     cleanupActiveSectors() {
