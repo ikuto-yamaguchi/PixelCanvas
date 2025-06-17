@@ -15,7 +15,7 @@ const STOCK_RECOVER_MS = 1000;
 // Supabase configuration
 const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
-const SECTOR_EXPANSION_THRESHOLD = 0.7; // 70% filled (45875 pixels out of 65536)
+const SECTOR_EXPANSION_THRESHOLD = 0.0001; // 0.01% filled (7 pixels) for testing
 
 // Initialize Supabase client for Realtime
 let supabaseClient = null;
@@ -60,7 +60,6 @@ class PixelCanvas {
         this.setupCanvas();
         this.setupEventListeners();
         this.setupColorPalette();
-        this.setupDebugControls();
         this.loadInitialData();
         
         if ('serviceWorker' in navigator) {
@@ -349,114 +348,6 @@ class PixelCanvas {
         buttons[0].classList.add('active');
     }
     
-    setupDebugControls() {
-        // Debug: Force reload pixels from Supabase
-        const debugReload = document.getElementById('debugReload');
-        if (debugReload) {
-            debugReload.addEventListener('click', async () => {
-                console.log('🔄 Force reloading pixels from Supabase...');
-                this.pixels.clear();
-                this.activeSectors.clear();
-                this.sectorPixelCounts.clear();
-                await this.loadPixelsFromSupabase();
-                console.log('✅ Reload complete!');
-            });
-        }
-        
-        // Debug: Clear all sectors and pixels
-        const debugClear = document.getElementById('debugClear');
-        if (debugClear) {
-            debugClear.addEventListener('click', async () => {
-                if (confirm('Clear ALL pixels and sectors? This cannot be undone!')) {
-                    console.log('🧹 Clearing all data...');
-                    await this.clearAllData();
-                }
-            });
-        }
-        
-        // Debug: Show current state info
-        const debugInfo = document.getElementById('debugInfo');
-        if (debugInfo) {
-            debugInfo.addEventListener('click', () => {
-                console.log('ℹ️ Current State:');
-                console.log(`Pixels in memory: ${this.pixels.size}`);
-                console.log(`Active sectors: ${Array.from(this.activeSectors).join(', ')}`);
-                console.log('Sector pixel counts:', Object.fromEntries(this.sectorPixelCounts));
-                console.log(`Viewport: offset(${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)}) scale:${this.scale.toFixed(2)}`);
-                console.log(`Canvas size: ${this.logicalWidth || 'unknown'}x${this.logicalHeight || 'unknown'} (logical)`);
-            });
-        }
-        
-        // Debug: Run test expansion
-        const debugTest = document.getElementById('debugTest');
-        if (debugTest) {
-            debugTest.addEventListener('click', () => {
-                console.log('🧪 Running test expansion...');
-                this.testExpansion();
-            });
-        }
-    }
-    
-    async clearAllData() {
-        try {
-            console.log('🧹 Clearing all data from database...');
-            
-            // Clear pixels table
-            const pixelsResponse = await fetch(`${SUPABASE_URL}/rest/v1/pixels`, {
-                method: 'DELETE',
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    'Prefer': 'return=minimal'
-                }
-            });
-            
-            // Clear sectors table
-            const sectorsResponse = await fetch(`${SUPABASE_URL}/rest/v1/sectors`, {
-                method: 'DELETE',
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    'Prefer': 'return=minimal'
-                }
-            });
-            
-            // Add initial sector (0,0)
-            const initResponse = await fetch(`${SUPABASE_URL}/rest/v1/sectors`, {
-                method: 'POST',
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    sector_x: 0,
-                    sector_y: 0,
-                    pixel_count: 0,
-                    is_active: true
-                })
-            });
-            
-            // Clear local state
-            this.pixels.clear();
-            this.activeSectors.clear();
-            this.sectorPixelCounts.clear();
-            
-            // Reset to initial state
-            this.activeSectors.add('0,0');
-            this.sectorPixelCounts.set('0,0', 0);
-            
-            // Center viewport and render
-            this.centerViewportOnActiveSectors();
-            this.render();
-            
-            console.log('✅ All data cleared and reset to initial state!');
-            
-        } catch (error) {
-            console.error('Failed to clear data:', error);
-            alert('Failed to clear data. Check console for details.');
-        }
-    }
     
     async handlePixelClick(x, y) {
         // Check if we have pixels in stock (client-side only)
