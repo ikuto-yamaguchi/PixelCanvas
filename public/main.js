@@ -524,6 +524,9 @@ class PixelCanvas {
         
         console.log(`Loaded ${this.pixels.size} pixels from localStorage`);
         
+        // Recalculate sector counts after loading all pixels
+        this.recalculateSectorCounts();
+        
         this.render();
         this.updateStatus(navigator.onLine);
         
@@ -897,9 +900,17 @@ class PixelCanvas {
                     
                     // Show sector info when zoomed in enough and text fits
                     if (sectorSize > 80) {
-                        const pixelCount = this.sectorPixelCounts.get(sectorKey) || 0;
+                        // Count actual pixels in this sector for accurate display
+                        let actualPixelCount = 0;
+                        for (const [key, color] of this.pixels) {
+                            const [pSectorX, pSectorY] = key.split(',').map(Number);
+                            if (pSectorX === sectorX && pSectorY === sectorY) {
+                                actualPixelCount++;
+                            }
+                        }
+                        
                         const coordinateText = `(${sectorX},${sectorY})`;
-                        const pixelText = `${pixelCount}px`;
+                        const pixelText = `${actualPixelCount}px`;
                         
                         // Calculate appropriate font size that fits within sector
                         const maxFontSize = Math.floor(sectorSize / 8);
@@ -1175,6 +1186,9 @@ class PixelCanvas {
             
             console.log('Sector counts loaded successfully!');
             
+            // Always recalculate counts from actual pixels to ensure consistency
+            this.recalculateSectorCounts();
+            
         } catch (error) {
             console.error('Failed to load sector counts:', error);
             // Fallback: calculate counts from loaded pixels
@@ -1206,6 +1220,27 @@ class PixelCanvas {
                     this.expandSectorsLocally(sectorX, sectorY);
                 }
             }
+        }
+    }
+    
+    recalculateSectorCounts() {
+        // Recalculate sector counts from actual pixels for consistency
+        console.log('Recalculating sector counts from actual pixels...');
+        
+        // Clear existing counts first  
+        this.sectorPixelCounts.clear();
+        
+        // Count pixels by sector from this.pixels
+        for (const [key, color] of this.pixels) {
+            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+            const sectorKey = `${sectorX},${sectorY}`;
+            const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
+            this.sectorPixelCounts.set(sectorKey, currentCount + 1);
+        }
+        
+        // Log the recalculated counts
+        for (const [sectorKey, count] of this.sectorPixelCounts) {
+            console.log(`Recalculated sector ${sectorKey}: ${count} pixels`);
         }
     }
     
