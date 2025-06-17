@@ -47,7 +47,7 @@ class PixelCanvas {
         this.stockRecoveryInterval = null;
         this.activeSectors = new Set(['0,0']); // Track active sectors
         this.isExpansionRunning = false; // Prevent concurrent expansion
-        this.sectorPixelCounts = new Map(); // Track pixel count per sector
+        // Removed sectorPixelCounts - using this.pixels as single source of truth
         this.deviceId = this.generateDeviceId(); // Unique device identifier
         
         // Mobile debug panel
@@ -95,23 +95,44 @@ class PixelCanvas {
     }
     
     setupEventListeners() {
-        // Grid toggle
+        this.setupGridToggle();
+        this.setupTouchHandlers();
+        this.setupMouseHandlers();
+        this.setupWheelZoom();
+    }
+    
+    setupGridToggle() {
         this.gridToggle.addEventListener('click', () => {
             this.showGrid = !this.showGrid;
             this.gridToggle.classList.toggle('active', this.showGrid);
             this.render();
         });
-        
-        // Common coordinate helper
-        const getCoords = (e) => {
-            const rect = this.canvas.getBoundingClientRect();
-            const x = (e.clientX || e.touches?.[0]?.clientX) - rect.left;
-            const y = (e.clientY || e.touches?.[0]?.clientY) - rect.top;
-            return { x, y };
+    }
+    
+    getCoords(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = (e.clientX || e.touches?.[0]?.clientX) - rect.left;
+        const y = (e.clientY || e.touches?.[0]?.clientY) - rect.top;
+        return { x, y };
+    }
+    
+    getDistance(touch1, touch2) {
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    getCenter(touch1, touch2) {
+        const rect = this.canvas.getBoundingClientRect();
+        return {
+            x: (touch1.clientX + touch2.clientX) / 2 - rect.left,
+            y: (touch1.clientY + touch2.clientY) / 2 - rect.top
         };
-        
+    }
+    
+    setupTouchHandlers() {
         // Touch state for mobile
-        let touchState = {
+        this.touchState = {
             startTime: 0,
             startX: 0,
             startY: 0,
@@ -126,160 +147,150 @@ class PixelCanvas {
             wasMultiTouch: false,
             gestureEndTime: 0
         };
+        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
+        this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e));
+        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+    }
+    
+    handleTouchStart(e) {
+        e.preventDefault();
         
-        const getDistance = (touch1, touch2) => {
-            const dx = touch1.clientX - touch2.clientX;
-            const dy = touch1.clientY - touch2.clientY;
-            return Math.sqrt(dx * dx + dy * dy);
-        };
+        const now = Date.now();
+        const previousTouches = this.touchState.touches;
+        this.touchState.touches = e.touches.length;
+        this.touchState.startTime = now;
         
-        const getCenter = (touch1, touch2) => {
-            const rect = this.canvas.getBoundingClientRect();
-            return {
-                x: (touch1.clientX + touch2.clientX) / 2 - rect.left,
-                y: (touch1.clientY + touch2.clientY) / 2 - rect.top
-            };
-        };
+        // If we just ended a multi-touch gesture, ignore single touch for a short time
+        if (previousTouches > 1 && e.touches.length === 1 && (now - this.touchState.gestureEndTime < 200)) {
+            this.touchState.moved = true; // Prevent this from being treated as a tap
+            return;
+        }
         
-        // TOUCH EVENTS - Simple and reliable
-        this.canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            
-            const now = Date.now();
-            const previousTouches = touchState.touches;
-            touchState.touches = e.touches.length;
-            touchState.startTime = now;
-            
-            // If we just ended a multi-touch gesture, ignore single touch for a short time
-            if (previousTouches > 1 && e.touches.length === 1 && (now - touchState.gestureEndTime < 200)) {
-                touchState.moved = true; // Prevent this from being treated as a tap
-                return;
+        this.touchState.moved = false;
+        
+        if (e.touches.length === 1) {
+            // Single touch - but only reset position if not coming from multi-touch
+            if (previousTouches <= 1) {
+                const coords = this.getCoords(e);
+                this.touchState.startX = coords.x;
+                this.touchState.startY = coords.y;
+                this.touchState.initialOffsetX = this.offsetX;
+                this.touchState.initialOffsetY = this.offsetY;
             }
-            
-            touchState.moved = false;
-            
-            if (e.touches.length === 1) {
-                // Single touch - but only reset position if not coming from multi-touch
-                if (previousTouches <= 1) {
-                    const coords = getCoords(e);
-                    touchState.startX = coords.x;
-                    touchState.startY = coords.y;
-                    touchState.initialOffsetX = this.offsetX;
-                    touchState.initialOffsetY = this.offsetY;
-                }
-                touchState.wasMultiTouch = false;
-            } else if (e.touches.length === 2) {
-                // Two finger gesture
-                touchState.wasMultiTouch = true;
-                touchState.initialDistance = getDistance(e.touches[0], e.touches[1]);
-                touchState.initialScale = this.scale;
-                const center = getCenter(e.touches[0], e.touches[1]);
-                touchState.initialCenterX = center.x;
-                touchState.initialCenterY = center.y;
-                touchState.initialOffsetX = this.offsetX;
-                touchState.initialOffsetY = this.offsetY;
-            }
-        });
+            this.touchState.wasMultiTouch = false;
+        } else if (e.touches.length === 2) {
+            // Two finger gesture
+            this.touchState.wasMultiTouch = true;
+            this.touchState.initialDistance = this.getDistance(e.touches[0], e.touches[1]);
+            this.touchState.initialScale = this.scale;
+            const center = this.getCenter(e.touches[0], e.touches[1]);
+            this.touchState.initialCenterX = center.x;
+            this.touchState.initialCenterY = center.y;
+            this.touchState.initialOffsetX = this.offsetX;
+            this.touchState.initialOffsetY = this.offsetY;
+        }
+    }
+    
+    handleTouchMove(e) {
+        e.preventDefault();
         
-        this.canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
+        // Only handle movement if the touch count matches what we started with
+        if (e.touches.length === 1 && this.touchState.touches === 1 && !this.touchState.wasMultiTouch) {
+            // Single finger pan - only if not coming from multi-touch
+            const coords = this.getCoords(e);
+            const dx = coords.x - this.touchState.startX;
+            const dy = coords.y - this.touchState.startY;
             
-            // Only handle movement if the touch count matches what we started with
-            if (e.touches.length === 1 && touchState.touches === 1 && !touchState.wasMultiTouch) {
-                // Single finger pan - only if not coming from multi-touch
-                const coords = getCoords(e);
-                const dx = coords.x - touchState.startX;
-                const dy = coords.y - touchState.startY;
-                
-                if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                    touchState.moved = true;
-                    this.offsetX = touchState.initialOffsetX + dx;
-                    this.offsetY = touchState.initialOffsetY + dy;
-                    this.constrainViewport(); // Apply viewport constraints
-                    this.render();
-                }
-            } else if (e.touches.length === 2 && touchState.touches === 2) {
-                // Two finger pinch zoom
-                const distance = getDistance(e.touches[0], e.touches[1]);
-                const scaleChange = distance / touchState.initialDistance;
-                const newScale = Math.max(0.1, Math.min(16, touchState.initialScale * scaleChange));
-                
-                // Use the initial center point for consistent zoom behavior
-                const centerX = touchState.initialCenterX;
-                const centerY = touchState.initialCenterY;
-                
-                // Calculate new offset to zoom towards the initial center
-                const scaleFactor = newScale / touchState.initialScale;
-                this.offsetX = centerX - (centerX - touchState.initialOffsetX) * scaleFactor;
-                this.offsetY = centerY - (centerY - touchState.initialOffsetY) * scaleFactor;
-                this.scale = newScale;
-                
-                this.constrainViewport(); // Apply viewport constraints after zoom
+            if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                this.touchState.moved = true;
+                this.offsetX = this.touchState.initialOffsetX + dx;
+                this.offsetY = this.touchState.initialOffsetY + dy;
+                this.constrainViewport();
                 this.render();
-                touchState.moved = true;
             }
-        });
+        } else if (e.touches.length === 2 && this.touchState.touches === 2) {
+            // Two finger pinch zoom
+            const distance = this.getDistance(e.touches[0], e.touches[1]);
+            const scaleChange = distance / this.touchState.initialDistance;
+            const newScale = Math.max(0.1, Math.min(16, this.touchState.initialScale * scaleChange));
+            
+            // Use the initial center point for consistent zoom behavior
+            const centerX = this.touchState.initialCenterX;
+            const centerY = this.touchState.initialCenterY;
+            
+            // Calculate new offset to zoom towards the initial center
+            const scaleFactor = newScale / this.touchState.initialScale;
+            this.offsetX = centerX - (centerX - this.touchState.initialOffsetX) * scaleFactor;
+            this.offsetY = centerY - (centerY - this.touchState.initialOffsetY) * scaleFactor;
+            this.scale = newScale;
+            
+            this.constrainViewport();
+            this.render();
+            this.touchState.moved = true;
+        }
+    }
+    
+    handleTouchEnd(e) {
+        e.preventDefault();
         
-        this.canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
+        const now = Date.now();
+        
+        // Only handle tap if it was a single touch that didn't move and wasn't multi-touch
+        if (this.touchState.touches === 1 && !this.touchState.moved && !this.touchState.wasMultiTouch) {
+            const tapDuration = now - this.touchState.startTime;
             
-            const now = Date.now();
-            
-            // Only handle tap if it was a single touch that didn't move and wasn't multi-touch
-            if (touchState.touches === 1 && !touchState.moved && !touchState.wasMultiTouch) {
-                const tapDuration = now - touchState.startTime;
-                
-                // Quick tap (less than 200ms) = draw pixel
-                if (tapDuration < 200) {
-                    this.handlePixelClick(touchState.startX, touchState.startY);
+            // Quick tap (less than 200ms) = draw pixel
+            if (tapDuration < 200) {
+                this.handlePixelClick(this.touchState.startX, this.touchState.startY);
+            }
+        }
+        
+        // If we're ending a multi-touch gesture, record the time
+        if (this.touchState.touches > 1 && e.touches.length <= 1) {
+            this.touchState.gestureEndTime = now;
+            this.touchState.wasMultiTouch = true;
+        }
+        
+        // Reduce expansion checks to improve performance
+        if (this.touchState.moved && !this.isExpansionRunning) {
+            this.mobileLog(`📱 TOUCHEND: Movement detected, scheduling expansion check`);
+            // Debounce expansion checks
+            setTimeout(() => {
+                if (!this.isExpansionRunning) {
+                    this.checkLoadedSectorsForExpansion();
                 }
-            }
-            
-            // If we're ending a multi-touch gesture, record the time
-            if (touchState.touches > 1 && e.touches.length <= 1) {
-                touchState.gestureEndTime = now;
-                touchState.wasMultiTouch = true;
-            }
-            
-            // Reduce expansion checks to improve performance
-            if (touchState.moved && !this.isExpansionRunning) {
-                this.mobileLog(`📱 TOUCHEND: Movement detected, scheduling expansion check`);
-                // Debounce expansion checks
-                setTimeout(() => {
-                    if (!this.isExpansionRunning) {
-                        this.checkLoadedSectorsForExpansion();
-                    }
-                }, 1000);
-            }
-            
-            // Update touch count
-            const previousTouches = touchState.touches;
-            touchState.touches = e.touches.length;
-            
-            // Reset movement state only when all touches are gone
-            if (e.touches.length === 0) {
-                touchState.moved = false;
-                touchState.wasMultiTouch = false;
-            }
-            
-            // If going from 2+ touches to 1 touch, reset single touch state
-            if (previousTouches > 1 && e.touches.length === 1) {
-                setTimeout(() => {
-                    if (touchState.touches === 1) {
-                        const coords = getCoords(e);
-                        touchState.startX = coords.x;
-                        touchState.startY = coords.y;
-                        touchState.initialOffsetX = this.offsetX;
-                        touchState.initialOffsetY = this.offsetY;
-                        touchState.moved = false;
-                        touchState.wasMultiTouch = false;
-                    }
-                }, 100);
-            }
-        });
+            }, 1000);
+        }
         
-        // MOUSE EVENTS - Keep existing logic for desktop
-        let mouseState = {
+        // Update touch count
+        const previousTouches = this.touchState.touches;
+        this.touchState.touches = e.touches.length;
+        
+        // Reset movement state only when all touches are gone
+        if (e.touches.length === 0) {
+            this.touchState.moved = false;
+            this.touchState.wasMultiTouch = false;
+        }
+        
+        // If going from 2+ touches to 1 touch, reset single touch state
+        if (previousTouches > 1 && e.touches.length === 1) {
+            setTimeout(() => {
+                if (this.touchState.touches === 1) {
+                    const coords = this.getCoords(e);
+                    this.touchState.startX = coords.x;
+                    this.touchState.startY = coords.y;
+                    this.touchState.initialOffsetX = this.offsetX;
+                    this.touchState.initialOffsetY = this.offsetY;
+                    this.touchState.moved = false;
+                    this.touchState.wasMultiTouch = false;
+                }
+            }, 100);
+        }
+    }
+    
+    setupMouseHandlers() {
+        // Mouse state for desktop
+        this.mouseState = {
             down: false,
             startX: 0,
             startY: 0,
@@ -287,86 +298,95 @@ class PixelCanvas {
             initialOffsetY: 0
         };
         
-        this.canvas.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            mouseState.down = true;
-            const coords = getCoords(e);
-            mouseState.startX = coords.x;
-            mouseState.startY = coords.y;
-            mouseState.initialOffsetX = this.offsetX;
-            mouseState.initialOffsetY = this.offsetY;
-        });
+        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+        this.canvas.addEventListener('mouseleave', () => this.handleMouseLeave());
+    }
+    
+    handleMouseDown(e) {
+        e.preventDefault();
+        this.mouseState.down = true;
+        const coords = this.getCoords(e);
+        this.mouseState.startX = coords.x;
+        this.mouseState.startY = coords.y;
+        this.mouseState.initialOffsetX = this.offsetX;
+        this.mouseState.initialOffsetY = this.offsetY;
+    }
+    
+    handleMouseMove(e) {
+        e.preventDefault();
+        if (!this.mouseState.down) return;
         
-        this.canvas.addEventListener('mousemove', (e) => {
-            e.preventDefault();
-            if (!mouseState.down) return;
-            
-            const coords = getCoords(e);
-            const dx = coords.x - mouseState.startX;
-            const dy = coords.y - mouseState.startY;
-            
-            this.offsetX = mouseState.initialOffsetX + dx;
-            this.offsetY = mouseState.initialOffsetY + dy;
-            this.constrainViewport(); // Apply viewport constraints
-            this.render();
-        });
+        const coords = this.getCoords(e);
+        const dx = coords.x - this.mouseState.startX;
+        const dy = coords.y - this.mouseState.startY;
         
-        this.canvas.addEventListener('mouseup', (e) => {
-            e.preventDefault();
-            if (!mouseState.down) return;
-            
-            const coords = getCoords(e);
-            const dx = coords.x - mouseState.startX;
-            const dy = coords.y - mouseState.startY;
-            
-            // If very small movement, treat as click
-            if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
-                console.log(`🖱️ MOUSEUP: Small movement, treating as click`);
-                this.handlePixelClick(mouseState.startX, mouseState.startY);
-            } else if (!this.isExpansionRunning) {
-                // Large movement = viewport pan, check for expansion (debounced)
-                console.log(`🖱️ MOUSEUP: Large movement detected (${dx}, ${dy}), scheduling expansion check`);
-                setTimeout(() => {
-                    if (!this.isExpansionRunning) {
-                        this.checkLoadedSectorsForExpansion();
-                    }
-                }, 1000);
-            }
-            
-            mouseState.down = false;
-        });
+        this.offsetX = this.mouseState.initialOffsetX + dx;
+        this.offsetY = this.mouseState.initialOffsetY + dy;
+        this.constrainViewport();
+        this.render();
+    }
+    
+    handleMouseUp(e) {
+        e.preventDefault();
+        if (!this.mouseState.down) return;
         
-        this.canvas.addEventListener('mouseleave', () => {
-            mouseState.down = false;
-        });
+        const coords = this.getCoords(e);
+        const dx = coords.x - this.mouseState.startX;
+        const dy = coords.y - this.mouseState.startY;
         
-        // Mouse wheel zoom
-        this.canvas.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const rect = this.canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
-            
-            const delta = e.deltaY > 0 ? 0.9 : 1.1;
-            const newScale = Math.max(0.1, Math.min(16, this.scale * delta));
-            
-            const scaleFactor = newScale / this.scale;
-            this.offsetX = mouseX - (mouseX - this.offsetX) * scaleFactor;
-            this.offsetY = mouseY - (mouseY - this.offsetY) * scaleFactor;
-            this.scale = newScale;
-            
-            this.constrainViewport(); // Apply viewport constraints after zoom
-            this.render();
-            
-            // Check for expansion after zoom (debounced)
-            if (!this.isExpansionRunning) {
-                setTimeout(() => {
-                    if (!this.isExpansionRunning) {
-                        this.checkLoadedSectorsForExpansion();
-                    }
-                }, 1500);
-            }
-        });
+        // If very small movement, treat as click
+        if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
+            console.log(`🖱️ MOUSEUP: Small movement, treating as click`);
+            this.handlePixelClick(this.mouseState.startX, this.mouseState.startY);
+        } else if (!this.isExpansionRunning) {
+            // Large movement = viewport pan, check for expansion (debounced)
+            console.log(`🖱️ MOUSEUP: Large movement detected (${dx}, ${dy}), scheduling expansion check`);
+            setTimeout(() => {
+                if (!this.isExpansionRunning) {
+                    this.checkLoadedSectorsForExpansion();
+                }
+            }, 1000);
+        }
+        
+        this.mouseState.down = false;
+    }
+    
+    handleMouseLeave() {
+        this.mouseState.down = false;
+    }
+    
+    setupWheelZoom() {
+        this.canvas.addEventListener('wheel', (e) => this.handleWheel(e));
+    }
+    
+    handleWheel(e) {
+        e.preventDefault();
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const newScale = Math.max(0.1, Math.min(16, this.scale * delta));
+        
+        const scaleFactor = newScale / this.scale;
+        this.offsetX = mouseX - (mouseX - this.offsetX) * scaleFactor;
+        this.offsetY = mouseY - (mouseY - this.offsetY) * scaleFactor;
+        this.scale = newScale;
+        
+        this.constrainViewport();
+        this.render();
+        
+        // Check for expansion after zoom (debounced)
+        if (!this.isExpansionRunning) {
+            setTimeout(() => {
+                if (!this.isExpansionRunning) {
+                    this.checkLoadedSectorsForExpansion();
+                }
+            }, 1500);
+        }
+    }
     }
     
     setupColorPalette() {
@@ -419,17 +439,9 @@ class PixelCanvas {
         // Update sector count locally and check for expansion
         const sectorKey = `${sectorX},${sectorY}`;
         
-        // Count actual pixels in this sector (more accurate than sectorPixelCounts)
-        let actualCount = 0;
-        for (const [key, color] of this.pixels) {
-            const [pSectorX, pSectorY] = key.split(',').map(Number);
-            if (pSectorX === sectorX && pSectorY === sectorY) {
-                actualCount++;
-            }
-        }
-        
-        console.log(`🔍 Sector (${sectorX}, ${sectorY}) after drawing: ${actualCount} pixels (including new pixel)`);
-        this.sectorPixelCounts.set(sectorKey, actualCount);
+        // Use unified pixel counting
+        const actualCount = this.getRealTimePixelCount(sectorKey);
+        console.log(`🔍 Sector (${sectorX}, ${sectorY}) after drawing: ${actualCount} pixels`);
         
         // Check if we need to expand
         const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
@@ -553,7 +565,6 @@ class PixelCanvas {
         // Initialize sector (0,0) as the starting active sector
         this.mobileLog(`🔧 INIT: Before adding (0,0) - Active: ${Array.from(this.activeSectors).join(',')}`);
         this.activeSectors.add('0,0');
-        this.sectorPixelCounts.set('0,0', 0);
         this.mobileLog(`🔧 INIT: After adding (0,0) - Active: ${Array.from(this.activeSectors).join(',')}`);
         
         // Load pixels from Supabase
@@ -723,31 +734,52 @@ class PixelCanvas {
     }
     
     getViewportBounds() {
-        // ビューポート境界計算の設計思想:
-        // 1. アクティブセクターが画面から完全に外れないようにする
-        // 2. 適度なパディングで快適な操作性を確保
-        // 3. ズームレベルに関わらず一貫した境界
-        
-        // アクティブセクターがない場合のデフォルト
+        // Handle case when no active sectors exist
         if (this.activeSectors.size === 0) {
-            // セクター(0,0)を中心とした1セクター分の範囲
-            const sectorSize = GRID_SIZE * PIXEL_SIZE;
-            const centerX = sectorSize / 2;
-            const centerY = sectorSize / 2;
-            
-            // Use logical canvas size (CSS pixels) for viewport calculations
-            const canvasWidth = this.logicalWidth || this.canvas.width / (window.devicePixelRatio || 1);
-            const canvasHeight = this.logicalHeight || this.canvas.height / (window.devicePixelRatio || 1);
-            
-            return {
-                minOffsetX: -centerX * this.scale,
-                maxOffsetX: canvasWidth - centerX * this.scale,
-                minOffsetY: -centerY * this.scale,
-                maxOffsetY: canvasHeight - centerY * this.scale
-            };
+            return this.getDefaultViewportBounds();
         }
         
-        // アクティブセクターの境界を計算
+        // Calculate bounds based on active sectors
+        const activeBounds = this.calculateActiveSectorBounds();
+        const paddedBounds = this.addPaddingToBounds(activeBounds);
+        const canvasSize = this.getLogicalCanvasSize();
+        
+        // Calculate viewport constraints
+        const horizontalConstraints = this.calculateHorizontalConstraints(paddedBounds, canvasSize);
+        const verticalConstraints = this.calculateVerticalConstraints(paddedBounds, canvasSize);
+        
+        this.logViewportBounds(activeBounds, paddedBounds, canvasSize, horizontalConstraints, verticalConstraints);
+        
+        return {
+            minOffsetX: horizontalConstraints.minOffsetX,
+            maxOffsetX: horizontalConstraints.maxOffsetX,
+            minOffsetY: verticalConstraints.minOffsetY,
+            maxOffsetY: verticalConstraints.maxOffsetY
+        };
+    }
+    
+    getDefaultViewportBounds() {
+        const sectorSize = GRID_SIZE * PIXEL_SIZE;
+        const centerX = sectorSize / 2;
+        const centerY = sectorSize / 2;
+        const canvasSize = this.getLogicalCanvasSize();
+        
+        return {
+            minOffsetX: -centerX * this.scale,
+            maxOffsetX: canvasSize.width - centerX * this.scale,
+            minOffsetY: -centerY * this.scale,
+            maxOffsetY: canvasSize.height - centerY * this.scale
+        };
+    }
+    
+    getLogicalCanvasSize() {
+        return {
+            width: this.logicalWidth || this.canvas.width / (window.devicePixelRatio || 1),
+            height: this.logicalHeight || this.canvas.height / (window.devicePixelRatio || 1)
+        };
+    }
+    
+    calculateActiveSectorBounds() {
         let minSectorX = Infinity, maxSectorX = -Infinity;
         let minSectorY = Infinity, maxSectorY = -Infinity;
         
@@ -759,82 +791,78 @@ class PixelCanvas {
             maxSectorY = Math.max(maxSectorY, sectorY);
         }
         
-        // ワールド座標でのアクティブエリアの境界（ピクセル単位）
         const pixelsPerSector = GRID_SIZE * PIXEL_SIZE;
-        const worldBounds = {
+        return {
             left: minSectorX * pixelsPerSector,
             right: (maxSectorX + 1) * pixelsPerSector,
             top: minSectorY * pixelsPerSector,
-            bottom: (maxSectorY + 1) * pixelsPerSector
+            bottom: (maxSectorY + 1) * pixelsPerSector,
+            minSectorX, maxSectorX, minSectorY, maxSectorY
         };
-        
-        // パディング: アクティブエリア外に1セクター分の余裕
+    }
+    
+    addPaddingToBounds(bounds) {
         const paddingSectors = 1;
-        const paddingPixels = paddingSectors * pixelsPerSector;
+        const paddingPixels = paddingSectors * GRID_SIZE * PIXEL_SIZE;
         
-        const paddedBounds = {
-            left: worldBounds.left - paddingPixels,
-            right: worldBounds.right + paddingPixels,
-            top: worldBounds.top - paddingPixels,
-            bottom: worldBounds.bottom + paddingPixels
+        return {
+            left: bounds.left - paddingPixels,
+            right: bounds.right + paddingPixels,
+            top: bounds.top - paddingPixels,
+            bottom: bounds.bottom + paddingPixels
         };
-        
-        // ビューポート制約の計算
-        // 原則: パディング込みのアクティブエリアが画面内に留まる範囲
-        
-        // Use logical canvas size (CSS pixels) for viewport calculations
-        const canvasWidth = this.logicalWidth || this.canvas.width / (window.devicePixelRatio || 1);
-        const canvasHeight = this.logicalHeight || this.canvas.height / (window.devicePixelRatio || 1);
-        
-        // 水平方向の制約
+    }
+    
+    calculateHorizontalConstraints(paddedBounds, canvasSize) {
         const worldWidthScaled = (paddedBounds.right - paddedBounds.left) * this.scale;
         
         let minOffsetX, maxOffsetX;
         
-        if (worldWidthScaled <= canvasWidth) {
-            // ワールドが画面より小さい場合: 中央寄せを許可
-            const centerOffsetX = (canvasWidth - worldWidthScaled) / 2 - paddedBounds.left * this.scale;
-            const margin = canvasWidth * 0.1; // 画面幅の10%の余裕
+        if (worldWidthScaled <= canvasSize.width) {
+            // World smaller than screen: allow centering
+            const centerOffsetX = (canvasSize.width - worldWidthScaled) / 2 - paddedBounds.left * this.scale;
+            const margin = canvasSize.width * 0.1; // 10% margin
             minOffsetX = centerOffsetX - margin;
             maxOffsetX = centerOffsetX + margin;
         } else {
-            // ワールドが画面より大きい場合: エッジ制約
-            minOffsetX = canvasWidth - paddedBounds.right * this.scale;  // 右端を画面右に
-            maxOffsetX = -paddedBounds.left * this.scale;               // 左端を画面左に
+            // World larger than screen: edge constraints
+            minOffsetX = canvasSize.width - paddedBounds.right * this.scale;
+            maxOffsetX = -paddedBounds.left * this.scale;
         }
         
-        // 垂直方向の制約
+        return { minOffsetX, maxOffsetX, worldWidthScaled };
+    }
+    
+    calculateVerticalConstraints(paddedBounds, canvasSize) {
         const worldHeightScaled = (paddedBounds.bottom - paddedBounds.top) * this.scale;
         
         let minOffsetY, maxOffsetY;
         
-        if (worldHeightScaled <= canvasHeight) {
-            // ワールドが画面より小さい場合: 中央寄せを許可
-            const centerOffsetY = (canvasHeight - worldHeightScaled) / 2 - paddedBounds.top * this.scale;
-            const margin = canvasHeight * 0.1; // 画面高の10%の余裕
+        if (worldHeightScaled <= canvasSize.height) {
+            // World smaller than screen: allow centering
+            const centerOffsetY = (canvasSize.height - worldHeightScaled) / 2 - paddedBounds.top * this.scale;
+            const margin = canvasSize.height * 0.1; // 10% margin
             minOffsetY = centerOffsetY - margin;
             maxOffsetY = centerOffsetY + margin;
         } else {
-            // ワールドが画面より大きい場合: エッジ制約
-            minOffsetY = canvasHeight - paddedBounds.bottom * this.scale;  // 下端を画面下に
-            maxOffsetY = -paddedBounds.top * this.scale;                  // 上端を画面上に
+            // World larger than screen: edge constraints
+            minOffsetY = canvasSize.height - paddedBounds.bottom * this.scale;
+            maxOffsetY = -paddedBounds.top * this.scale;
         }
         
+        return { minOffsetY, maxOffsetY, worldHeightScaled };
+    }
+    
+    logViewportBounds(activeBounds, paddedBounds, canvasSize, horizontalConstraints, verticalConstraints) {
         console.log(`🔍 Viewport bounds calculated:
-            Active sectors: X[${minSectorX} to ${maxSectorX}] Y[${minSectorY} to ${maxSectorY}]
-            World bounds: X[${worldBounds.left} to ${worldBounds.right}] Y[${worldBounds.top} to ${worldBounds.bottom}]
+            Active sectors: X[${activeBounds.minSectorX} to ${activeBounds.maxSectorX}] Y[${activeBounds.minSectorY} to ${activeBounds.maxSectorY}]
+            World bounds: X[${activeBounds.left} to ${activeBounds.right}] Y[${activeBounds.top} to ${activeBounds.bottom}]
             Padded bounds: X[${paddedBounds.left} to ${paddedBounds.right}] Y[${paddedBounds.top} to ${paddedBounds.bottom}]
-            Canvas (logical): ${canvasWidth}x${canvasHeight}, Scale: ${this.scale.toFixed(2)}x
+            Canvas (logical): ${canvasSize.width}x${canvasSize.height}, Scale: ${this.scale.toFixed(2)}x
             Canvas (physical): ${this.canvas.width}x${this.canvas.height}, DPR: ${window.devicePixelRatio || 1}
-            World size scaled: ${worldWidthScaled.toFixed(1)}x${worldHeightScaled.toFixed(1)}
-            Offset bounds: X[${minOffsetX.toFixed(1)} to ${maxOffsetX.toFixed(1)}] Y[${minOffsetY.toFixed(1)} to ${maxOffsetY.toFixed(1)}]`);
-        
-        return {
-            minOffsetX: minOffsetX,
-            maxOffsetX: maxOffsetX,
-            minOffsetY: minOffsetY,
-            maxOffsetY: maxOffsetY
-        };
+            World size scaled: ${horizontalConstraints.worldWidthScaled.toFixed(1)}x${verticalConstraints.worldHeightScaled.toFixed(1)}
+            Offset bounds: X[${horizontalConstraints.minOffsetX.toFixed(1)} to ${horizontalConstraints.maxOffsetX.toFixed(1)}] Y[${verticalConstraints.minOffsetY.toFixed(1)} to ${verticalConstraints.maxOffsetY.toFixed(1)}]`);
+    }
     }
     
     constrainViewport() {
@@ -1094,7 +1122,15 @@ class PixelCanvas {
     }
     
     setupMobileDebugPanel() {
-        // Create debug panel for mobile
+        this.createDebugPanel();
+        this.createCopyButton();
+        this.createFreezeButton();
+        this.createClearButton();
+        this.createToggleButton();
+        this.initializeDebugState();
+    }
+    
+    createDebugPanel() {
         this.debugPanel = document.createElement('div');
         this.debugPanel.id = 'mobileDebugPanel';
         this.debugPanel.style.cssText = `
@@ -1114,8 +1150,9 @@ class PixelCanvas {
             display: none;
         `;
         document.body.appendChild(this.debugPanel);
-        
-        // Add copy button to debug panel
+    }
+    
+    createCopyButton() {
         this.copyButton = document.createElement('button');
         this.copyButton.textContent = '📋 Copy Logs';
         this.copyButton.style.cssText = `
@@ -1133,8 +1170,9 @@ class PixelCanvas {
         `;
         this.copyButton.addEventListener('click', () => this.copyLogsToClipboard());
         this.debugPanel.appendChild(this.copyButton);
-        
-        // Add freeze button
+    }
+    
+    createFreezeButton() {
         this.freezeButton = document.createElement('button');
         this.freezeButton.textContent = '❄️ Freeze';
         this.freezeButton.style.cssText = `
@@ -1150,11 +1188,11 @@ class PixelCanvas {
             cursor: pointer;
             z-index: 10002;
         `;
-        this.logsFrozen = false;
         this.freezeButton.addEventListener('click', () => this.toggleFreezeLogs());
         this.debugPanel.appendChild(this.freezeButton);
-        
-        // Add clear button
+    }
+    
+    createClearButton() {
         this.clearButton = document.createElement('button');
         this.clearButton.textContent = '🗑️ Clear';
         this.clearButton.style.cssText = `
@@ -1172,8 +1210,9 @@ class PixelCanvas {
         `;
         this.clearButton.addEventListener('click', () => this.clearLogs());
         this.debugPanel.appendChild(this.clearButton);
-        
-        // Add toggle button
+    }
+    
+    createToggleButton() {
         this.debugToggle = document.createElement('button');
         this.debugToggle.textContent = '🐛';
         this.debugToggle.style.cssText = `
@@ -1196,9 +1235,12 @@ class PixelCanvas {
             this.debugToggle.textContent = isVisible ? '🐛' : '❌';
         });
         document.body.appendChild(this.debugToggle);
-        
+    }
+    
+    initializeDebugState() {
         this.debugLogs = [];
-        this.maxDebugLogs = 200; // Increase log retention
+        this.maxDebugLogs = 200;
+        this.logsFrozen = false;
     }
     
     mobileLog(message) {
@@ -1482,69 +1524,17 @@ class PixelCanvas {
             const sectors = await response.json();
             console.log(`Successfully loaded ${sectors.length} sectors:`, sectors);
             
-            // Clear existing counts
-            this.sectorPixelCounts.clear();
-            
-            for (const sector of sectors) {
-                const key = `${sector.sector_x},${sector.sector_y}`;
-                this.sectorPixelCounts.set(key, sector.pixel_count);
-                console.log(`Sector ${key}: ${sector.pixel_count} pixels`);
-                
-                // Do NOT automatically expand here - let checkLoadedSectorsForExpansion handle it
-                // This prevents mass activation of all sectors during data loading
-            }
-            
-            console.log('Sector counts loaded successfully!');
-            
-            // Always recalculate counts from actual pixels to ensure consistency
-            this.recalculateSectorCounts();
+            console.log(`Successfully loaded ${sectors.length} sectors from database`);
+            // Note: Using real-time pixel counting instead of cached counts
             
         } catch (error) {
             console.error('Failed to load sector counts:', error);
-            // Fallback: calculate counts from loaded pixels
-            console.log('Fallback: calculating sector counts from pixels...');
-            this.calculateSectorCountsFromPixels();
+            console.log('Note: Using real-time pixel counting as fallback');
         }
     }
     
-    calculateSectorCountsFromPixels() {
-        this.sectorPixelCounts.clear();
-        
-        // Count pixels by sector
-        for (const [key, color] of this.pixels) {
-            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
-            const sectorKey = `${sectorX},${sectorY}`;
-            const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
-            this.sectorPixelCounts.set(sectorKey, currentCount + 1);
-        }
-        
-        // Do NOT expand here - let checkLoadedSectorsForExpansion handle it
-        // This prevents automatic expansion during fallback processing
-        for (const [sectorKey, count] of this.sectorPixelCounts) {
-            console.log(`Calculated sector ${sectorKey}: ${count} pixels`);
-        }
-    }
-    
-    recalculateSectorCounts() {
-        // Recalculate sector counts from actual pixels for consistency
-        console.log('Recalculating sector counts from actual pixels...');
-        
-        // Clear existing counts first  
-        this.sectorPixelCounts.clear();
-        
-        // Count pixels by sector from this.pixels
-        for (const [key, color] of this.pixels) {
-            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
-            const sectorKey = `${sectorX},${sectorY}`;
-            const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
-            this.sectorPixelCounts.set(sectorKey, currentCount + 1);
-        }
-        
-        // Log the recalculated counts
-        for (const [sectorKey, count] of this.sectorPixelCounts) {
-            console.log(`Recalculated sector ${sectorKey}: ${count} pixels`);
-        }
-    }
+    // Removed calculateSectorCountsFromPixels() and recalculateSectorCounts()
+    // Using getRealTimePixelCount() for all pixel counting needs
     
     debounceExpansionCheck() {
         // Debounce expansion checks to avoid too many database calls
@@ -1767,12 +1757,11 @@ class PixelCanvas {
         }
     }
     
-    updateSectorCountLazy(sectorKey, increment) {
-        // Update in background without blocking
+    updateSectorCountInDatabase(sectorKey) {
+        // Update database with real-time pixel count
         setTimeout(() => {
             const [sectorX, sectorY] = sectorKey.split(',').map(Number);
-            const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
-            const newCount = currentCount + increment;
+            const realCount = this.getRealTimePixelCount(sectorKey);
             
             fetch(`${SUPABASE_URL}/rest/v1/sectors?sector_x=eq.${sectorX}&sector_y=eq.${sectorY}`, {
                 method: 'PATCH',
@@ -1783,15 +1772,10 @@ class PixelCanvas {
                     'Prefer': 'return=minimal'
                 },
                 body: JSON.stringify({
-                    pixel_count: newCount
+                    pixel_count: realCount
                 })
             }).catch(() => {}); // Ignore errors
         }, 0);
-    }
-    
-    async updateSectorCount(sectorKey, increment) {
-        // Keep for compatibility
-        this.updateSectorCountLazy(sectorKey, increment);
     }
     
     async checkSectorExpansion(sectorX, sectorY, pixelCount) {
@@ -1847,7 +1831,6 @@ class PixelCanvas {
             
             if (!this.activeSectors.has(sectorKey)) {
                 this.activeSectors.add(sectorKey);
-                this.sectorPixelCounts.set(sectorKey, 0);
                 console.log(`🎯 Expanded to sector (${newX}, ${newY})`);
                 expanded = true;
                 
@@ -2067,9 +2050,7 @@ class PixelCanvas {
             console.log(`Drawing test pixel at (${x}, ${y})`);
             this.drawPixel(0, 0, x, y, Math.floor(Math.random() * 16));
             
-            // Add to local count
-            const count = this.sectorPixelCounts.get('0,0') || 0;
-            this.sectorPixelCounts.set('0,0', count + 1);
+            // Note: Using real-time pixel counting
             
             // Small delay between pixels
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -2159,10 +2140,7 @@ class PixelCanvas {
         // Also add to main pixels map for persistence
         this.pixels.set(key, pixelData.color);
         
-        // Update sector pixel count but DON'T automatically add to activeSectors
-        const sectorKey = `${pixelData.sector_x},${pixelData.sector_y}`;
-        const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
-        this.sectorPixelCounts.set(sectorKey, currentCount + 1);
+        // Sector pixel counting is now handled by getRealTimePixelCount() as single source of truth
         
         // Batch render for performance (render every 100ms)
         if (!this.renderTimeout) {
@@ -2192,10 +2170,6 @@ class PixelCanvas {
         this.remotePixelsBuffer.clear();
     }
     
-    updatePixelCount() {
-        // This method is no longer used - stock display is handled by updateStockDisplay
-        // Keep for compatibility but don't override stock display
-    }
 }
 
 // Initialize when DOM is ready
