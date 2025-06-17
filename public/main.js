@@ -530,6 +530,9 @@ class PixelCanvas {
         this.render();
         this.updateStatus(navigator.onLine);
         
+        // Check for expansion opportunities after initial load
+        setTimeout(() => this.checkVisibleSectorsForExpansion(), 1000);
+        
         // Set up real-time subscription (optional)
         // this.setupRealtimeSubscription();
         
@@ -794,6 +797,9 @@ class PixelCanvas {
         if (Math.abs(originalOffsetX - this.offsetX) > 5 || Math.abs(originalOffsetY - this.offsetY) > 5) {
             this.showBoundaryWarning();
         }
+        
+        // Check for expansion opportunities when viewport changes
+        this.checkVisibleSectorsForExpansion();
     }
     
     centerViewportOnActiveSectors() {
@@ -1241,6 +1247,55 @@ class PixelCanvas {
         // Log the recalculated counts
         for (const [sectorKey, count] of this.sectorPixelCounts) {
             console.log(`Recalculated sector ${sectorKey}: ${count} pixels`);
+        }
+    }
+    
+    checkVisibleSectorsForExpansion() {
+        // Check all visible sectors for expansion threshold
+        const sectorSize = GRID_SIZE * PIXEL_SIZE * this.scale;
+        
+        // Calculate visible sector range
+        const startSectorX = Math.floor(-this.offsetX / sectorSize) - 1;
+        const endSectorX = Math.ceil((this.canvas.width - this.offsetX) / sectorSize) + 1;
+        const startSectorY = Math.floor(-this.offsetY / sectorSize) - 1;
+        const endSectorY = Math.ceil((this.canvas.height - this.offsetY) / sectorSize) + 1;
+        
+        let expandedAny = false;
+        
+        // Check each visible sector
+        for (let sectorX = startSectorX; sectorX <= endSectorX; sectorX++) {
+            for (let sectorY = startSectorY; sectorY <= endSectorY; sectorY++) {
+                const sectorKey = `${sectorX},${sectorY}`;
+                
+                // Count actual pixels in this sector
+                let pixelCount = 0;
+                for (const [key, color] of this.pixels) {
+                    const [pSectorX, pSectorY] = key.split(',').map(Number);
+                    if (pSectorX === sectorX && pSectorY === sectorY) {
+                        pixelCount++;
+                    }
+                }
+                
+                // Check if expansion is needed
+                if (pixelCount > 0) {
+                    const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
+                    const fillPercentage = pixelCount / maxPixelsPerSector;
+                    
+                    if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
+                        // Only expand if this sector isn't already active
+                        if (!this.activeSectors.has(sectorKey)) {
+                            console.log(`🔄 Viewport expansion check: sector (${sectorX}, ${sectorY}) with ${pixelCount} pixels (${(fillPercentage * 100).toFixed(3)}%)`);
+                            this.expandSectorsLocally(sectorX, sectorY);
+                            expandedAny = true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (expandedAny) {
+            console.log(`🎯 Expanded sectors based on viewport visibility`);
+            this.render(); // Re-render to show new active sectors
         }
     }
     
