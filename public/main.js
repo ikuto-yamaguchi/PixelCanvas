@@ -17,6 +17,12 @@ const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
 const SECTOR_EXPANSION_THRESHOLD = 0.0001; // 0.01% filled (7 pixels) for testing
 
+// Initialize Supabase client for Realtime
+let supabaseClient = null;
+if (typeof window !== 'undefined' && window.supabase) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
 class PixelCanvas {
     constructor() {
         this.canvas = document.getElementById('mainCanvas');
@@ -44,6 +50,8 @@ class PixelCanvas {
         this.deviceId = this.generateDeviceId(); // Unique device identifier
         this.cachedIP = null; // Cache IP address
         this.ipCacheTime = 0; // IP cache timestamp
+        this.realtimeChannel = null; // Realtime subscription
+        this.remotePixelsBuffer = new Map(); // Buffer for remote pixels
         
         this.init();
     }
@@ -178,6 +186,7 @@ class PixelCanvas {
                     touchState.moved = true;
                     this.offsetX = touchState.initialOffsetX + dx;
                     this.offsetY = touchState.initialOffsetY + dy;
+                    this.constrainViewport(); // Apply viewport constraints
                     this.render();
                 }
             } else if (e.touches.length === 2 && touchState.touches === 2) {
@@ -196,6 +205,7 @@ class PixelCanvas {
                 this.offsetY = centerY - (centerY - touchState.initialOffsetY) * scaleFactor;
                 this.scale = newScale;
                 
+                this.constrainViewport(); // Apply viewport constraints after zoom
                 this.render();
                 touchState.moved = true;
             }
@@ -277,6 +287,7 @@ class PixelCanvas {
             
             this.offsetX = mouseState.initialOffsetX + dx;
             this.offsetY = mouseState.initialOffsetY + dy;
+            this.constrainViewport(); // Apply viewport constraints
             this.render();
         });
         
@@ -315,6 +326,7 @@ class PixelCanvas {
             this.offsetY = mouseY - (mouseY - this.offsetY) * scaleFactor;
             this.scale = newScale;
             
+            this.constrainViewport(); // Apply viewport constraints after zoom
             this.render();
         });
     }
@@ -335,6 +347,12 @@ class PixelCanvas {
         // Check if we have pixels in stock (client-side only)
         if (this.pixelStock <= 0) {
             console.log('No pixels in client stock');
+            return;
+        }
+        
+        // Check if click is within active sectors
+        if (!this.isWithinActiveSectors(x, y)) {
+            this.showOutOfBoundsWarning();
             return;
         }
         
@@ -486,6 +504,9 @@ class PixelCanvas {
         // Load pixels from Supabase
         this.loadPixelsFromSupabase();
         
+        // Setup realtime subscription
+        this.setupRealtimeSubscription();
+        
         // Also load from localStorage as backup
         const savedPixels = JSON.parse(localStorage.getItem('pixelcanvas_pixels') || '{}');
         for (const [key, color] of Object.entries(savedPixels)) {
@@ -604,6 +625,9 @@ class PixelCanvas {
                 }
             }
         }
+        
+        // Render active sector boundaries for visual clarity
+        this.renderActiveSectorBounds();
     }
     
     renderPixels() {
@@ -614,6 +638,168 @@ class PixelCanvas {
             const worldY = sectorY * GRID_SIZE + localY;
             this.renderPixel(worldX, worldY, color);
         }
+    }
+    
+    getViewportBounds() {
+        // Calculate the bounding box for all active sectors with padding
+        let minSectorX = 0, maxSectorX = 0, minSectorY = 0, maxSectorY = 0;
+        
+        if (this.activeSectors.size > 0) {
+            minSectorX = maxSectorX = parseInt(Array.from(this.activeSectors)[0].split(',')[0]);
+            minSectorY = maxSectorY = parseInt(Array.from(this.activeSectors)[0].split(',')[1]);
+            
+            for (const sectorKey of this.activeSectors) {
+                const [sectorX, sectorY] = sectorKey.split(',').map(Number);
+                minSectorX = Math.min(minSectorX, sectorX);
+                maxSectorX = Math.max(maxSectorX, sectorX);
+                minSectorY = Math.min(minSectorY, sectorY);
+                maxSectorY = Math.max(maxSectorY, sectorY);
+            }
+        }
+        
+        // Add padding (1 sector on each side for comfortable viewing)
+        const padding = GRID_SIZE * PIXEL_SIZE;
+        const worldBounds = {
+            left: (minSectorX - 1) * GRID_SIZE * PIXEL_SIZE - padding,
+            right: (maxSectorX + 2) * GRID_SIZE * PIXEL_SIZE + padding,
+            top: (minSectorY - 1) * GRID_SIZE * PIXEL_SIZE - padding,
+            bottom: (maxSectorY + 2) * GRID_SIZE * PIXEL_SIZE + padding
+        };
+        
+        // Convert to viewport bounds (screen coordinates)
+        return {
+            minOffsetX: this.canvas.width - worldBounds.right * this.scale,
+            maxOffsetX: -worldBounds.left * this.scale,
+            minOffsetY: this.canvas.height - worldBounds.bottom * this.scale,
+            maxOffsetY: -worldBounds.top * this.scale
+        };
+    }
+    
+    constrainViewport() {
+        // Apply viewport constraints based on active sectors
+        const bounds = this.getViewportBounds();
+        
+        const originalOffsetX = this.offsetX;
+        const originalOffsetY = this.offsetY;
+        
+        this.offsetX = Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, this.offsetX));
+        this.offsetY = Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, this.offsetY));
+        
+        // Show boundary warning if viewport was constrained
+        if (originalOffsetX !== this.offsetX || originalOffsetY !== this.offsetY) {
+            this.showBoundaryWarning();
+        }
+    }
+    
+    showBoundaryWarning() {
+        // Visual feedback when hitting viewport boundaries
+        let warning = document.getElementById('boundaryWarning');
+        if (!warning) {
+            warning = document.createElement('div');
+            warning.id = 'boundaryWarning';
+            warning.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(255, 68, 68, 0.9);
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                text-align: center;
+                z-index: 1000;
+                pointer-events: none;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            `;
+            warning.textContent = '🚫 アクティブエリアの境界です';
+            document.body.appendChild(warning);
+        }
+        
+        warning.style.display = 'block';
+        
+        // Auto-hide after 2 seconds
+        clearTimeout(this.boundaryWarningTimeout);
+        this.boundaryWarningTimeout = setTimeout(() => {
+            warning.style.display = 'none';
+        }, 2000);
+    }
+
+    renderActiveSectorBounds() {
+        const sectorSize = GRID_SIZE * PIXEL_SIZE * this.scale;
+        
+        // Only show visual bounds when sectors are large enough to see
+        if (sectorSize < 30) return;
+        
+        // Calculate visible sector range
+        const startSectorX = Math.floor(-this.offsetX / sectorSize);
+        const endSectorX = Math.ceil((this.canvas.width - this.offsetX) / sectorSize);
+        const startSectorY = Math.floor(-this.offsetY / sectorSize);
+        const endSectorY = Math.ceil((this.canvas.height - this.offsetY) / sectorSize);
+        
+        // Draw each visible sector with appropriate styling
+        for (let sectorX = startSectorX; sectorX <= endSectorX; sectorX++) {
+            for (let sectorY = startSectorY; sectorY <= endSectorY; sectorY++) {
+                const sectorKey = `${sectorX},${sectorY}`;
+                const isActive = this.activeSectors.has(sectorKey);
+                
+                // Calculate screen position of sector
+                const screenX = this.offsetX + sectorX * sectorSize;
+                const screenY = this.offsetY + sectorY * sectorSize;
+                
+                if (isActive) {
+                    // Active sector: bright green border
+                    this.ctx.strokeStyle = '#00ff00';
+                    this.ctx.lineWidth = Math.max(2, 4 / this.scale);
+                    this.ctx.setLineDash([]);
+                    
+                    this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
+                    
+                    // Show sector info when zoomed in enough
+                    if (sectorSize > 100) {
+                        this.ctx.fillStyle = '#00ff00';
+                        this.ctx.font = `${Math.max(12, 20 / this.scale)}px monospace`;
+                        this.ctx.textAlign = 'center';
+                        this.ctx.textBaseline = 'middle';
+                        
+                        const pixelCount = this.sectorPixelCounts.get(sectorKey) || 0;
+                        const text = `(${sectorX},${sectorY})\n${pixelCount}px`;
+                        const centerX = screenX + sectorSize / 2;
+                        const centerY = screenY + sectorSize / 2;
+                        
+                        this.ctx.fillText(`(${sectorX},${sectorY})`, centerX, centerY - 10);
+                        this.ctx.fillText(`${pixelCount}px`, centerX, centerY + 10);
+                    }
+                } else {
+                    // Inactive sector: dim overlay
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                    this.ctx.fillRect(screenX, screenY, sectorSize, sectorSize);
+                    
+                    // Red dashed border
+                    this.ctx.strokeStyle = '#ff4444';
+                    this.ctx.lineWidth = Math.max(1, 2 / this.scale);
+                    this.ctx.setLineDash([8, 4]);
+                    this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
+                    
+                    // "LOCKED" text when zoomed in enough
+                    if (sectorSize > 80) {
+                        this.ctx.fillStyle = '#ff4444';
+                        this.ctx.font = `${Math.max(10, 16 / this.scale)}px monospace`;
+                        this.ctx.textAlign = 'center';
+                        this.ctx.textBaseline = 'middle';
+                        
+                        const centerX = screenX + sectorSize / 2;
+                        const centerY = screenY + sectorSize / 2;
+                        
+                        this.ctx.fillText('LOCKED', centerX, centerY);
+                    }
+                }
+            }
+        }
+        
+        // Reset line dash for other drawing
+        this.ctx.setLineDash([]);
     }
     
     generateDeviceId() {
@@ -755,6 +941,9 @@ class PixelCanvas {
             
             // Load sector counts
             await this.loadSectorCounts();
+            
+            // Ensure viewport is properly bounded after loading active sectors
+            this.constrainViewport();
             
             console.log(`Total pixels in memory: ${this.pixels.size}`);
             this.render();
@@ -1063,6 +1252,119 @@ class PixelCanvas {
         }
         
         console.log('✅ Test complete! Expansion should have triggered.');
+    }
+    
+    isWithinActiveSectors(x, y) {
+        const worldX = Math.floor((x - this.offsetX) / (PIXEL_SIZE * this.scale));
+        const worldY = Math.floor((y - this.offsetY) / (PIXEL_SIZE * this.scale));
+        
+        const sectorX = Math.floor(worldX / GRID_SIZE);
+        const sectorY = Math.floor(worldY / GRID_SIZE);
+        const sectorKey = `${sectorX},${sectorY}`;
+        
+        return this.activeSectors.has(sectorKey);
+    }
+    
+    showOutOfBoundsWarning() {
+        const warning = document.createElement('div');
+        warning.style.cssText = `
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #f87171;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            z-index: 1000;
+            animation: shake 0.5s ease-in-out;
+        `;
+        warning.textContent = '⚠️ You can only draw in active sectors!';
+        
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes shake {
+                0%, 100% { transform: translate(-50%, 0); }
+                25% { transform: translate(-50%, -5px); }
+                75% { transform: translate(-50%, 5px); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(warning);
+        
+        setTimeout(() => {
+            warning.style.opacity = '0';
+            warning.style.transition = 'opacity 0.3s';
+            setTimeout(() => {
+                warning.remove();
+                style.remove();
+            }, 300);
+        }, 2000);
+    }
+    
+    setupRealtimeSubscription() {
+        if (!supabaseClient) {
+            console.warn('Supabase client not available for realtime');
+            return;
+        }
+        
+        // Subscribe to pixel changes
+        this.realtimeChannel = supabaseClient
+            .channel('pixels-changes')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'pixels'
+            }, (payload) => {
+                this.handleRemotePixel(payload.new);
+            })
+            .subscribe();
+            
+        console.log('🔄 Realtime subscription active for pixel changes');
+    }
+    
+    handleRemotePixel(pixelData) {
+        // Don't process our own pixels
+        const key = `${pixelData.sector_x},${pixelData.sector_y},${pixelData.local_x},${pixelData.local_y}`;
+        
+        // Add to remote pixels buffer for batched rendering
+        this.remotePixelsBuffer.set(key, pixelData.color);
+        
+        // Also add to main pixels map for persistence
+        this.pixels.set(key, pixelData.color);
+        
+        // Track the sector
+        const sectorKey = `${pixelData.sector_x},${pixelData.sector_y}`;
+        this.activeSectors.add(sectorKey);
+        
+        // Batch render for performance (render every 100ms)
+        if (!this.renderTimeout) {
+            this.renderTimeout = setTimeout(() => {
+                this.renderRemotePixels();
+                this.renderTimeout = null;
+            }, 100);
+        }
+        
+        console.log(`📡 Received remote pixel: ${key} = color ${pixelData.color}`);
+    }
+    
+    renderRemotePixels() {
+        if (this.remotePixelsBuffer.size === 0) return;
+        
+        console.log(`🎨 Rendering ${this.remotePixelsBuffer.size} remote pixels`);
+        
+        // Render all buffered remote pixels
+        for (const [key, color] of this.remotePixelsBuffer) {
+            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+            const worldX = sectorX * GRID_SIZE + localX;
+            const worldY = sectorY * GRID_SIZE + localY;
+            this.renderPixel(worldX, worldY, color);
+        }
+        
+        // Clear the buffer
+        this.remotePixelsBuffer.clear();
     }
     
     updatePixelCount() {
