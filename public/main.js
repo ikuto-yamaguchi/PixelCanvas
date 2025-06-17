@@ -681,33 +681,32 @@ class PixelCanvas {
         const paddedBottom = worldBottom + padding;
         
         // Convert to screen coordinate constraints
-        // The offset represents how much we've moved the world relative to screen
-        // Positive offset = world moved right/down, negative = world moved left/up
+        // Screen coordinate = world coordinate * scale + offset
+        // Therefore: offset = screen coordinate - world coordinate * scale
         
-        // When world's right edge is at screen's left edge: offsetX = -worldRight * scale
-        // When world's left edge is at screen's right edge: offsetX = canvas.width - worldLeft * scale
-        const minOffsetX = this.canvas.width - paddedRight * this.scale; // Right limit
-        const maxOffsetX = -paddedLeft * this.scale; // Left limit
-        const minOffsetY = this.canvas.height - paddedBottom * this.scale; // Bottom limit  
-        const maxOffsetY = -paddedTop * this.scale; // Top limit
+        // Left movement limit: world's right edge at screen's left edge (screen=0)
+        const minOffsetX = 0 - paddedRight * this.scale;
         
-        // Ensure the bounds make logical sense (minOffset should be less than maxOffset)
-        const finalMinOffsetX = Math.min(minOffsetX, maxOffsetX);
-        const finalMaxOffsetX = Math.max(minOffsetX, maxOffsetX);
-        const finalMinOffsetY = Math.min(minOffsetY, maxOffsetY);
-        const finalMaxOffsetY = Math.max(minOffsetY, maxOffsetY);
+        // Right movement limit: world's left edge at screen's right edge (screen=canvas.width)
+        const maxOffsetX = this.canvas.width - paddedLeft * this.scale;
+        
+        // Up movement limit: world's bottom edge at screen's top edge (screen=0)
+        const minOffsetY = 0 - paddedBottom * this.scale;
+        
+        // Down movement limit: world's top edge at screen's bottom edge (screen=canvas.height)
+        const maxOffsetY = this.canvas.height - paddedTop * this.scale;
         
         console.log(`🔍 Viewport bounds calculated:
             World bounds: X[${worldLeft} to ${worldRight}] Y[${worldTop} to ${worldBottom}]
             Padded bounds: X[${paddedLeft.toFixed(1)} to ${paddedRight.toFixed(1)}] Y[${paddedTop.toFixed(1)} to ${paddedBottom.toFixed(1)}]
             Screen size: ${this.canvas.width}x${this.canvas.height}, Scale: ${this.scale.toFixed(2)}x
-            Offset bounds: X[${finalMinOffsetX.toFixed(1)} to ${finalMaxOffsetX.toFixed(1)}] Y[${finalMinOffsetY.toFixed(1)} to ${finalMaxOffsetY.toFixed(1)}]`);
+            Offset bounds: X[${minOffsetX.toFixed(1)} to ${maxOffsetX.toFixed(1)}] Y[${minOffsetY.toFixed(1)} to ${maxOffsetY.toFixed(1)}]`);
         
         return {
-            minOffsetX: finalMinOffsetX,
-            maxOffsetX: finalMaxOffsetX,
-            minOffsetY: finalMinOffsetY,
-            maxOffsetY: finalMaxOffsetY
+            minOffsetX: minOffsetX,
+            maxOffsetX: maxOffsetX,
+            minOffsetY: minOffsetY,
+            maxOffsetY: maxOffsetY
         };
     }
     
