@@ -641,18 +641,27 @@ class PixelCanvas {
     }
     
     getViewportBounds() {
-        // If no active sectors, use default bounds
+        // ビューポート境界計算の設計思想:
+        // 1. アクティブセクターが画面から完全に外れないようにする
+        // 2. 適度なパディングで快適な操作性を確保
+        // 3. ズームレベルに関わらず一貫した境界
+        
+        // アクティブセクターがない場合のデフォルト
         if (this.activeSectors.size === 0) {
-            const defaultSize = GRID_SIZE * PIXEL_SIZE * this.scale;
+            // セクター(0,0)を中心とした1セクター分の範囲
+            const sectorSize = GRID_SIZE * PIXEL_SIZE;
+            const centerX = sectorSize / 2;
+            const centerY = sectorSize / 2;
+            
             return {
-                minOffsetX: this.canvas.width - defaultSize,
-                maxOffsetX: defaultSize,
-                minOffsetY: this.canvas.height - defaultSize,
-                maxOffsetY: defaultSize
+                minOffsetX: -centerX * this.scale,
+                maxOffsetX: this.canvas.width - centerX * this.scale,
+                minOffsetY: -centerY * this.scale,
+                maxOffsetY: this.canvas.height - centerY * this.scale
             };
         }
         
-        // Calculate the actual bounding box of all active sectors
+        // アクティブセクターの境界を計算
         let minSectorX = Infinity, maxSectorX = -Infinity;
         let minSectorY = Infinity, maxSectorY = -Infinity;
         
@@ -664,42 +673,71 @@ class PixelCanvas {
             maxSectorY = Math.max(maxSectorY, sectorY);
         }
         
-        // Calculate world pixel boundaries
-        const sectorPixelSize = GRID_SIZE * PIXEL_SIZE;
-        const worldLeft = minSectorX * sectorPixelSize;
-        const worldRight = (maxSectorX + 1) * sectorPixelSize;
-        const worldTop = minSectorY * sectorPixelSize;
-        const worldBottom = (maxSectorY + 1) * sectorPixelSize;
+        // ワールド座標でのアクティブエリアの境界（ピクセル単位）
+        const pixelsPerSector = GRID_SIZE * PIXEL_SIZE;
+        const worldBounds = {
+            left: minSectorX * pixelsPerSector,
+            right: (maxSectorX + 1) * pixelsPerSector,
+            top: minSectorY * pixelsPerSector,
+            bottom: (maxSectorY + 1) * pixelsPerSector
+        };
         
-        // Add fixed padding to allow comfortable navigation around active sectors
-        // Use 1.5 sectors worth of padding regardless of zoom level
-        const padding = sectorPixelSize * 1.5;
+        // パディング: アクティブエリア外に1セクター分の余裕
+        const paddingSectors = 1;
+        const paddingPixels = paddingSectors * pixelsPerSector;
         
-        const paddedLeft = worldLeft - padding;
-        const paddedRight = worldRight + padding;
-        const paddedTop = worldTop - padding;
-        const paddedBottom = worldBottom + padding;
+        const paddedBounds = {
+            left: worldBounds.left - paddingPixels,
+            right: worldBounds.right + paddingPixels,
+            top: worldBounds.top - paddingPixels,
+            bottom: worldBounds.bottom + paddingPixels
+        };
         
-        // Convert to screen coordinate constraints
-        // Screen coordinate = world coordinate * scale + offset
-        // Therefore: offset = screen coordinate - world coordinate * scale
+        // ビューポート制約の計算
+        // 原則: パディング込みのアクティブエリアが画面内に留まる範囲
         
-        // Left movement limit: world's right edge at screen's left edge (screen=0)
-        const minOffsetX = 0 - paddedRight * this.scale;
+        // 水平方向の制約
+        const worldWidthScaled = (paddedBounds.right - paddedBounds.left) * this.scale;
+        const canvasWidth = this.canvas.width;
         
-        // Right movement limit: world's left edge at screen's right edge (screen=canvas.width)
-        const maxOffsetX = this.canvas.width - paddedLeft * this.scale;
+        let minOffsetX, maxOffsetX;
         
-        // Up movement limit: world's bottom edge at screen's top edge (screen=0)
-        const minOffsetY = 0 - paddedBottom * this.scale;
+        if (worldWidthScaled <= canvasWidth) {
+            // ワールドが画面より小さい場合: 中央寄せを許可
+            const centerOffsetX = (canvasWidth - worldWidthScaled) / 2 - paddedBounds.left * this.scale;
+            const margin = canvasWidth * 0.1; // 画面幅の10%の余裕
+            minOffsetX = centerOffsetX - margin;
+            maxOffsetX = centerOffsetX + margin;
+        } else {
+            // ワールドが画面より大きい場合: エッジ制約
+            minOffsetX = canvasWidth - paddedBounds.right * this.scale;  // 右端を画面右に
+            maxOffsetX = -paddedBounds.left * this.scale;               // 左端を画面左に
+        }
         
-        // Down movement limit: world's top edge at screen's bottom edge (screen=canvas.height)
-        const maxOffsetY = this.canvas.height - paddedTop * this.scale;
+        // 垂直方向の制約
+        const worldHeightScaled = (paddedBounds.bottom - paddedBounds.top) * this.scale;
+        const canvasHeight = this.canvas.height;
+        
+        let minOffsetY, maxOffsetY;
+        
+        if (worldHeightScaled <= canvasHeight) {
+            // ワールドが画面より小さい場合: 中央寄せを許可
+            const centerOffsetY = (canvasHeight - worldHeightScaled) / 2 - paddedBounds.top * this.scale;
+            const margin = canvasHeight * 0.1; // 画面高の10%の余裕
+            minOffsetY = centerOffsetY - margin;
+            maxOffsetY = centerOffsetY + margin;
+        } else {
+            // ワールドが画面より大きい場合: エッジ制約
+            minOffsetY = canvasHeight - paddedBounds.bottom * this.scale;  // 下端を画面下に
+            maxOffsetY = -paddedBounds.top * this.scale;                  // 上端を画面上に
+        }
         
         console.log(`🔍 Viewport bounds calculated:
-            World bounds: X[${worldLeft} to ${worldRight}] Y[${worldTop} to ${worldBottom}]
-            Padded bounds: X[${paddedLeft.toFixed(1)} to ${paddedRight.toFixed(1)}] Y[${paddedTop.toFixed(1)} to ${paddedBottom.toFixed(1)}]
-            Screen size: ${this.canvas.width}x${this.canvas.height}, Scale: ${this.scale.toFixed(2)}x
+            Active sectors: X[${minSectorX} to ${maxSectorX}] Y[${minSectorY} to ${maxSectorY}]
+            World bounds: X[${worldBounds.left} to ${worldBounds.right}] Y[${worldBounds.top} to ${worldBounds.bottom}]
+            Padded bounds: X[${paddedBounds.left} to ${paddedBounds.right}] Y[${paddedBounds.top} to ${paddedBounds.bottom}]
+            Canvas: ${canvasWidth}x${canvasHeight}, Scale: ${this.scale.toFixed(2)}x
+            World size scaled: ${worldWidthScaled.toFixed(1)}x${worldHeightScaled.toFixed(1)}
             Offset bounds: X[${minOffsetX.toFixed(1)} to ${maxOffsetX.toFixed(1)}] Y[${minOffsetY.toFixed(1)} to ${maxOffsetY.toFixed(1)}]`);
         
         return {
