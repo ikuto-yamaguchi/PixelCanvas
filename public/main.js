@@ -529,7 +529,8 @@ class PixelCanvas {
         // setTimeout(() => this.syncWithServerStock(), 1000); // Skip server sync - too slow
         setInterval(() => this.saveStockState(), 5000); // Save every 5 seconds
         
-        // Initialize sector (0,0) if not exists
+        // Initialize sector (0,0) as the starting active sector
+        this.activeSectors.add('0,0');
         this.sectorPixelCounts.set('0,0', 0);
         
         // Load pixels from Supabase
@@ -821,6 +822,11 @@ class PixelCanvas {
         // Show boundary warning if viewport was constrained significantly
         if (Math.abs(originalOffsetX - this.offsetX) > 5 || Math.abs(originalOffsetY - this.offsetY) > 5) {
             this.showBoundaryWarning();
+        }
+        
+        // Check for expansion after any significant viewport change
+        if (Math.abs(originalOffsetX - this.offsetX) > 1 || Math.abs(originalOffsetY - this.offsetY) > 1) {
+            this.checkLoadedSectorsForExpansion();
         }
     }
     
@@ -1154,9 +1160,8 @@ class PixelCanvas {
                 this.pixels.set(key, pixel.color);
                 console.log(`Added pixel: ${key} = color ${pixel.color}`);
                 
-                // Track sector
-                const sectorKey = `${pixel.sector_x},${pixel.sector_y}`;
-                this.activeSectors.add(sectorKey);
+                // Do NOT automatically add to activeSectors - let expansion logic handle this
+                // The sector should only be active if it meets expansion criteria
             }
             
             // Load sector counts
@@ -1321,7 +1326,7 @@ class PixelCanvas {
             console.log(`📍 No loaded sectors need expansion`);
         }
         
-        // Also schedule async check for completeness
+        // Also schedule async check for completeness (for database validation)
         this.debounceExpansionCheck();
     }
     
