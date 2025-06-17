@@ -36,8 +36,8 @@ class PixelCanvas {
         
         this.currentColor = 0;
         this.scale = 2;
-        this.offsetX = 400; // Center on sector (0,0)
-        this.offsetY = 300; // Center on sector (0,0)
+        this.offsetX = 0; // Will be set properly after loading sectors
+        this.offsetY = 0; // Will be set properly after loading sectors
         this.sectors = new Map();
         this.pendingPixels = [];
         this.pixels = new Map(); // Store drawn pixels
@@ -193,7 +193,7 @@ class PixelCanvas {
                 // Two finger pinch zoom
                 const distance = getDistance(e.touches[0], e.touches[1]);
                 const scaleChange = distance / touchState.initialDistance;
-                const newScale = Math.max(0.5, Math.min(16, touchState.initialScale * scaleChange));
+                const newScale = Math.max(0.1, Math.min(16, touchState.initialScale * scaleChange));
                 
                 // Use the initial center point for consistent zoom behavior
                 const centerX = touchState.initialCenterX;
@@ -319,7 +319,7 @@ class PixelCanvas {
             const mouseY = e.clientY - rect.top;
             
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
-            const newScale = Math.max(0.5, Math.min(16, this.scale * delta));
+            const newScale = Math.max(0.1, Math.min(16, this.scale * delta));
             
             const scaleFactor = newScale / this.scale;
             this.offsetX = mouseX - (mouseX - this.offsetX) * scaleFactor;
@@ -641,37 +641,61 @@ class PixelCanvas {
     }
     
     getViewportBounds() {
-        // Calculate the bounding box for all active sectors with padding
-        let minSectorX = 0, maxSectorX = 0, minSectorY = 0, maxSectorY = 0;
-        
-        if (this.activeSectors.size > 0) {
-            minSectorX = maxSectorX = parseInt(Array.from(this.activeSectors)[0].split(',')[0]);
-            minSectorY = maxSectorY = parseInt(Array.from(this.activeSectors)[0].split(',')[1]);
-            
-            for (const sectorKey of this.activeSectors) {
-                const [sectorX, sectorY] = sectorKey.split(',').map(Number);
-                minSectorX = Math.min(minSectorX, sectorX);
-                maxSectorX = Math.max(maxSectorX, sectorX);
-                minSectorY = Math.min(minSectorY, sectorY);
-                maxSectorY = Math.max(maxSectorY, sectorY);
-            }
+        // If no active sectors, use default bounds
+        if (this.activeSectors.size === 0) {
+            const defaultSize = GRID_SIZE * PIXEL_SIZE * this.scale;
+            return {
+                minOffsetX: this.canvas.width - defaultSize,
+                maxOffsetX: defaultSize,
+                minOffsetY: this.canvas.height - defaultSize,
+                maxOffsetY: defaultSize
+            };
         }
         
-        // Add padding (1 sector on each side for comfortable viewing)
-        const padding = GRID_SIZE * PIXEL_SIZE;
-        const worldBounds = {
-            left: (minSectorX - 1) * GRID_SIZE * PIXEL_SIZE - padding,
-            right: (maxSectorX + 2) * GRID_SIZE * PIXEL_SIZE + padding,
-            top: (minSectorY - 1) * GRID_SIZE * PIXEL_SIZE - padding,
-            bottom: (maxSectorY + 2) * GRID_SIZE * PIXEL_SIZE + padding
-        };
+        // Calculate the actual bounding box of all active sectors
+        let minSectorX = Infinity, maxSectorX = -Infinity;
+        let minSectorY = Infinity, maxSectorY = -Infinity;
         
-        // Convert to viewport bounds (screen coordinates)
+        for (const sectorKey of this.activeSectors) {
+            const [sectorX, sectorY] = sectorKey.split(',').map(Number);
+            minSectorX = Math.min(minSectorX, sectorX);
+            maxSectorX = Math.max(maxSectorX, sectorX);
+            minSectorY = Math.min(minSectorY, sectorY);
+            maxSectorY = Math.max(maxSectorY, sectorY);
+        }
+        
+        // Calculate world pixel boundaries
+        const sectorPixelSize = GRID_SIZE * PIXEL_SIZE;
+        const worldLeft = minSectorX * sectorPixelSize;
+        const worldRight = (maxSectorX + 1) * sectorPixelSize;
+        const worldTop = minSectorY * sectorPixelSize;
+        const worldBottom = (maxSectorY + 1) * sectorPixelSize;
+        
+        // Add padding based on zoom level (more padding when zoomed out)
+        const paddingFactor = Math.max(1, 2 / this.scale); // More padding when zoomed out
+        const padding = sectorPixelSize * paddingFactor;
+        
+        const paddedLeft = worldLeft - padding;
+        const paddedRight = worldRight + padding;
+        const paddedTop = worldTop - padding;
+        const paddedBottom = worldBottom + padding;
+        
+        // Convert to screen coordinate constraints
+        // The offset represents how much we've moved the world relative to screen
+        // Positive offset = world moved right/down, negative = world moved left/up
+        
+        // When world's right edge is at screen's left edge: offsetX = -worldRight * scale
+        // When world's left edge is at screen's right edge: offsetX = canvas.width - worldLeft * scale
+        const minOffsetX = this.canvas.width - paddedRight * this.scale; // Right limit
+        const maxOffsetX = -paddedLeft * this.scale; // Left limit
+        const minOffsetY = this.canvas.height - paddedBottom * this.scale; // Bottom limit  
+        const maxOffsetY = -paddedTop * this.scale; // Top limit
+        
         return {
-            minOffsetX: this.canvas.width - worldBounds.right * this.scale,
-            maxOffsetX: -worldBounds.left * this.scale,
-            minOffsetY: this.canvas.height - worldBounds.bottom * this.scale,
-            maxOffsetY: -worldBounds.top * this.scale
+            minOffsetX: Math.min(minOffsetX, maxOffsetX - 100), // Ensure some minimum space
+            maxOffsetX: Math.max(maxOffsetX, minOffsetX + 100),
+            minOffsetY: Math.min(minOffsetY, maxOffsetY - 100),
+            maxOffsetY: Math.max(maxOffsetY, minOffsetY + 100)
         };
     }
     
@@ -682,13 +706,63 @@ class PixelCanvas {
         const originalOffsetX = this.offsetX;
         const originalOffsetY = this.offsetY;
         
-        this.offsetX = Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, this.offsetX));
-        this.offsetY = Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, this.offsetY));
+        // Apply strict constraints
+        const newOffsetX = Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, this.offsetX));
+        const newOffsetY = Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, this.offsetY));
         
-        // Show boundary warning if viewport was constrained
-        if (originalOffsetX !== this.offsetX || originalOffsetY !== this.offsetY) {
+        // Debug logging for viewport constraints
+        if (Math.abs(newOffsetX - this.offsetX) > 1 || Math.abs(newOffsetY - this.offsetY) > 1) {
+            console.log(`🔒 Viewport constrained: 
+                Original: (${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)})
+                New: (${newOffsetX.toFixed(1)}, ${newOffsetY.toFixed(1)})
+                Bounds: X[${bounds.minOffsetX.toFixed(1)} to ${bounds.maxOffsetX.toFixed(1)}] Y[${bounds.minOffsetY.toFixed(1)} to ${bounds.maxOffsetY.toFixed(1)}]
+                Scale: ${this.scale.toFixed(2)}x`);
+        }
+        
+        this.offsetX = newOffsetX;
+        this.offsetY = newOffsetY;
+        
+        // Show boundary warning if viewport was constrained significantly
+        if (Math.abs(originalOffsetX - this.offsetX) > 5 || Math.abs(originalOffsetY - this.offsetY) > 5) {
             this.showBoundaryWarning();
         }
+    }
+    
+    centerViewportOnActiveSectors() {
+        if (this.activeSectors.size === 0) {
+            // Default to center of sector (0,0)
+            this.offsetX = this.canvas.width / 2;
+            this.offsetY = this.canvas.height / 2;
+            return;
+        }
+        
+        // Calculate center of all active sectors
+        let sumX = 0, sumY = 0;
+        for (const sectorKey of this.activeSectors) {
+            const [sectorX, sectorY] = sectorKey.split(',').map(Number);
+            sumX += sectorX;
+            sumY += sectorY;
+        }
+        
+        const centerSectorX = sumX / this.activeSectors.size;
+        const centerSectorY = sumY / this.activeSectors.size;
+        
+        // Convert to world pixel coordinates (center of the center sector)
+        const worldCenterX = (centerSectorX + 0.5) * GRID_SIZE * PIXEL_SIZE;
+        const worldCenterY = (centerSectorY + 0.5) * GRID_SIZE * PIXEL_SIZE;
+        
+        // Center the viewport on this world position
+        this.offsetX = this.canvas.width / 2 - worldCenterX * this.scale;
+        this.offsetY = this.canvas.height / 2 - worldCenterY * this.scale;
+        
+        console.log(`📍 Centered viewport on active sectors:
+            Center sector: (${centerSectorX.toFixed(1)}, ${centerSectorY.toFixed(1)})
+            World center: (${worldCenterX.toFixed(1)}, ${worldCenterY.toFixed(1)})
+            Viewport offset: (${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)})
+            Active sectors: ${Array.from(this.activeSectors).join(', ')}`);
+        
+        // Apply constraints after centering
+        this.constrainViewport();
     }
     
     showBoundaryWarning() {
@@ -942,8 +1016,8 @@ class PixelCanvas {
             // Load sector counts
             await this.loadSectorCounts();
             
-            // Ensure viewport is properly bounded after loading active sectors
-            this.constrainViewport();
+            // Center viewport on active sectors (includes viewport constraints)
+            this.centerViewportOnActiveSectors();
             
             console.log(`Total pixels in memory: ${this.pixels.size}`);
             this.render();
