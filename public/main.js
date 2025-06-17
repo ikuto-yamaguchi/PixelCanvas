@@ -550,7 +550,7 @@ class PixelCanvas {
         this.loadSectorCounts();
         
         // Clean up any inconsistencies in activeSectors after loading
-        setTimeout(() => this.cleanupActiveSectors(), 2000);
+        setTimeout(() => this.cleanupActiveSectors(), 3000);
         
         // Setup realtime subscription
         this.setupRealtimeSubscription();
@@ -1533,8 +1533,9 @@ class PixelCanvas {
         // Debounce expansion checks to avoid too many database calls
         clearTimeout(this.expansionCheckTimeout);
         this.expansionCheckTimeout = setTimeout(() => {
-            this.checkVisibleSectorsForExpansion();
-        }, 100); // Wait 100ms after viewport stops moving
+            // Disable excessive expansion checking temporarily
+            // this.checkVisibleSectorsForExpansion();
+        }, 500); // Increased delay and disabled
     }
     
     checkLoadedSectorsForExpansion() {
@@ -1584,17 +1585,14 @@ class PixelCanvas {
             this.mobileLog(`📊 Evaluating ${sectorKey}: ${pixelCount}px (${(fillPercentage * 100).toFixed(4)}%)`);
             this.mobileLog(`📊 Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%, Meets: ${fillPercentage >= SECTOR_EXPANSION_THRESHOLD}`);
             
-            if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
+            if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD && pixelCount >= 7) {
                 const [sectorX, sectorY] = sectorKey.split(',').map(Number);
-                this.mobileLog(`🔄 *** EXPANDING ${sectorKey} ***`);
-                
-                // Log detailed expansion debugging
-                this.logSectorExpansionDetails(sectorX, sectorY, pixelCount);
+                this.mobileLog(`🔄 *** EXPANDING ${sectorKey} (${pixelCount} pixels) ***`);
                 
                 this.expandSectorsLocally(sectorX, sectorY);
                 expandedAny = true;
             } else {
-                this.mobileLog(`❌ ${sectorKey} below threshold`);
+                this.mobileLog(`❌ ${sectorKey} below threshold or insufficient pixels (${pixelCount})`);
             }
         }
         
@@ -1718,9 +1716,9 @@ class PixelCanvas {
                 
                 console.log(`🔍 Sector ${sectorKey}: ${pixelCount} pixels (${(fillPercentage * 100).toFixed(3)}%)`);
                 
-                if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
+                if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD && pixelCount >= 7) {
                     const [sectorX, sectorY] = sectorKey.split(',').map(Number);
-                    console.log(`🔄 Viewport expansion: sector (${sectorX}, ${sectorY}) exceeds threshold!`);
+                    console.log(`🔄 Viewport expansion: sector (${sectorX}, ${sectorY}) exceeds threshold with ${pixelCount} pixels!`);
                     this.expandSectorsLocally(sectorX, sectorY);
                     expandedAny = true;
                 }
@@ -1786,19 +1784,21 @@ class PixelCanvas {
     }
     
     expandSectorsLocally(centerX, centerY) {
-        this.mobileLog(`🎯 EXPANSION START: Center (${centerX}, ${centerY})`);
-        this.mobileLog(`🎯 Active before expansion: ${Array.from(this.activeSectors).join(',')}`);
-        
-        // The center sector is the one that triggered expansion - it already has pixels
-        // so we should REMOVE it from activeSectors since it's no longer empty.
         const centerKey = `${centerX},${centerY}`;
         const centerPixelCount = this.sectorPixelCounts.get(centerKey) || 0;
-        this.mobileLog(`🎯 Center sector (${centerX}, ${centerY}) has ${centerPixelCount} pixels`);
+        
+        // CRITICAL: Only expand if center sector actually has enough pixels
+        if (centerPixelCount < 7) {
+            this.mobileLog(`❌ ABORT EXPANSION: ${centerKey} only has ${centerPixelCount} pixels (need 7+)`);
+            return;
+        }
+        
+        this.mobileLog(`🎯 EXPANSION START: Center (${centerX}, ${centerY}) with ${centerPixelCount} pixels`);
         
         // Remove center sector from activeSectors since it now has pixels
         if (this.activeSectors.has(centerKey)) {
             this.activeSectors.delete(centerKey);
-            this.mobileLog(`🗑️ Removed ${centerKey} from activeSectors (has pixels)`);
+            this.mobileLog(`🗑️ Removed ${centerKey} from activeSectors`);
         }
         
         // 8-direction expansion
