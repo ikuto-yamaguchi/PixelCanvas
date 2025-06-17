@@ -239,8 +239,11 @@ class PixelCanvas {
             
             // Check for sector expansion after viewport movement
             if (touchState.moved) {
+                console.log(`📱 TOUCHEND: Movement detected, triggering expansion check`);
                 // Use immediate check instead of async
                 this.checkLoadedSectorsForExpansion();
+            } else {
+                console.log(`📱 TOUCHEND: No movement detected, skipping expansion check`);
             }
             
             // Update touch count
@@ -312,9 +315,11 @@ class PixelCanvas {
             
             // If very small movement, treat as click
             if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
+                console.log(`🖱️ MOUSEUP: Small movement, treating as click`);
                 this.handlePixelClick(mouseState.startX, mouseState.startY);
             } else {
                 // Large movement = viewport pan, check for expansion
+                console.log(`🖱️ MOUSEUP: Large movement detected (${dx}, ${dy}), triggering expansion check`);
                 this.checkLoadedSectorsForExpansion();
             }
             
@@ -825,8 +830,13 @@ class PixelCanvas {
         }
         
         // Check for expansion after any significant viewport change
-        if (Math.abs(originalOffsetX - this.offsetX) > 1 || Math.abs(originalOffsetY - this.offsetY) > 1) {
+        const offsetDeltaX = Math.abs(originalOffsetX - this.offsetX);
+        const offsetDeltaY = Math.abs(originalOffsetY - this.offsetY);
+        if (offsetDeltaX > 1 || offsetDeltaY > 1) {
+            console.log(`📐 CONSTRAINVIEWPORT: Significant change detected (Δx: ${offsetDeltaX.toFixed(1)}, Δy: ${offsetDeltaY.toFixed(1)}), triggering expansion check`);
             this.checkLoadedSectorsForExpansion();
+        } else {
+            console.log(`📐 CONSTRAINVIEWPORT: No significant change (Δx: ${offsetDeltaX.toFixed(1)}, Δy: ${offsetDeltaY.toFixed(1)}), skipping expansion check`);
         }
     }
     
@@ -915,10 +925,25 @@ class PixelCanvas {
         const endSectorY = Math.ceil((this.canvas.height - this.offsetY) / sectorSize);
         
         // Draw each visible sector with appropriate styling
+        console.log(`🎨 RENDER: Drawing sectors in range X[${startSectorX} to ${endSectorX}] Y[${startSectorY} to ${endSectorY}]`);
+        console.log(`🎨 RENDER: Current active sectors: ${Array.from(this.activeSectors).join(', ')}`);
+        
         for (let sectorX = startSectorX; sectorX <= endSectorX; sectorX++) {
             for (let sectorY = startSectorY; sectorY <= endSectorY; sectorY++) {
                 const sectorKey = `${sectorX},${sectorY}`;
                 const isActive = this.activeSectors.has(sectorKey);
+                
+                // Count actual pixels in this sector for debugging
+                let pixelCount = 0;
+                for (const [key, color] of this.pixels) {
+                    const [pSectorX, pSectorY] = key.split(',').map(Number);
+                    if (pSectorX === sectorX && pSectorY === sectorY) {
+                        pixelCount++;
+                    }
+                }
+                
+                const shouldBeActive = pixelCount > 0 && (pixelCount / (GRID_SIZE * GRID_SIZE)) >= SECTOR_EXPANSION_THRESHOLD;
+                console.log(`🎨 RENDER: Sector ${sectorKey} - IsActive: ${isActive}, Pixels: ${pixelCount}, ShouldBeActive: ${shouldBeActive}`);
                 
                 // Calculate screen position of sector
                 const screenX = this.offsetX + sectorX * sectorSize;
@@ -1287,7 +1312,10 @@ class PixelCanvas {
     
     checkLoadedSectorsForExpansion() {
         // Immediate synchronous check using already loaded pixel data
-        console.log(`🔍 Checking loaded sectors for expansion (sync)`);
+        console.log(`🔍 === CHECKING LOADED SECTORS FOR EXPANSION (SYNC) ===`);
+        console.log(`🔍 Total pixels in memory: ${this.pixels.size}`);
+        console.log(`🔍 Current active sectors: ${Array.from(this.activeSectors).join(', ')}`);
+        console.log(`🔍 Expansion threshold: ${SECTOR_EXPANSION_THRESHOLD} (${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%)`);
         
         // Count pixels by sector from loaded pixels
         const sectorCounts = new Map();
@@ -1297,7 +1325,14 @@ class PixelCanvas {
             sectorCounts.set(sectorKey, (sectorCounts.get(sectorKey) || 0) + 1);
         }
         
-        console.log(`Found pixels in ${sectorCounts.size} sectors from loaded data`);
+        console.log(`🔍 Found pixels in ${sectorCounts.size} sectors from loaded data:`);
+        for (const [sectorKey, count] of sectorCounts) {
+            const isActive = this.activeSectors.has(sectorKey);
+            const maxPixels = GRID_SIZE * GRID_SIZE;
+            const percentage = (count / maxPixels * 100).toFixed(4);
+            const exceedsThreshold = count / maxPixels >= SECTOR_EXPANSION_THRESHOLD;
+            console.log(`🔍   Sector ${sectorKey}: ${count} pixels (${percentage}%), Active: ${isActive}, Exceeds threshold: ${exceedsThreshold}`);
+        }
         
         let expandedAny = false;
         
@@ -1305,6 +1340,7 @@ class PixelCanvas {
         for (const [sectorKey, pixelCount] of sectorCounts) {
             // Skip if this sector is already active
             if (this.activeSectors.has(sectorKey)) {
+                console.log(`🔍 Skipping sector ${sectorKey} - already active`);
                 continue;
             }
             
@@ -1312,11 +1348,12 @@ class PixelCanvas {
             const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
             const fillPercentage = pixelCount / maxPixelsPerSector;
             
-            console.log(`🔍 Loaded sector ${sectorKey}: ${pixelCount} pixels (${(fillPercentage * 100).toFixed(3)}%)`);
+            console.log(`🔍 Evaluating sector ${sectorKey}: ${pixelCount} pixels (${(fillPercentage * 100).toFixed(4)}%)`);
+            console.log(`🔍   Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%, Meets threshold: ${fillPercentage >= SECTOR_EXPANSION_THRESHOLD}`);
             
             if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
                 const [sectorX, sectorY] = sectorKey.split(',').map(Number);
-                console.log(`🔄 Sync expansion: sector (${sectorX}, ${sectorY}) exceeds threshold!`);
+                console.log(`🔄 *** TRIGGERING EXPANSION for sector (${sectorX}, ${sectorY}) ***`);
                 this.expandSectorsLocally(sectorX, sectorY);
                 expandedAny = true;
             }
@@ -1324,7 +1361,11 @@ class PixelCanvas {
         
         if (!expandedAny) {
             console.log(`📍 No loaded sectors need expansion`);
+        } else {
+            console.log(`🎯 Expansion completed. New active sectors: ${Array.from(this.activeSectors).join(', ')}`);
         }
+        
+        console.log(`🔍 === END LOADED SECTORS CHECK ===`);
         
         // Also schedule async check for completeness (for database validation)
         this.debounceExpansionCheck();
