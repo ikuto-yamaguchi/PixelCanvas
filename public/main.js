@@ -237,6 +237,11 @@ class PixelCanvas {
                 touchState.wasMultiTouch = true;
             }
             
+            // Check for sector expansion after viewport movement
+            if (touchState.moved) {
+                this.checkVisibleSectorsForExpansion();
+            }
+            
             // Update touch count
             const previousTouches = touchState.touches;
             touchState.touches = e.touches.length;
@@ -307,6 +312,9 @@ class PixelCanvas {
             // If very small movement, treat as click
             if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
                 this.handlePixelClick(mouseState.startX, mouseState.startY);
+            } else {
+                // Large movement = viewport pan, check for expansion
+                this.checkVisibleSectorsForExpansion();
             }
             
             mouseState.down = false;
@@ -333,6 +341,9 @@ class PixelCanvas {
             
             this.constrainViewport(); // Apply viewport constraints after zoom
             this.render();
+            
+            // Check for expansion after zoom with debounce
+            this.debounceExpansionCheck();
         });
     }
     
@@ -797,9 +808,6 @@ class PixelCanvas {
         if (Math.abs(originalOffsetX - this.offsetX) > 5 || Math.abs(originalOffsetY - this.offsetY) > 5) {
             this.showBoundaryWarning();
         }
-        
-        // Check for expansion opportunities when viewport changes (debounced)
-        this.debounceExpansionCheck();
     }
     
     centerViewportOnActiveSectors() {
@@ -1255,7 +1263,7 @@ class PixelCanvas {
         clearTimeout(this.expansionCheckTimeout);
         this.expansionCheckTimeout = setTimeout(() => {
             this.checkVisibleSectorsForExpansion();
-        }, 500); // Wait 500ms after viewport stops moving
+        }, 100); // Wait 100ms after viewport stops moving
     }
     
     async checkVisibleSectorsForExpansion() {
@@ -1271,8 +1279,9 @@ class PixelCanvas {
         console.log(`🔍 Checking visible sectors for expansion: X[${startSectorX} to ${endSectorX}] Y[${startSectorY} to ${endSectorY}]`);
         
         try {
-            // Get all sectors in the visible range from database
-            const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors?sector_x=gte.${startSectorX}&sector_x=lte.${endSectorX}&sector_y=gte.${startSectorY}&sector_y=lte.${endSectorY}&select=sector_x,sector_y,pixel_count`, {
+            // Query pixels table directly to count pixels by sector in visible range
+            // This catches sectors that have pixels but aren't in sectors table yet
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/pixels?sector_x=gte.${startSectorX}&sector_x=lte.${endSectorX}&sector_y=gte.${startSectorY}&sector_y=lte.${endSectorY}&select=sector_x,sector_y`, {
                 headers: {
                     'apikey': SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
@@ -1280,35 +1289,42 @@ class PixelCanvas {
             });
             
             if (!response.ok) {
-                console.error('Failed to load visible sectors for expansion check');
+                console.error('Failed to load pixels for expansion check');
                 return;
             }
             
-            const sectors = await response.json();
-            console.log(`Found ${sectors.length} existing sectors in visible range:`, sectors);
+            const pixels = await response.json();
+            console.log(`Found ${pixels.length} pixels in visible range`);
+            
+            // Count pixels by sector
+            const sectorCounts = new Map();
+            for (const pixel of pixels) {
+                const sectorKey = `${pixel.sector_x},${pixel.sector_y}`;
+                sectorCounts.set(sectorKey, (sectorCounts.get(sectorKey) || 0) + 1);
+            }
+            
+            console.log(`Calculated pixel counts for ${sectorCounts.size} sectors:`, Array.from(sectorCounts.entries()));
             
             let expandedAny = false;
             
-            for (const sector of sectors) {
-                const sectorKey = `${sector.sector_x},${sector.sector_y}`;
-                
+            // Check each sector with pixels
+            for (const [sectorKey, pixelCount] of sectorCounts) {
                 // Skip if this sector is already active
                 if (this.activeSectors.has(sectorKey)) {
                     continue;
                 }
                 
                 // Check if expansion is needed
-                if (sector.pixel_count > 0) {
-                    const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
-                    const fillPercentage = sector.pixel_count / maxPixelsPerSector;
-                    
-                    console.log(`🔍 Sector (${sector.sector_x}, ${sector.sector_y}): ${sector.pixel_count} pixels (${(fillPercentage * 100).toFixed(3)}%)`);
-                    
-                    if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
-                        console.log(`🔄 Viewport expansion: sector (${sector.sector_x}, ${sector.sector_y}) exceeds threshold!`);
-                        this.expandSectorsLocally(sector.sector_x, sector.sector_y);
-                        expandedAny = true;
-                    }
+                const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
+                const fillPercentage = pixelCount / maxPixelsPerSector;
+                
+                console.log(`🔍 Sector ${sectorKey}: ${pixelCount} pixels (${(fillPercentage * 100).toFixed(3)}%)`);
+                
+                if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
+                    const [sectorX, sectorY] = sectorKey.split(',').map(Number);
+                    console.log(`🔄 Viewport expansion: sector (${sectorX}, ${sectorY}) exceeds threshold!`);
+                    this.expandSectorsLocally(sectorX, sectorY);
+                    expandedAny = true;
                 }
             }
             
