@@ -552,11 +552,26 @@ class PixelCanvas {
         
         // Also load from localStorage as backup
         const savedPixels = JSON.parse(localStorage.getItem('pixelcanvas_pixels') || '{}');
+        const localStorageCount = Object.keys(savedPixels).length;
+        
+        // Track localStorage sectors for debugging
+        const localSectorStats = new Map();
         for (const [key, color] of Object.entries(savedPixels)) {
             this.pixels.set(key, color);
+            
+            // Track which sectors have pixels in localStorage
+            const [sectorX, sectorY] = key.split(',').map(Number);
+            const sectorKey = `${sectorX},${sectorY}`;
+            localSectorStats.set(sectorKey, (localSectorStats.get(sectorKey) || 0) + 1);
         }
         
-        console.log(`Loaded ${this.pixels.size} pixels from localStorage`);
+        this.mobileLog(`🔄 Loaded ${localStorageCount} pixels from localStorage`);
+        if (localSectorStats.size > 0) {
+            this.mobileLog(`📊 LocalStorage sectors: ${Array.from(localSectorStats.keys()).join(',')}`);
+            for (const [sectorKey, count] of localSectorStats) {
+                this.mobileLog(`📊 Local ${sectorKey}: ${count} pixels`);
+            }
+        }
         
         // Recalculate sector counts after loading all pixels
         this.recalculateSectorCounts();
@@ -1235,7 +1250,7 @@ class PixelCanvas {
     
     async loadPixelsFromSupabase() {
         try {
-            console.log('Loading pixels from Supabase...');
+            this.mobileLog('🔄 Loading pixels from database...');
             
             const response = await fetch(`${SUPABASE_URL}/rest/v1/pixels?select=*`, {
                 headers: {
@@ -1251,16 +1266,23 @@ class PixelCanvas {
             }
             
             const pixels = await response.json();
-            console.log(`Successfully loaded ${pixels.length} pixels from Supabase:`, pixels);
+            this.mobileLog(`✅ Loaded ${pixels.length} pixels from database`);
             
-            // Convert to our internal format
+            // Convert to our internal format and track sectors
+            const sectorStats = new Map();
             for (const pixel of pixels) {
                 const key = `${pixel.sector_x},${pixel.sector_y},${pixel.local_x},${pixel.local_y}`;
                 this.pixels.set(key, pixel.color);
-                console.log(`Added pixel: ${key} = color ${pixel.color}`);
                 
-                // Do NOT automatically add to activeSectors - let expansion logic handle this
-                // The sector should only be active if it meets expansion criteria
+                // Track which sectors have pixels for debugging
+                const sectorKey = `${pixel.sector_x},${pixel.sector_y}`;
+                sectorStats.set(sectorKey, (sectorStats.get(sectorKey) || 0) + 1);
+            }
+            
+            // Log sectors found in database
+            this.mobileLog(`📊 Sectors in DB: ${Array.from(sectorStats.keys()).join(',')}`);
+            for (const [sectorKey, count] of sectorStats) {
+                this.mobileLog(`📊 DB ${sectorKey}: ${count} pixels`);
             }
             
             // Load sector counts
@@ -1413,7 +1435,7 @@ class PixelCanvas {
         for (const [sectorKey, pixelCount] of sectorCounts) {
             // Skip if this sector is already active
             if (this.activeSectors.has(sectorKey)) {
-                console.log(`🔍 Skipping sector ${sectorKey} - already active`);
+                this.mobileLog(`⏭️ Skip ${sectorKey} - already active`);
                 continue;
             }
             
@@ -1421,14 +1443,16 @@ class PixelCanvas {
             const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
             const fillPercentage = pixelCount / maxPixelsPerSector;
             
-            console.log(`🔍 Evaluating sector ${sectorKey}: ${pixelCount} pixels (${(fillPercentage * 100).toFixed(4)}%)`);
-            console.log(`🔍   Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%, Meets threshold: ${fillPercentage >= SECTOR_EXPANSION_THRESHOLD}`);
+            this.mobileLog(`📊 Evaluating ${sectorKey}: ${pixelCount}px (${(fillPercentage * 100).toFixed(4)}%)`);
+            this.mobileLog(`📊 Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%, Meets: ${fillPercentage >= SECTOR_EXPANSION_THRESHOLD}`);
             
             if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
                 const [sectorX, sectorY] = sectorKey.split(',').map(Number);
                 this.mobileLog(`🔄 *** EXPANDING ${sectorKey} ***`);
                 this.expandSectorsLocally(sectorX, sectorY);
                 expandedAny = true;
+            } else {
+                this.mobileLog(`❌ ${sectorKey} below threshold`);
             }
         }
         
