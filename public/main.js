@@ -46,6 +46,7 @@ class PixelCanvas {
         this.initializePixelStock();
         this.stockRecoveryInterval = null;
         this.activeSectors = new Set(['0,0']); // Track active sectors
+        this.isExpansionRunning = false; // Prevent concurrent expansion
         this.sectorPixelCounts = new Map(); // Track pixel count per sector
         this.deviceId = this.generateDeviceId(); // Unique device identifier
         
@@ -1539,19 +1540,20 @@ class PixelCanvas {
     }
     
     checkLoadedSectorsForExpansion() {
-        // Immediate synchronous check using already loaded pixel data
-        this.mobileLog(`🔍 === CHECKING LOADED SECTORS ===`);
-        this.mobileLog(`🔍 Pixels: ${this.pixels.size}, Active: ${Array.from(this.activeSectors).join(',')}`);
-        this.mobileLog(`🔍 Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%`);
-        this.mobileLog(`🔍 SectorCounts: ${this.sectorPixelCounts.size} entries`);
-        
-        // Count pixels by sector from loaded pixels
-        const sectorCounts = new Map();
-        for (const [key, color] of this.pixels) {
-            const [sectorX, sectorY] = key.split(',').map(Number);
-            const sectorKey = `${sectorX},${sectorY}`;
-            sectorCounts.set(sectorKey, (sectorCounts.get(sectorKey) || 0) + 1);
+        // Prevent concurrent execution
+        if (this.isExpansionRunning) {
+            this.mobileLog(`⏸️ Expansion already running, skipping...`);
+            return;
         }
+        this.isExpansionRunning = true;
+        
+        try {
+            this.mobileLog(`🔍 === CHECKING LOADED SECTORS ===`);
+            this.mobileLog(`🔍 Pixels: ${this.pixels.size}, Active: ${Array.from(this.activeSectors).join(',')}`);
+            this.mobileLog(`🔍 Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%`);
+            
+            // Use pixels as single source of truth - count pixels in real-time
+            const sectorCounts = this.calculateRealTimeSectorCounts();
         
         this.mobileLog(`🔍 Found ${sectorCounts.size} sectors with pixels:`);
         for (const [sectorKey, count] of sectorCounts) {
@@ -1609,6 +1611,35 @@ class PixelCanvas {
         
         // Also schedule async check for completeness (for database validation)
         this.debounceExpansionCheck();
+        
+        } finally {
+            this.isExpansionRunning = false;
+        }
+    }
+    
+    calculateRealTimeSectorCounts() {
+        // Single source of truth: count pixels directly from this.pixels
+        const sectorCounts = new Map();
+        for (const [key, color] of this.pixels) {
+            const [sectorX, sectorY] = key.split(',').map(Number);
+            const sectorKey = `${sectorX},${sectorY}`;
+            sectorCounts.set(sectorKey, (sectorCounts.get(sectorKey) || 0) + 1);
+        }
+        return sectorCounts;
+    }
+    
+    getRealTimePixelCount(sectorKey) {
+        // Real-time pixel count for specific sector
+        let count = 0;
+        const [targetSectorX, targetSectorY] = sectorKey.split(',').map(Number);
+        
+        for (const [key, color] of this.pixels) {
+            const [sectorX, sectorY] = key.split(',').map(Number);
+            if (sectorX === targetSectorX && sectorY === targetSectorY) {
+                count++;
+            }
+        }
+        return count;
     }
     
     logSectorExpansionDetails(centerX, centerY, pixelCount) {
@@ -1632,18 +1663,18 @@ class PixelCanvas {
             const newY = centerY + dy;
             const neighborKey = `${newX},${newY}`;
             const isActive = this.activeSectors.has(neighborKey);
-            const pixelCount = this.sectorPixelCounts.get(neighborKey) || 0;
-            this.mobileLog(`  ${neighborKey}: Active=${isActive}, Pixels=${pixelCount}`);
+            const realPixelCount = this.getRealTimePixelCount(neighborKey);
+            this.mobileLog(`  ${neighborKey}: Active=${isActive}, Pixels=${realPixelCount}`);
         }
     }
     
     cleanupActiveSectors() {
-        // Remove any sectors from activeSectors that have pixels
+        // Remove any sectors from activeSectors that have pixels (using real-time count)
         // activeSectors should only contain empty sectors available for drawing
         const sectorsToRemove = [];
         
         for (const sectorKey of this.activeSectors) {
-            const pixelCount = this.sectorPixelCounts.get(sectorKey) || 0;
+            const pixelCount = this.getRealTimePixelCount(sectorKey);
             if (pixelCount > 0) {
                 sectorsToRemove.push(sectorKey);
             }
@@ -1651,7 +1682,8 @@ class PixelCanvas {
         
         for (const sectorKey of sectorsToRemove) {
             this.activeSectors.delete(sectorKey);
-            this.mobileLog(`🧹 Cleanup: Removed ${sectorKey} from activeSectors (${this.sectorPixelCounts.get(sectorKey)} pixels)`);
+            const realPixelCount = this.getRealTimePixelCount(sectorKey);
+            this.mobileLog(`🧹 Cleanup: Removed ${sectorKey} from activeSectors (${realPixelCount} pixels)`);
         }
         
         if (sectorsToRemove.length > 0) {
@@ -1785,15 +1817,17 @@ class PixelCanvas {
     
     expandSectorsLocally(centerX, centerY) {
         const centerKey = `${centerX},${centerY}`;
-        const centerPixelCount = this.sectorPixelCounts.get(centerKey) || 0;
+        
+        // Use real-time pixel count to prevent data inconsistency
+        const centerPixelCount = this.getRealTimePixelCount(centerKey);
         
         // CRITICAL: Only expand if center sector actually has enough pixels
         if (centerPixelCount < 7) {
-            this.mobileLog(`❌ ABORT EXPANSION: ${centerKey} only has ${centerPixelCount} pixels (need 7+)`);
+            this.mobileLog(`❌ ABORT EXPANSION: ${centerKey} has ${centerPixelCount} pixels (need 7+)`);
             return;
         }
         
-        this.mobileLog(`🎯 EXPANSION START: Center (${centerX}, ${centerY}) with ${centerPixelCount} pixels`);
+        this.mobileLog(`🎯 EXPANSION START: Center (${centerX}, ${centerY}) with ${centerPixelCount} verified pixels`);
         
         // Remove center sector from activeSectors since it now has pixels
         if (this.activeSectors.has(centerKey)) {
