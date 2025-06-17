@@ -76,6 +76,11 @@ class PixelCanvas {
         const rect = this.container.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
         
+        // Store logical canvas size (CSS pixels) for viewport calculations
+        this.logicalWidth = rect.width;
+        this.logicalHeight = rect.height;
+        
+        // Set physical canvas size (device pixels) for sharp rendering
         this.canvas.width = rect.width * dpr;
         this.canvas.height = rect.height * dpr;
         this.canvas.style.width = rect.width + 'px';
@@ -653,11 +658,15 @@ class PixelCanvas {
             const centerX = sectorSize / 2;
             const centerY = sectorSize / 2;
             
+            // Use logical canvas size (CSS pixels) for viewport calculations
+            const canvasWidth = this.logicalWidth || this.canvas.width / (window.devicePixelRatio || 1);
+            const canvasHeight = this.logicalHeight || this.canvas.height / (window.devicePixelRatio || 1);
+            
             return {
                 minOffsetX: -centerX * this.scale,
-                maxOffsetX: this.canvas.width - centerX * this.scale,
+                maxOffsetX: canvasWidth - centerX * this.scale,
                 minOffsetY: -centerY * this.scale,
-                maxOffsetY: this.canvas.height - centerY * this.scale
+                maxOffsetY: canvasHeight - centerY * this.scale
             };
         }
         
@@ -696,9 +705,12 @@ class PixelCanvas {
         // ビューポート制約の計算
         // 原則: パディング込みのアクティブエリアが画面内に留まる範囲
         
+        // Use logical canvas size (CSS pixels) for viewport calculations
+        const canvasWidth = this.logicalWidth || this.canvas.width / (window.devicePixelRatio || 1);
+        const canvasHeight = this.logicalHeight || this.canvas.height / (window.devicePixelRatio || 1);
+        
         // 水平方向の制約
         const worldWidthScaled = (paddedBounds.right - paddedBounds.left) * this.scale;
-        const canvasWidth = this.canvas.width;
         
         let minOffsetX, maxOffsetX;
         
@@ -716,7 +728,6 @@ class PixelCanvas {
         
         // 垂直方向の制約
         const worldHeightScaled = (paddedBounds.bottom - paddedBounds.top) * this.scale;
-        const canvasHeight = this.canvas.height;
         
         let minOffsetY, maxOffsetY;
         
@@ -736,7 +747,8 @@ class PixelCanvas {
             Active sectors: X[${minSectorX} to ${maxSectorX}] Y[${minSectorY} to ${maxSectorY}]
             World bounds: X[${worldBounds.left} to ${worldBounds.right}] Y[${worldBounds.top} to ${worldBounds.bottom}]
             Padded bounds: X[${paddedBounds.left} to ${paddedBounds.right}] Y[${paddedBounds.top} to ${paddedBounds.bottom}]
-            Canvas: ${canvasWidth}x${canvasHeight}, Scale: ${this.scale.toFixed(2)}x
+            Canvas (logical): ${canvasWidth}x${canvasHeight}, Scale: ${this.scale.toFixed(2)}x
+            Canvas (physical): ${this.canvas.width}x${this.canvas.height}, DPR: ${window.devicePixelRatio || 1}
             World size scaled: ${worldWidthScaled.toFixed(1)}x${worldHeightScaled.toFixed(1)}
             Offset bounds: X[${minOffsetX.toFixed(1)} to ${maxOffsetX.toFixed(1)}] Y[${minOffsetY.toFixed(1)} to ${maxOffsetY.toFixed(1)}]`);
         
