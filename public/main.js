@@ -48,6 +48,9 @@ class PixelCanvas {
         this.activeSectors = new Set(['0,0']); // Track active sectors
         this.sectorPixelCounts = new Map(); // Track pixel count per sector
         this.deviceId = this.generateDeviceId(); // Unique device identifier
+        
+        // Mobile debug panel
+        this.setupMobileDebugPanel();
         this.cachedIP = null; // Cache IP address
         this.ipCacheTime = 0; // IP cache timestamp
         this.realtimeChannel = null; // Realtime subscription
@@ -239,11 +242,11 @@ class PixelCanvas {
             
             // Check for sector expansion after viewport movement
             if (touchState.moved) {
-                console.log(`📱 TOUCHEND: Movement detected, triggering expansion check`);
+                this.mobileLog(`📱 TOUCHEND: Movement detected, triggering expansion check`);
                 // Use immediate check instead of async
                 this.checkLoadedSectorsForExpansion();
             } else {
-                console.log(`📱 TOUCHEND: No movement detected, skipping expansion check`);
+                this.mobileLog(`📱 TOUCHEND: No movement detected, skipping expansion check`);
             }
             
             // Update touch count
@@ -1053,6 +1056,77 @@ class PixelCanvas {
         this.ctx.setLineDash([]);
     }
     
+    setupMobileDebugPanel() {
+        // Create debug panel for mobile
+        this.debugPanel = document.createElement('div');
+        this.debugPanel.id = 'mobileDebugPanel';
+        this.debugPanel.style.cssText = `
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            width: calc(100vw - 20px);
+            max-height: 200px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10000;
+            overflow-y: auto;
+            display: none;
+        `;
+        document.body.appendChild(this.debugPanel);
+        
+        // Add toggle button
+        this.debugToggle = document.createElement('button');
+        this.debugToggle.textContent = '🐛';
+        this.debugToggle.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 20px;
+            z-index: 10001;
+            cursor: pointer;
+        `;
+        this.debugToggle.addEventListener('click', () => {
+            const isVisible = this.debugPanel.style.display !== 'none';
+            this.debugPanel.style.display = isVisible ? 'none' : 'block';
+            this.debugToggle.textContent = isVisible ? '🐛' : '❌';
+        });
+        document.body.appendChild(this.debugToggle);
+        
+        this.debugLogs = [];
+        this.maxDebugLogs = 50;
+    }
+    
+    mobileLog(message) {
+        // Add timestamp
+        const timestamp = new Date().toLocaleTimeString();
+        const logEntry = `[${timestamp}] ${message}`;
+        
+        // Add to logs array
+        this.debugLogs.push(logEntry);
+        if (this.debugLogs.length > this.maxDebugLogs) {
+            this.debugLogs.shift();
+        }
+        
+        // Update panel
+        if (this.debugPanel) {
+            this.debugPanel.innerHTML = this.debugLogs.join('<br>');
+            this.debugPanel.scrollTop = this.debugPanel.scrollHeight;
+        }
+        
+        // Also log to console for desktop users
+        console.log(message);
+    }
+    
     generateDeviceId() {
         // Create a semi-persistent device identifier
         const canvas = document.createElement('canvas');
@@ -1312,10 +1386,9 @@ class PixelCanvas {
     
     checkLoadedSectorsForExpansion() {
         // Immediate synchronous check using already loaded pixel data
-        console.log(`🔍 === CHECKING LOADED SECTORS FOR EXPANSION (SYNC) ===`);
-        console.log(`🔍 Total pixels in memory: ${this.pixels.size}`);
-        console.log(`🔍 Current active sectors: ${Array.from(this.activeSectors).join(', ')}`);
-        console.log(`🔍 Expansion threshold: ${SECTOR_EXPANSION_THRESHOLD} (${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%)`);
+        this.mobileLog(`🔍 === CHECKING LOADED SECTORS ===`);
+        this.mobileLog(`🔍 Pixels: ${this.pixels.size}, Active: ${Array.from(this.activeSectors).join(',')}`);
+        this.mobileLog(`🔍 Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}%`);
         
         // Count pixels by sector from loaded pixels
         const sectorCounts = new Map();
@@ -1325,13 +1398,13 @@ class PixelCanvas {
             sectorCounts.set(sectorKey, (sectorCounts.get(sectorKey) || 0) + 1);
         }
         
-        console.log(`🔍 Found pixels in ${sectorCounts.size} sectors from loaded data:`);
+        this.mobileLog(`🔍 Found ${sectorCounts.size} sectors with pixels:`);
         for (const [sectorKey, count] of sectorCounts) {
             const isActive = this.activeSectors.has(sectorKey);
             const maxPixels = GRID_SIZE * GRID_SIZE;
-            const percentage = (count / maxPixels * 100).toFixed(4);
+            const percentage = (count / maxPixels * 100).toFixed(2);
             const exceedsThreshold = count / maxPixels >= SECTOR_EXPANSION_THRESHOLD;
-            console.log(`🔍   Sector ${sectorKey}: ${count} pixels (${percentage}%), Active: ${isActive}, Exceeds threshold: ${exceedsThreshold}`);
+            this.mobileLog(`🔍 ${sectorKey}: ${count}px (${percentage}%) Active:${isActive} Exceeds:${exceedsThreshold}`);
         }
         
         let expandedAny = false;
@@ -1353,19 +1426,19 @@ class PixelCanvas {
             
             if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
                 const [sectorX, sectorY] = sectorKey.split(',').map(Number);
-                console.log(`🔄 *** TRIGGERING EXPANSION for sector (${sectorX}, ${sectorY}) ***`);
+                this.mobileLog(`🔄 *** EXPANDING ${sectorKey} ***`);
                 this.expandSectorsLocally(sectorX, sectorY);
                 expandedAny = true;
             }
         }
         
         if (!expandedAny) {
-            console.log(`📍 No loaded sectors need expansion`);
+            this.mobileLog(`📍 No expansion needed`);
         } else {
-            console.log(`🎯 Expansion completed. New active sectors: ${Array.from(this.activeSectors).join(', ')}`);
+            this.mobileLog(`🎯 Expanded! New active: ${Array.from(this.activeSectors).join(',')}`);
         }
         
-        console.log(`🔍 === END LOADED SECTORS CHECK ===`);
+        this.mobileLog(`🔍 === END CHECK ===`);
         
         // Also schedule async check for completeness (for database validation)
         this.debounceExpansionCheck();
