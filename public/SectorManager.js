@@ -5,6 +5,7 @@ export class SectorManager {
     constructor(pixelCanvas) {
         this.pixelCanvas = pixelCanvas;
         this.isExpansionRunning = false;
+        this.expandedSectors = new Set(); // Track sectors that have been expanded
         this.expansionDebouncer = Utils.debounce(
             () => this.checkLoadedSectorsForExpansion(), 
             CONFIG.EXPANSION_DEBOUNCE_MS
@@ -243,6 +244,12 @@ export class SectorManager {
     }
     
     async checkSectorExpansion(sectorKey, pixelCount) {
+        // Skip if this sector has already been expanded
+        if (this.expandedSectors.has(sectorKey)) {
+            this.pixelCanvas.debugPanel.log(`⏩ Sector ${sectorKey}: Already expanded, skipping`);
+            return false;
+        }
+        
         const maxPixelsPerSector = CONFIG.GRID_SIZE * CONFIG.GRID_SIZE;
         const fillPercentage = pixelCount / maxPixelsPerSector;
         
@@ -251,6 +258,10 @@ export class SectorManager {
         if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD && pixelCount >= 7) {
             const [sectorX, sectorY] = Utils.parseSectorKey(sectorKey);
             this.pixelCanvas.debugPanel.log(`🔄 Expansion triggered: sector (${sectorX}, ${sectorY}) exceeds threshold with ${pixelCount} pixels!`);
+            
+            // Mark as expanded to prevent re-expansion
+            this.expandedSectors.add(sectorKey);
+            
             this.expandSectorsLocally(sectorX, sectorY);
             return true;
         }
@@ -278,6 +289,9 @@ export class SectorManager {
         
         // Add neighboring empty sectors to active sectors
         const addedSectors = [];
+        let alreadyActiveSectors = [];
+        let sectorsWithPixels = [];
+        
         for (let dx = -1; dx <= 1; dx++) {
             for (let dy = -1; dy <= 1; dy++) {
                 if (dx === 0 && dy === 0) continue; // Skip center sector
@@ -285,11 +299,23 @@ export class SectorManager {
                 const neighborKey = Utils.createSectorKey(centerX + dx, centerY + dy);
                 const neighborPixelCount = this.getRealTimePixelCount(neighborKey);
                 
-                if (neighborPixelCount === 0 && !this.pixelCanvas.activeSectors.has(neighborKey)) {
+                if (neighborPixelCount > 0) {
+                    sectorsWithPixels.push(`${neighborKey}(${neighborPixelCount}px)`);
+                } else if (this.pixelCanvas.activeSectors.has(neighborKey)) {
+                    alreadyActiveSectors.push(neighborKey);
+                } else {
                     this.pixelCanvas.activeSectors.add(neighborKey);
                     addedSectors.push(neighborKey);
                 }
             }
+        }
+        
+        // Detailed logging for debugging
+        if (alreadyActiveSectors.length > 0) {
+            this.pixelCanvas.debugPanel.log(`⚠️ Already active neighbors: ${alreadyActiveSectors.join(', ')}`);
+        }
+        if (sectorsWithPixels.length > 0) {
+            this.pixelCanvas.debugPanel.log(`🎨 Neighbors with pixels: ${sectorsWithPixels.join(', ')}`);
         }
         
         this.pixelCanvas.debugPanel.log(`➕ Added ${addedSectors.length} new active sectors: ${addedSectors.join(', ')}`);

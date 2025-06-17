@@ -278,7 +278,8 @@ export class NetworkManager {
             const pixels = await response.json();
             this.pixelCanvas.debugPanel.log(`📦 Loaded ${pixels.length} pixels from database`);
             
-            // Add each pixel to the pixels map
+            // Add each pixel to the pixels map and calculate occupied sectors
+            const occupiedSectors = new Set();
             for (const pixel of pixels) {
                 const key = Utils.createPixelKey(
                     pixel.sector_x,
@@ -287,7 +288,14 @@ export class NetworkManager {
                     pixel.local_y
                 );
                 this.pixelCanvas.pixels.set(key, pixel.color);
+                
+                // Track which sectors have pixels
+                const sectorKey = Utils.createSectorKey(pixel.sector_x, pixel.sector_y);
+                occupiedSectors.add(sectorKey);
             }
+            
+            // Initialize active sectors: start with (0,0) and add neighbors of any occupied sectors
+            this.initializeActiveSectors(occupiedSectors);
             
             // Also save to localStorage for offline access
             const pixelsObject = {};
@@ -341,5 +349,32 @@ export class NetworkManager {
         }
         
         return [];
+    }
+    
+    initializeActiveSectors(occupiedSectors) {
+        // Always start with (0,0) as active
+        this.pixelCanvas.activeSectors.add('0,0');
+        
+        // Add empty neighbors around occupied sectors
+        let initialActiveCount = 1;
+        for (const sectorKey of occupiedSectors) {
+            const [sectorX, sectorY] = Utils.parseSectorKey(sectorKey);
+            
+            // Add empty neighbors around this occupied sector
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    const neighborKey = Utils.createSectorKey(sectorX + dx, sectorY + dy);
+                    
+                    // Only add if it's not occupied and not already active
+                    if (!occupiedSectors.has(neighborKey) && !this.pixelCanvas.activeSectors.has(neighborKey)) {
+                        this.pixelCanvas.activeSectors.add(neighborKey);
+                        initialActiveCount++;
+                    }
+                }
+            }
+        }
+        
+        this.pixelCanvas.debugPanel.log(`🎯 Initialized ${initialActiveCount} active sectors around ${occupiedSectors.size} occupied sectors`);
+        this.pixelCanvas.debugPanel.log(`📍 Active sectors: ${Array.from(this.pixelCanvas.activeSectors).slice(0, 10).join(', ')}${this.pixelCanvas.activeSectors.size > 10 ? '...' : ''}`);
     }
 }

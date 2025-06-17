@@ -21,7 +21,7 @@ class PixelCanvas {
         this.offsetX = 0;
         this.offsetY = 0;
         this.showGrid = true;
-        this.activeSectors = new Set(['0,0']);
+        this.activeSectors = new Set(); // Initialize empty, will be populated from database
         this.isExpansionRunning = false;
         this.deviceId = Utils.generateDeviceId();
         
