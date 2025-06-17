@@ -241,13 +241,15 @@ class PixelCanvas {
                 touchState.wasMultiTouch = true;
             }
             
-            // Check for sector expansion after viewport movement
-            if (touchState.moved) {
-                this.mobileLog(`📱 TOUCHEND: Movement detected, triggering expansion check`);
-                // Use immediate check instead of async
-                this.checkLoadedSectorsForExpansion();
-            } else {
-                this.mobileLog(`📱 TOUCHEND: No movement detected, skipping expansion check`);
+            // Reduce expansion checks to improve performance
+            if (touchState.moved && !this.isExpansionRunning) {
+                this.mobileLog(`📱 TOUCHEND: Movement detected, scheduling expansion check`);
+                // Debounce expansion checks
+                setTimeout(() => {
+                    if (!this.isExpansionRunning) {
+                        this.checkLoadedSectorsForExpansion();
+                    }
+                }, 1000);
             }
             
             // Update touch count
@@ -321,10 +323,14 @@ class PixelCanvas {
             if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
                 console.log(`🖱️ MOUSEUP: Small movement, treating as click`);
                 this.handlePixelClick(mouseState.startX, mouseState.startY);
-            } else {
-                // Large movement = viewport pan, check for expansion
-                console.log(`🖱️ MOUSEUP: Large movement detected (${dx}, ${dy}), triggering expansion check`);
-                this.checkLoadedSectorsForExpansion();
+            } else if (!this.isExpansionRunning) {
+                // Large movement = viewport pan, check for expansion (debounced)
+                console.log(`🖱️ MOUSEUP: Large movement detected (${dx}, ${dy}), scheduling expansion check`);
+                setTimeout(() => {
+                    if (!this.isExpansionRunning) {
+                        this.checkLoadedSectorsForExpansion();
+                    }
+                }, 1000);
             }
             
             mouseState.down = false;
@@ -352,8 +358,14 @@ class PixelCanvas {
             this.constrainViewport(); // Apply viewport constraints after zoom
             this.render();
             
-            // Check for expansion after zoom
-            this.checkLoadedSectorsForExpansion();
+            // Check for expansion after zoom (debounced)
+            if (!this.isExpansionRunning) {
+                setTimeout(() => {
+                    if (!this.isExpansionRunning) {
+                        this.checkLoadedSectorsForExpansion();
+                    }
+                }, 1500);
+            }
         });
     }
     
@@ -551,7 +563,7 @@ class PixelCanvas {
         this.loadSectorCounts();
         
         // Clean up any inconsistencies in activeSectors after loading
-        setTimeout(() => this.cleanupActiveSectors(), 3000);
+        setTimeout(() => this.cleanupActiveSectors(), 5000);
         
         // Setup realtime subscription
         this.setupRealtimeSubscription();
@@ -856,11 +868,15 @@ class PixelCanvas {
         // Check for expansion after any significant viewport change
         const offsetDeltaX = Math.abs(originalOffsetX - this.offsetX);
         const offsetDeltaY = Math.abs(originalOffsetY - this.offsetY);
-        if (offsetDeltaX > 1 || offsetDeltaY > 1) {
-            console.log(`📐 CONSTRAINVIEWPORT: Significant change detected (Δx: ${offsetDeltaX.toFixed(1)}, Δy: ${offsetDeltaY.toFixed(1)}), triggering expansion check`);
-            this.checkLoadedSectorsForExpansion();
-        } else {
-            console.log(`📐 CONSTRAINVIEWPORT: No significant change (Δx: ${offsetDeltaX.toFixed(1)}, Δy: ${offsetDeltaY.toFixed(1)}), skipping expansion check`);
+        if (offsetDeltaX > 10 || offsetDeltaY > 10) { // Increase threshold
+            if (!this.isExpansionRunning) {
+                console.log(`📐 CONSTRAINVIEWPORT: Major change detected (Δx: ${offsetDeltaX.toFixed(1)}, Δy: ${offsetDeltaY.toFixed(1)}), scheduling expansion check`);
+                setTimeout(() => {
+                    if (!this.isExpansionRunning) {
+                        this.checkLoadedSectorsForExpansion();
+                    }
+                }, 2000);
+            }
         }
     }
     
@@ -1589,12 +1605,16 @@ class PixelCanvas {
             
             if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD && pixelCount >= 7) {
                 const [sectorX, sectorY] = sectorKey.split(',').map(Number);
-                this.mobileLog(`🔄 *** EXPANDING ${sectorKey} (${pixelCount} pixels) ***`);
                 
-                this.expandSectorsLocally(sectorX, sectorY);
-                expandedAny = true;
-            } else {
-                this.mobileLog(`❌ ${sectorKey} below threshold or insufficient pixels (${pixelCount})`);
+                // Double-check with real-time count to prevent inconsistency
+                const realTimeCount = this.getRealTimePixelCount(sectorKey);
+                if (realTimeCount >= 7) {
+                    this.mobileLog(`🔄 EXPANDING ${sectorKey} (verified: ${realTimeCount} pixels)`);
+                    this.expandSectorsLocally(sectorX, sectorY);
+                    expandedAny = true;
+                } else {
+                    this.mobileLog(`❌ ${sectorKey} inconsistent data: cached=${pixelCount}, real=${realTimeCount}`);
+                }
             }
         }
         
@@ -1642,31 +1662,7 @@ class PixelCanvas {
         return count;
     }
     
-    logSectorExpansionDetails(centerX, centerY, pixelCount) {
-        // Log detailed information about sector expansion
-        const centerKey = `${centerX},${centerY}`;
-        this.mobileLog(`🔍 EXPANSION DETAILS for ${centerKey}:`);
-        this.mobileLog(`  - Pixels: ${pixelCount}`);
-        this.mobileLog(`  - In activeSectors: ${this.activeSectors.has(centerKey)}`);
-        this.mobileLog(`  - In sectorPixelCounts: ${this.sectorPixelCounts.has(centerKey)}`);
-        
-        // Check all 8 neighbors
-        const directions = [
-            [-1, -1], [-1, 0], [-1, 1],
-            [0, -1],           [0, 1],
-            [1, -1],  [1, 0],  [1, 1]
-        ];
-        
-        this.mobileLog(`🔍 NEIGHBOR STATUS:`);
-        for (const [dx, dy] of directions) {
-            const newX = centerX + dx;
-            const newY = centerY + dy;
-            const neighborKey = `${newX},${newY}`;
-            const isActive = this.activeSectors.has(neighborKey);
-            const realPixelCount = this.getRealTimePixelCount(neighborKey);
-            this.mobileLog(`  ${neighborKey}: Active=${isActive}, Pixels=${realPixelCount}`);
-        }
-    }
+    // Removed logSectorExpansionDetails - causing performance issues with excessive logging
     
     cleanupActiveSectors() {
         // Remove any sectors from activeSectors that have pixels (using real-time count)
