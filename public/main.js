@@ -1133,6 +1133,8 @@ class PixelCanvas {
     
     async loadSectorCounts() {
         try {
+            console.log('Loading sector counts from Supabase...');
+            
             const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors?select=*`, {
                 headers: {
                     'apikey': SUPABASE_ANON_KEY,
@@ -1141,17 +1143,56 @@ class PixelCanvas {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorText = await response.text();
+                console.error('Failed to load sector counts:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
             
             const sectors = await response.json();
+            console.log(`Successfully loaded ${sectors.length} sectors:`, sectors);
+            
+            // Clear existing counts
+            this.sectorPixelCounts.clear();
+            
             for (const sector of sectors) {
                 const key = `${sector.sector_x},${sector.sector_y}`;
                 this.sectorPixelCounts.set(key, sector.pixel_count);
+                console.log(`Sector ${key}: ${sector.pixel_count} pixels`);
+                
+                // Check if expansion is needed immediately
+                if (sector.pixel_count > 0) {
+                    this.checkSectorExpansion(sector.sector_x, sector.sector_y, sector.pixel_count);
+                }
             }
+            
+            console.log('Sector counts loaded successfully!');
             
         } catch (error) {
             console.error('Failed to load sector counts:', error);
+            // Fallback: calculate counts from loaded pixels
+            console.log('Fallback: calculating sector counts from pixels...');
+            this.calculateSectorCountsFromPixels();
+        }
+    }
+    
+    calculateSectorCountsFromPixels() {
+        this.sectorPixelCounts.clear();
+        
+        // Count pixels by sector
+        for (const [key, color] of this.pixels) {
+            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+            const sectorKey = `${sectorX},${sectorY}`;
+            const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
+            this.sectorPixelCounts.set(sectorKey, currentCount + 1);
+        }
+        
+        // Check expansion for each sector
+        for (const [sectorKey, count] of this.sectorPixelCounts) {
+            const [sectorX, sectorY] = sectorKey.split(',').map(Number);
+            console.log(`Calculated sector ${sectorKey}: ${count} pixels`);
+            if (count > 0) {
+                this.checkSectorExpansion(sectorX, sectorY, count);
+            }
         }
     }
     
@@ -1183,12 +1224,19 @@ class PixelCanvas {
     }
     
     async checkSectorExpansion(sectorX, sectorY, pixelCount) {
-        const maxPixelsPerSector = GRID_SIZE * GRID_SIZE; // 256 * 256
+        const maxPixelsPerSector = GRID_SIZE * GRID_SIZE; // 256 * 256 = 65536
         const fillPercentage = pixelCount / maxPixelsPerSector;
+        const thresholdPixels = Math.ceil(maxPixelsPerSector * SECTOR_EXPANSION_THRESHOLD);
+        
+        console.log(`🔍 Checking expansion for sector (${sectorX}, ${sectorY}):
+            Pixels: ${pixelCount}/${maxPixelsPerSector}
+            Fill percentage: ${(fillPercentage * 100).toFixed(4)}%
+            Threshold: ${(SECTOR_EXPANSION_THRESHOLD * 100).toFixed(4)}% (${thresholdPixels} pixels)
+            Should expand: ${fillPercentage >= SECTOR_EXPANSION_THRESHOLD}`);
         
         if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
-            console.log(`Sector (${sectorX}, ${sectorY}) is ${Math.round(fillPercentage * 100)}% full. Expanding...`);
-            await this.expandSectors(sectorX, sectorY);
+            console.log(`🚀 Sector (${sectorX}, ${sectorY}) is ${(fillPercentage * 100).toFixed(2)}% full. Expanding...`);
+            this.expandSectorsLocally(sectorX, sectorY);
         }
     }
     
