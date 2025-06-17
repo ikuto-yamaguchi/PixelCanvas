@@ -88,24 +88,70 @@ export class SectorManager {
     
     cleanupActiveSectors() {
         const sectorsToRemove = [];
+        const originalSize = this.pixelCanvas.activeSectors.size;
         
         for (const sectorKey of this.pixelCanvas.activeSectors) {
             const pixelCount = this.getRealTimePixelCount(sectorKey);
             if (pixelCount > 0) {
-                sectorsToRemove.push(sectorKey);
+                sectorsToRemove.push({ key: sectorKey, pixels: pixelCount });
             }
         }
         
-        for (const sectorKey of sectorsToRemove) {
-            this.pixelCanvas.activeSectors.delete(sectorKey);
-            const realPixelCount = this.getRealTimePixelCount(sectorKey);
-            this.pixelCanvas.debugPanel.log(`🧹 Cleanup: Removed ${sectorKey} from activeSectors (${realPixelCount} pixels)`);
+        for (const sector of sectorsToRemove) {
+            this.pixelCanvas.activeSectors.delete(sector.key);
+            this.pixelCanvas.debugPanel.log(`🔒 LOCKED: Sector ${sector.key} removed from active (${sector.pixels} pixels found)`);
         }
         
         if (sectorsToRemove.length > 0) {
-            this.pixelCanvas.debugPanel.log(`🧹 Cleanup complete: Removed ${sectorsToRemove.length} sectors from activeSectors`);
-            this.pixelCanvas.debugPanel.log(`🧹 Active sectors now: ${Array.from(this.pixelCanvas.activeSectors).join(',')}`);
+            this.pixelCanvas.debugPanel.log(`🧹 Cleanup: ${sectorsToRemove.length} sectors locked, ${originalSize - sectorsToRemove.length} remain active`);
+            this.pixelCanvas.debugPanel.log(`🟢 Active sectors remaining: ${this.pixelCanvas.activeSectors.size}`);
+            
+            // If very few active sectors left, trigger emergency expansion
+            if (this.pixelCanvas.activeSectors.size < 10) {
+                this.pixelCanvas.debugPanel.log(`⚠️ WARNING: Only ${this.pixelCanvas.activeSectors.size} active sectors left! Need emergency expansion.`);
+                this.emergencyExpansion();
+            }
         }
+    }
+    
+    emergencyExpansion() {
+        this.pixelCanvas.debugPanel.log(`🚨 EMERGENCY EXPANSION: Adding sectors in wider radius...`);
+        
+        // Find center of current activity
+        let totalX = 0, totalY = 0, count = 0;
+        for (const sectorKey of this.pixelCanvas.activeSectors) {
+            const [x, y] = Utils.parseSectorKey(sectorKey);
+            totalX += x;
+            totalY += y;
+            count++;
+        }
+        
+        if (count === 0) {
+            // Fallback to origin
+            totalX = 0;
+            totalY = 0;
+            count = 1;
+        }
+        
+        const centerX = Math.round(totalX / count);
+        const centerY = Math.round(totalY / count);
+        
+        // Add empty sectors in 3-radius around center
+        let addedCount = 0;
+        for (let dx = -3; dx <= 3; dx++) {
+            for (let dy = -3; dy <= 3; dy++) {
+                const sectorKey = Utils.createSectorKey(centerX + dx, centerY + dy);
+                const pixelCount = this.getRealTimePixelCount(sectorKey);
+                
+                if (pixelCount === 0 && !this.pixelCanvas.activeSectors.has(sectorKey)) {
+                    this.pixelCanvas.activeSectors.add(sectorKey);
+                    addedCount++;
+                }
+            }
+        }
+        
+        this.pixelCanvas.debugPanel.log(`🆘 Emergency expansion: Added ${addedCount} new active sectors around (${centerX}, ${centerY})`);
+        this.pixelCanvas.debugPanel.log(`🟢 Total active sectors now: ${this.pixelCanvas.activeSectors.size}`);
     }
     
     async checkVisibleSectorsForExpansion() {
@@ -284,16 +330,22 @@ export class SectorManager {
         // Remove center sector from active sectors (it now has pixels)
         if (this.pixelCanvas.activeSectors.has(centerKey)) {
             this.pixelCanvas.activeSectors.delete(centerKey);
-            this.pixelCanvas.debugPanel.log(`🗑️ Removed center sector ${centerKey} from activeSectors`);
+            this.pixelCanvas.debugPanel.log(`🔒 LOCKED sector ${centerKey} (removed from activeSectors - now has ${centerPixelCount} pixels)`);
+        } else {
+            this.pixelCanvas.debugPanel.log(`ℹ️ Sector ${centerKey} was already locked with ${centerPixelCount} pixels`);
         }
         
-        // Add neighboring empty sectors to active sectors
+        // Add neighboring empty sectors to active sectors (expanded radius)
         const addedSectors = [];
         let alreadyActiveSectors = [];
         let sectorsWithPixels = [];
+        let skippedSectors = [];
         
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
+        // Expand in a 2-radius circle to ensure sufficient new sectors
+        const radius = addedSectors.length === 0 ? 2 : 1; // Use radius 2 if no immediate neighbors
+        
+        for (let dx = -radius; dx <= radius; dx++) {
+            for (let dy = -radius; dy <= radius; dy++) {
                 if (dx === 0 && dy === 0) continue; // Skip center sector
                 
                 const neighborKey = Utils.createSectorKey(centerX + dx, centerY + dy);
@@ -301,6 +353,11 @@ export class SectorManager {
                 
                 if (neighborPixelCount > 0) {
                     sectorsWithPixels.push(`${neighborKey}(${neighborPixelCount}px)`);
+                    // Also remove from active sectors if it has pixels
+                    if (this.pixelCanvas.activeSectors.has(neighborKey)) {
+                        this.pixelCanvas.activeSectors.delete(neighborKey);
+                        this.pixelCanvas.debugPanel.log(`🔒 LOCKED neighbor ${neighborKey} (found ${neighborPixelCount} pixels)`);
+                    }
                 } else if (this.pixelCanvas.activeSectors.has(neighborKey)) {
                     alreadyActiveSectors.push(neighborKey);
                 } else {
