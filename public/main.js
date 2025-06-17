@@ -510,6 +510,9 @@ class PixelCanvas {
         // Load pixels from Supabase
         this.loadPixelsFromSupabase();
         
+        // Load sector counts and check for expansion
+        this.loadSectorCounts();
+        
         // Setup realtime subscription
         this.setupRealtimeSubscription();
         
@@ -1159,9 +1162,14 @@ class PixelCanvas {
                 this.sectorPixelCounts.set(key, sector.pixel_count);
                 console.log(`Sector ${key}: ${sector.pixel_count} pixels`);
                 
-                // Check if expansion is needed immediately
+                // Check if expansion is needed immediately for existing sectors
                 if (sector.pixel_count > 0) {
-                    this.checkSectorExpansion(sector.sector_x, sector.sector_y, sector.pixel_count);
+                    const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
+                    const fillPercentage = sector.pixel_count / maxPixelsPerSector;
+                    if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
+                        console.log(`🔄 Initial expansion needed for sector (${sector.sector_x}, ${sector.sector_y}) with ${sector.pixel_count} pixels`);
+                        this.expandSectorsLocally(sector.sector_x, sector.sector_y);
+                    }
                 }
             }
             
@@ -1191,7 +1199,12 @@ class PixelCanvas {
             const [sectorX, sectorY] = sectorKey.split(',').map(Number);
             console.log(`Calculated sector ${sectorKey}: ${count} pixels`);
             if (count > 0) {
-                this.checkSectorExpansion(sectorX, sectorY, count);
+                const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
+                const fillPercentage = count / maxPixelsPerSector;
+                if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
+                    console.log(`🔄 Initial expansion needed for calculated sector (${sectorX}, ${sectorY}) with ${count} pixels`);
+                    this.expandSectorsLocally(sectorX, sectorY);
+                }
             }
         }
     }
