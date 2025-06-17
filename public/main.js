@@ -798,8 +798,8 @@ class PixelCanvas {
             this.showBoundaryWarning();
         }
         
-        // Check for expansion opportunities when viewport changes
-        this.checkVisibleSectorsForExpansion();
+        // Check for expansion opportunities when viewport changes (debounced)
+        this.debounceExpansionCheck();
     }
     
     centerViewportOnActiveSectors() {
@@ -1250,7 +1250,15 @@ class PixelCanvas {
         }
     }
     
-    checkVisibleSectorsForExpansion() {
+    debounceExpansionCheck() {
+        // Debounce expansion checks to avoid too many database calls
+        clearTimeout(this.expansionCheckTimeout);
+        this.expansionCheckTimeout = setTimeout(() => {
+            this.checkVisibleSectorsForExpansion();
+        }, 500); // Wait 500ms after viewport stops moving
+    }
+    
+    async checkVisibleSectorsForExpansion() {
         // Check all visible sectors for expansion threshold
         const sectorSize = GRID_SIZE * PIXEL_SIZE * this.scale;
         
@@ -1260,42 +1268,59 @@ class PixelCanvas {
         const startSectorY = Math.floor(-this.offsetY / sectorSize) - 1;
         const endSectorY = Math.ceil((this.canvas.height - this.offsetY) / sectorSize) + 1;
         
-        let expandedAny = false;
+        console.log(`🔍 Checking visible sectors for expansion: X[${startSectorX} to ${endSectorX}] Y[${startSectorY} to ${endSectorY}]`);
         
-        // Check each visible sector
-        for (let sectorX = startSectorX; sectorX <= endSectorX; sectorX++) {
-            for (let sectorY = startSectorY; sectorY <= endSectorY; sectorY++) {
-                const sectorKey = `${sectorX},${sectorY}`;
+        try {
+            // Get all sectors in the visible range from database
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors?sector_x=gte.${startSectorX}&sector_x=lte.${endSectorX}&sector_y=gte.${startSectorY}&sector_y=lte.${endSectorY}&select=sector_x,sector_y,pixel_count`, {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            });
+            
+            if (!response.ok) {
+                console.error('Failed to load visible sectors for expansion check');
+                return;
+            }
+            
+            const sectors = await response.json();
+            console.log(`Found ${sectors.length} existing sectors in visible range:`, sectors);
+            
+            let expandedAny = false;
+            
+            for (const sector of sectors) {
+                const sectorKey = `${sector.sector_x},${sector.sector_y}`;
                 
-                // Count actual pixels in this sector
-                let pixelCount = 0;
-                for (const [key, color] of this.pixels) {
-                    const [pSectorX, pSectorY] = key.split(',').map(Number);
-                    if (pSectorX === sectorX && pSectorY === sectorY) {
-                        pixelCount++;
-                    }
+                // Skip if this sector is already active
+                if (this.activeSectors.has(sectorKey)) {
+                    continue;
                 }
                 
                 // Check if expansion is needed
-                if (pixelCount > 0) {
+                if (sector.pixel_count > 0) {
                     const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
-                    const fillPercentage = pixelCount / maxPixelsPerSector;
+                    const fillPercentage = sector.pixel_count / maxPixelsPerSector;
+                    
+                    console.log(`🔍 Sector (${sector.sector_x}, ${sector.sector_y}): ${sector.pixel_count} pixels (${(fillPercentage * 100).toFixed(3)}%)`);
                     
                     if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
-                        // Only expand if this sector isn't already active
-                        if (!this.activeSectors.has(sectorKey)) {
-                            console.log(`🔄 Viewport expansion check: sector (${sectorX}, ${sectorY}) with ${pixelCount} pixels (${(fillPercentage * 100).toFixed(3)}%)`);
-                            this.expandSectorsLocally(sectorX, sectorY);
-                            expandedAny = true;
-                        }
+                        console.log(`🔄 Viewport expansion: sector (${sector.sector_x}, ${sector.sector_y}) exceeds threshold!`);
+                        this.expandSectorsLocally(sector.sector_x, sector.sector_y);
+                        expandedAny = true;
                     }
                 }
             }
-        }
-        
-        if (expandedAny) {
-            console.log(`🎯 Expanded sectors based on viewport visibility`);
-            this.render(); // Re-render to show new active sectors
+            
+            if (expandedAny) {
+                console.log(`🎯 Expanded sectors based on viewport visibility`);
+                this.render(); // Re-render to show new active sectors
+            } else {
+                console.log(`📍 No sectors in visible range need expansion`);
+            }
+            
+        } catch (error) {
+            console.error('Failed to check visible sectors for expansion:', error);
         }
     }
     
