@@ -1085,13 +1085,51 @@ class PixelCanvas {
             color: #00ff00;
             font-family: monospace;
             font-size: 10px;
-            padding: 10px;
+            padding: 30px 10px 10px 10px;
             border-radius: 5px;
             z-index: 10000;
             overflow-y: auto;
             display: none;
         `;
         document.body.appendChild(this.debugPanel);
+        
+        // Add copy button to debug panel
+        this.copyButton = document.createElement('button');
+        this.copyButton.textContent = '📋 Copy Logs';
+        this.copyButton.style.cssText = `
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #333;
+            color: white;
+            border: 1px solid #666;
+            border-radius: 3px;
+            padding: 5px 8px;
+            font-size: 10px;
+            cursor: pointer;
+            z-index: 10002;
+        `;
+        this.copyButton.addEventListener('click', () => this.copyLogsToClipboard());
+        this.debugPanel.appendChild(this.copyButton);
+        
+        // Add clear button
+        this.clearButton = document.createElement('button');
+        this.clearButton.textContent = '🗑️ Clear';
+        this.clearButton.style.cssText = `
+            position: absolute;
+            top: 5px;
+            right: 85px;
+            background: #333;
+            color: white;
+            border: 1px solid #666;
+            border-radius: 3px;
+            padding: 5px 8px;
+            font-size: 10px;
+            cursor: pointer;
+            z-index: 10002;
+        `;
+        this.clearButton.addEventListener('click', () => this.clearLogs());
+        this.debugPanel.appendChild(this.clearButton);
         
         // Add toggle button
         this.debugToggle = document.createElement('button');
@@ -1134,12 +1172,79 @@ class PixelCanvas {
         
         // Update panel
         if (this.debugPanel) {
-            this.debugPanel.innerHTML = this.debugLogs.join('<br>');
+            // Create content div to separate logs from buttons
+            let contentDiv = this.debugPanel.querySelector('.debug-content');
+            if (!contentDiv) {
+                contentDiv = document.createElement('div');
+                contentDiv.className = 'debug-content';
+                this.debugPanel.appendChild(contentDiv);
+            }
+            contentDiv.innerHTML = this.debugLogs.join('<br>');
             this.debugPanel.scrollTop = this.debugPanel.scrollHeight;
         }
         
         // Also log to console for desktop users
         console.log(message);
+    }
+    
+    copyLogsToClipboard() {
+        // Create text version of logs
+        const logText = this.debugLogs.join('\n');
+        
+        // Try modern clipboard API first
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(logText).then(() => {
+                this.showCopySuccess();
+            }).catch(() => {
+                this.fallbackCopy(logText);
+            });
+        } else {
+            this.fallbackCopy(logText);
+        }
+    }
+    
+    fallbackCopy(text) {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            document.execCommand('copy');
+            this.showCopySuccess();
+        } catch (err) {
+            console.error('Failed to copy logs:', err);
+            alert('Copy failed. Please manually select and copy the logs.');
+        }
+        
+        document.body.removeChild(textArea);
+    }
+    
+    showCopySuccess() {
+        const originalText = this.copyButton.textContent;
+        this.copyButton.textContent = '✅ Copied!';
+        this.copyButton.style.background = '#4ade80';
+        
+        setTimeout(() => {
+            this.copyButton.textContent = originalText;
+            this.copyButton.style.background = '#333';
+        }, 2000);
+    }
+    
+    clearLogs() {
+        this.debugLogs = [];
+        if (this.debugPanel) {
+            const contentDiv = this.debugPanel.querySelector('.debug-content');
+            if (contentDiv) {
+                contentDiv.innerHTML = '';
+            }
+        }
+        this.mobileLog('🗑️ Logs cleared');
     }
     
     generateDeviceId() {
