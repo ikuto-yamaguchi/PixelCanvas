@@ -671,9 +671,9 @@ class PixelCanvas {
         const worldTop = minSectorY * sectorPixelSize;
         const worldBottom = (maxSectorY + 1) * sectorPixelSize;
         
-        // Add padding based on zoom level (more padding when zoomed out)
-        const paddingFactor = Math.max(1, 2 / this.scale); // More padding when zoomed out
-        const padding = sectorPixelSize * paddingFactor;
+        // Add fixed padding to allow comfortable navigation around active sectors
+        // Use 1.5 sectors worth of padding regardless of zoom level
+        const padding = sectorPixelSize * 1.5;
         
         const paddedLeft = worldLeft - padding;
         const paddedRight = worldRight + padding;
@@ -837,7 +837,7 @@ class PixelCanvas {
                 if (isActive) {
                     // Active sector: bright green border
                     this.ctx.strokeStyle = '#00ff00';
-                    this.ctx.lineWidth = Math.max(2, 4 / this.scale);
+                    this.ctx.lineWidth = Math.max(1, Math.min(3, 2 / this.scale));
                     this.ctx.setLineDash([]);
                     
                     this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
@@ -863,15 +863,28 @@ class PixelCanvas {
                         
                         if (coordWidth <= maxWidth && pixelWidth <= maxWidth && fontSize >= 10) {
                             const centerX = screenX + sectorSize / 2;
-                            const quarterY = screenY + sectorSize / 4;
-                            const threeQuarterY = screenY + (sectorSize * 3) / 4;
+                            const centerY = screenY + sectorSize / 2;
                             
-                            // Position coordinate text in upper quarter
                             this.ctx.textBaseline = 'middle';
-                            this.ctx.fillText(coordinateText, centerX, quarterY);
                             
-                            // Position pixel count in lower quarter
-                            this.ctx.fillText(pixelText, centerX, threeQuarterY);
+                            // Check if we can fit both lines comfortably
+                            const lineSpacing = fontSize * 1.2;
+                            if (sectorSize > lineSpacing * 3) {
+                                // Two lines: coordinate above center, pixel count below center
+                                this.ctx.fillText(coordinateText, centerX, centerY - lineSpacing / 2);
+                                this.ctx.fillText(pixelText, centerX, centerY + lineSpacing / 2);
+                            } else {
+                                // Single line: combine or show coordinate only
+                                const combinedText = `${coordinateText} ${pixelText}`;
+                                const combinedWidth = this.ctx.measureText(combinedText).width;
+                                
+                                if (combinedWidth <= maxWidth) {
+                                    this.ctx.fillText(combinedText, centerX, centerY);
+                                } else {
+                                    // Show coordinate only if combined doesn't fit
+                                    this.ctx.fillText(coordinateText, centerX, centerY);
+                                }
+                            }
                         }
                     }
                 } else {
@@ -881,7 +894,7 @@ class PixelCanvas {
                     
                     // Red dashed border
                     this.ctx.strokeStyle = '#ff4444';
-                    this.ctx.lineWidth = Math.max(1, 2 / this.scale);
+                    this.ctx.lineWidth = Math.max(0.5, Math.min(2, 1.5 / this.scale));
                     this.ctx.setLineDash([8, 4]);
                     this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
                     
