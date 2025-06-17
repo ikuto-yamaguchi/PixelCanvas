@@ -691,11 +691,23 @@ class PixelCanvas {
         const minOffsetY = this.canvas.height - paddedBottom * this.scale; // Bottom limit  
         const maxOffsetY = -paddedTop * this.scale; // Top limit
         
+        // Ensure the bounds make logical sense (minOffset should be less than maxOffset)
+        const finalMinOffsetX = Math.min(minOffsetX, maxOffsetX);
+        const finalMaxOffsetX = Math.max(minOffsetX, maxOffsetX);
+        const finalMinOffsetY = Math.min(minOffsetY, maxOffsetY);
+        const finalMaxOffsetY = Math.max(minOffsetY, maxOffsetY);
+        
+        console.log(`🔍 Viewport bounds calculated:
+            World bounds: X[${worldLeft} to ${worldRight}] Y[${worldTop} to ${worldBottom}]
+            Padded bounds: X[${paddedLeft.toFixed(1)} to ${paddedRight.toFixed(1)}] Y[${paddedTop.toFixed(1)} to ${paddedBottom.toFixed(1)}]
+            Screen size: ${this.canvas.width}x${this.canvas.height}, Scale: ${this.scale.toFixed(2)}x
+            Offset bounds: X[${finalMinOffsetX.toFixed(1)} to ${finalMaxOffsetX.toFixed(1)}] Y[${finalMinOffsetY.toFixed(1)} to ${finalMaxOffsetY.toFixed(1)}]`);
+        
         return {
-            minOffsetX: Math.min(minOffsetX, maxOffsetX - 100), // Ensure some minimum space
-            maxOffsetX: Math.max(maxOffsetX, minOffsetX + 100),
-            minOffsetY: Math.min(minOffsetY, maxOffsetY - 100),
-            maxOffsetY: Math.max(maxOffsetY, minOffsetY + 100)
+            minOffsetX: finalMinOffsetX,
+            maxOffsetX: finalMaxOffsetX,
+            minOffsetY: finalMinOffsetY,
+            maxOffsetY: finalMaxOffsetY
         };
     }
     
@@ -830,20 +842,37 @@ class PixelCanvas {
                     
                     this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
                     
-                    // Show sector info when zoomed in enough
-                    if (sectorSize > 100) {
-                        this.ctx.fillStyle = '#00ff00';
-                        this.ctx.font = `${Math.max(12, 20 / this.scale)}px monospace`;
-                        this.ctx.textAlign = 'center';
-                        this.ctx.textBaseline = 'middle';
-                        
+                    // Show sector info when zoomed in enough and text fits
+                    if (sectorSize > 80) {
                         const pixelCount = this.sectorPixelCounts.get(sectorKey) || 0;
-                        const text = `(${sectorX},${sectorY})\n${pixelCount}px`;
-                        const centerX = screenX + sectorSize / 2;
-                        const centerY = screenY + sectorSize / 2;
+                        const coordinateText = `(${sectorX},${sectorY})`;
+                        const pixelText = `${pixelCount}px`;
                         
-                        this.ctx.fillText(`(${sectorX},${sectorY})`, centerX, centerY - 10);
-                        this.ctx.fillText(`${pixelCount}px`, centerX, centerY + 10);
+                        // Calculate appropriate font size that fits within sector
+                        const maxFontSize = Math.floor(sectorSize / 8);
+                        const fontSize = Math.max(8, Math.min(16, maxFontSize));
+                        
+                        this.ctx.fillStyle = '#00ff00';
+                        this.ctx.font = `${fontSize}px monospace`;
+                        this.ctx.textAlign = 'center';
+                        
+                        // Check if text fits within sector bounds
+                        const coordWidth = this.ctx.measureText(coordinateText).width;
+                        const pixelWidth = this.ctx.measureText(pixelText).width;
+                        const maxWidth = sectorSize - 8; // 4px padding on each side
+                        
+                        if (coordWidth <= maxWidth && pixelWidth <= maxWidth && fontSize >= 10) {
+                            const centerX = screenX + sectorSize / 2;
+                            const quarterY = screenY + sectorSize / 4;
+                            const threeQuarterY = screenY + (sectorSize * 3) / 4;
+                            
+                            // Position coordinate text in upper quarter
+                            this.ctx.textBaseline = 'middle';
+                            this.ctx.fillText(coordinateText, centerX, quarterY);
+                            
+                            // Position pixel count in lower quarter
+                            this.ctx.fillText(pixelText, centerX, threeQuarterY);
+                        }
                     }
                 } else {
                     // Inactive sector: dim overlay
@@ -856,17 +885,29 @@ class PixelCanvas {
                     this.ctx.setLineDash([8, 4]);
                     this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
                     
-                    // "LOCKED" text when zoomed in enough
-                    if (sectorSize > 80) {
+                    // "LOCKED" text when zoomed in enough and fits
+                    if (sectorSize > 60) {
+                        const lockedText = 'LOCKED';
+                        
+                        // Calculate appropriate font size that fits within sector
+                        const maxFontSize = Math.floor(sectorSize / 6);
+                        const fontSize = Math.max(8, Math.min(14, maxFontSize));
+                        
                         this.ctx.fillStyle = '#ff4444';
-                        this.ctx.font = `${Math.max(10, 16 / this.scale)}px monospace`;
+                        this.ctx.font = `${fontSize}px monospace`;
                         this.ctx.textAlign = 'center';
                         this.ctx.textBaseline = 'middle';
                         
-                        const centerX = screenX + sectorSize / 2;
-                        const centerY = screenY + sectorSize / 2;
+                        // Check if text fits within sector bounds
+                        const textWidth = this.ctx.measureText(lockedText).width;
+                        const maxWidth = sectorSize - 8; // 4px padding on each side
                         
-                        this.ctx.fillText('LOCKED', centerX, centerY);
+                        if (textWidth <= maxWidth && fontSize >= 8) {
+                            const centerX = screenX + sectorSize / 2;
+                            const centerY = screenY + sectorSize / 2;
+                            
+                            this.ctx.fillText(lockedText, centerX, centerY);
+                        }
                     }
                 }
             }
