@@ -1,0 +1,313 @@
+// Event handling for PixelCanvas
+import { CONFIG, Utils } from './Config.js';
+
+export class EventHandlers {
+    constructor(canvas, pixelCanvas) {
+        this.canvas = canvas;
+        this.pixelCanvas = pixelCanvas;
+        
+        // Touch state
+        this.touchState = {
+            startTime: 0,
+            startX: 0,
+            startY: 0,
+            initialOffsetX: 0,
+            initialOffsetY: 0,
+            initialScale: 1,
+            initialDistance: 0,
+            initialCenterX: 0,
+            initialCenterY: 0,
+            moved: false,
+            touches: 0,
+            wasMultiTouch: false,
+            gestureEndTime: 0
+        };
+        
+        // Mouse state
+        this.mouseState = {
+            down: false,
+            startX: 0,
+            startY: 0,
+            initialOffsetX: 0,
+            initialOffsetY: 0
+        };
+        
+        this.setupEventListeners();
+    }
+    
+    setupEventListeners() {
+        this.setupGridToggle();
+        this.setupTouchHandlers();
+        this.setupMouseHandlers();
+        this.setupWheelZoom();
+    }
+    
+    setupGridToggle() {
+        const gridToggle = document.getElementById('gridToggle');
+        if (gridToggle) {
+            gridToggle.addEventListener('click', () => {
+                this.pixelCanvas.showGrid = !this.pixelCanvas.showGrid;
+                gridToggle.classList.toggle('active', this.pixelCanvas.showGrid);
+                this.pixelCanvas.render();
+            });
+        }
+    }
+    
+    setupTouchHandlers() {
+        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
+        this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e));
+        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+    }
+    
+    handleTouchStart(e) {
+        e.preventDefault();
+        
+        const now = Date.now();
+        const previousTouches = this.touchState.touches;
+        this.touchState.touches = e.touches.length;
+        this.touchState.startTime = now;
+        
+        // Ignore single touch after multi-touch gesture
+        if (previousTouches > 1 && e.touches.length === 1 && 
+            (now - this.touchState.gestureEndTime < CONFIG.MULTI_TOUCH_DELAY_MS)) {
+            this.touchState.moved = true;
+            return;
+        }
+        
+        this.touchState.moved = false;
+        
+        if (e.touches.length === 1) {
+            this.handleSingleTouchStart(e, previousTouches);
+        } else if (e.touches.length === 2) {
+            this.handleMultiTouchStart(e);
+        }
+    }
+    
+    handleSingleTouchStart(e, previousTouches) {
+        if (previousTouches <= 1) {
+            const coords = this.getCoords(e);
+            this.touchState.startX = coords.x;
+            this.touchState.startY = coords.y;
+            this.touchState.initialOffsetX = this.pixelCanvas.offsetX;
+            this.touchState.initialOffsetY = this.pixelCanvas.offsetY;
+        }
+        this.touchState.wasMultiTouch = false;
+    }
+    
+    handleMultiTouchStart(e) {
+        this.touchState.wasMultiTouch = true;
+        this.touchState.initialDistance = Utils.getTouchDistance(e.touches[0], e.touches[1]);
+        this.touchState.initialScale = this.pixelCanvas.scale;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const center = Utils.getTouchCenter(e.touches[0], e.touches[1], rect);
+        this.touchState.initialCenterX = center.x;
+        this.touchState.initialCenterY = center.y;
+        this.touchState.initialOffsetX = this.pixelCanvas.offsetX;
+        this.touchState.initialOffsetY = this.pixelCanvas.offsetY;
+    }
+    
+    handleTouchMove(e) {
+        e.preventDefault();
+        
+        if (e.touches.length === 1 && this.touchState.touches === 1 && !this.touchState.wasMultiTouch) {
+            this.handleSingleTouchMove(e);
+        } else if (e.touches.length === 2 && this.touchState.touches === 2) {
+            this.handleMultiTouchMove(e);
+        }
+    }
+    
+    handleSingleTouchMove(e) {
+        const coords = this.getCoords(e);
+        const dx = coords.x - this.touchState.startX;
+        const dy = coords.y - this.touchState.startY;
+        
+        if (Math.abs(dx) > CONFIG.TOUCH_MOVEMENT_THRESHOLD || Math.abs(dy) > CONFIG.TOUCH_MOVEMENT_THRESHOLD) {
+            this.touchState.moved = true;
+            this.pixelCanvas.offsetX = this.touchState.initialOffsetX + dx;
+            this.pixelCanvas.offsetY = this.touchState.initialOffsetY + dy;
+            this.pixelCanvas.constrainViewport();
+            this.pixelCanvas.render();
+        }
+    }
+    
+    handleMultiTouchMove(e) {
+        const distance = Utils.getTouchDistance(e.touches[0], e.touches[1]);
+        const scaleChange = distance / this.touchState.initialDistance;
+        const newScale = Utils.clamp(
+            this.touchState.initialScale * scaleChange, 
+            CONFIG.MIN_SCALE, 
+            CONFIG.MAX_SCALE
+        );
+        
+        const centerX = this.touchState.initialCenterX;
+        const centerY = this.touchState.initialCenterY;
+        const scaleFactor = newScale / this.touchState.initialScale;
+        
+        this.pixelCanvas.offsetX = centerX - (centerX - this.touchState.initialOffsetX) * scaleFactor;
+        this.pixelCanvas.offsetY = centerY - (centerY - this.touchState.initialOffsetY) * scaleFactor;
+        this.pixelCanvas.scale = newScale;
+        
+        this.pixelCanvas.constrainViewport();
+        this.pixelCanvas.render();
+        this.touchState.moved = true;
+    }
+    
+    handleTouchEnd(e) {
+        e.preventDefault();
+        
+        const now = Date.now();
+        
+        // Handle tap for pixel drawing
+        if (this.touchState.touches === 1 && !this.touchState.moved && !this.touchState.wasMultiTouch) {
+            const tapDuration = now - this.touchState.startTime;
+            
+            if (tapDuration < CONFIG.TAP_DURATION_MS) {
+                this.pixelCanvas.handlePixelClick(this.touchState.startX, this.touchState.startY);
+            }
+        }
+        
+        // Record multi-touch gesture end time
+        if (this.touchState.touches > 1 && e.touches.length <= 1) {
+            this.touchState.gestureEndTime = now;
+            this.touchState.wasMultiTouch = true;
+        }
+        
+        // Schedule expansion check on movement
+        this.scheduleExpansionCheck();
+        
+        // Update touch state
+        this.updateTouchState(e, now);
+    }
+    
+    scheduleExpansionCheck() {
+        if (this.touchState.moved && !this.pixelCanvas.isExpansionRunning) {
+            this.pixelCanvas.debugPanel.log('📱 TOUCHEND: Movement detected, scheduling expansion check');
+            setTimeout(() => {
+                if (!this.pixelCanvas.isExpansionRunning) {
+                    this.pixelCanvas.sectorManager.checkLoadedSectorsForExpansion();
+                }
+            }, CONFIG.EXPANSION_DEBOUNCE_MS);
+        }
+    }
+    
+    updateTouchState(e, now) {
+        const previousTouches = this.touchState.touches;
+        this.touchState.touches = e.touches.length;
+        
+        if (e.touches.length === 0) {
+            this.touchState.moved = false;
+            this.touchState.wasMultiTouch = false;
+        }
+        
+        // Reset single touch state when transitioning from multi-touch
+        if (previousTouches > 1 && e.touches.length === 1) {
+            setTimeout(() => {
+                if (this.touchState.touches === 1) {
+                    const coords = this.getCoords(e);
+                    this.touchState.startX = coords.x;
+                    this.touchState.startY = coords.y;
+                    this.touchState.initialOffsetX = this.pixelCanvas.offsetX;
+                    this.touchState.initialOffsetY = this.pixelCanvas.offsetY;
+                    this.touchState.moved = false;
+                    this.touchState.wasMultiTouch = false;
+                }
+            }, CONFIG.TOUCH_RESET_DELAY_MS);
+        }
+    }
+    
+    setupMouseHandlers() {
+        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+        this.canvas.addEventListener('mouseleave', () => this.handleMouseLeave());
+    }
+    
+    handleMouseDown(e) {
+        e.preventDefault();
+        this.mouseState.down = true;
+        const coords = this.getCoords(e);
+        this.mouseState.startX = coords.x;
+        this.mouseState.startY = coords.y;
+        this.mouseState.initialOffsetX = this.pixelCanvas.offsetX;
+        this.mouseState.initialOffsetY = this.pixelCanvas.offsetY;
+    }
+    
+    handleMouseMove(e) {
+        e.preventDefault();
+        if (!this.mouseState.down) return;
+        
+        const coords = this.getCoords(e);
+        const dx = coords.x - this.mouseState.startX;
+        const dy = coords.y - this.mouseState.startY;
+        
+        this.pixelCanvas.offsetX = this.mouseState.initialOffsetX + dx;
+        this.pixelCanvas.offsetY = this.mouseState.initialOffsetY + dy;
+        this.pixelCanvas.constrainViewport();
+        this.pixelCanvas.render();
+    }
+    
+    handleMouseUp(e) {
+        e.preventDefault();
+        if (!this.mouseState.down) return;
+        
+        const coords = this.getCoords(e);
+        const dx = coords.x - this.mouseState.startX;
+        const dy = coords.y - this.mouseState.startY;
+        
+        // Handle click vs drag
+        if (Math.abs(dx) < CONFIG.MOUSE_MOVEMENT_THRESHOLD && Math.abs(dy) < CONFIG.MOUSE_MOVEMENT_THRESHOLD) {
+            console.log('🖱️ MOUSEUP: Small movement, treating as click');
+            this.pixelCanvas.handlePixelClick(this.mouseState.startX, this.mouseState.startY);
+        } else if (!this.pixelCanvas.isExpansionRunning) {
+            console.log(`🖱️ MOUSEUP: Large movement detected (${dx}, ${dy}), scheduling expansion check`);
+            setTimeout(() => {
+                if (!this.pixelCanvas.isExpansionRunning) {
+                    this.pixelCanvas.sectorManager.checkLoadedSectorsForExpansion();
+                }
+            }, CONFIG.EXPANSION_DEBOUNCE_MS);
+        }
+        
+        this.mouseState.down = false;
+    }
+    
+    handleMouseLeave() {
+        this.mouseState.down = false;
+    }
+    
+    setupWheelZoom() {
+        this.canvas.addEventListener('wheel', (e) => this.handleWheel(e));
+    }
+    
+    handleWheel(e) {
+        e.preventDefault();
+        const rect = this.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const newScale = Utils.clamp(this.pixelCanvas.scale * delta, CONFIG.MIN_SCALE, CONFIG.MAX_SCALE);
+        
+        const scaleFactor = newScale / this.pixelCanvas.scale;
+        this.pixelCanvas.offsetX = mouseX - (mouseX - this.pixelCanvas.offsetX) * scaleFactor;
+        this.pixelCanvas.offsetY = mouseY - (mouseY - this.pixelCanvas.offsetY) * scaleFactor;
+        this.pixelCanvas.scale = newScale;
+        
+        this.pixelCanvas.constrainViewport();
+        this.pixelCanvas.render();
+        
+        // Schedule expansion check after zoom
+        if (!this.pixelCanvas.isExpansionRunning) {
+            setTimeout(() => {
+                if (!this.pixelCanvas.isExpansionRunning) {
+                    this.pixelCanvas.sectorManager.checkLoadedSectorsForExpansion();
+                }
+            }, CONFIG.WHEEL_DEBOUNCE_MS);
+        }
+    }
+    
+    getCoords(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        return Utils.getEventCoords(e, rect);
+    }
+}
