@@ -1432,15 +1432,8 @@ class PixelCanvas {
                 this.sectorPixelCounts.set(key, sector.pixel_count);
                 console.log(`Sector ${key}: ${sector.pixel_count} pixels`);
                 
-                // Check if expansion is needed immediately for existing sectors
-                if (sector.pixel_count > 0) {
-                    const maxPixelsPerSector = GRID_SIZE * GRID_SIZE;
-                    const fillPercentage = sector.pixel_count / maxPixelsPerSector;
-                    if (fillPercentage >= SECTOR_EXPANSION_THRESHOLD) {
-                        console.log(`🔄 Initial expansion needed for sector (${sector.sector_x}, ${sector.sector_y}) with ${sector.pixel_count} pixels`);
-                        this.expandSectorsLocally(sector.sector_x, sector.sector_y);
-                    }
-                }
+                // Do NOT automatically expand here - let checkLoadedSectorsForExpansion handle it
+                // This prevents mass activation of all sectors during data loading
             }
             
             console.log('Sector counts loaded successfully!');
@@ -1694,14 +1687,11 @@ class PixelCanvas {
     expandSectorsLocally(centerX, centerY) {
         console.log(`🎯 Starting expansion from sector (${centerX}, ${centerY})`);
         
-        // First, ensure the center sector itself is active
+        // The center sector is the one that triggered expansion - it already has pixels
+        // so we should NOT add it to activeSectors. We only expand to empty neighbors.
         const centerKey = `${centerX},${centerY}`;
-        let centerActivated = false;
-        if (!this.activeSectors.has(centerKey)) {
-            this.activeSectors.add(centerKey);
-            centerActivated = true;
-            console.log(`🎯 Center sector (${centerX}, ${centerY}) activated`);
-        }
+        const centerPixelCount = this.sectorPixelCounts.get(centerKey) || 0;
+        console.log(`🎯 Center sector (${centerX}, ${centerY}) has ${centerPixelCount} pixels`)
         
         // 8-direction expansion
         const directions = [
@@ -1741,11 +1731,9 @@ class PixelCanvas {
             }
         }
         
-        // Consider expansion successful if center was activated OR surrounding sectors were added
-        const hasExpansion = centerActivated || expanded;
-        
-        if (hasExpansion) {
-            console.log(`🎯 Expansion completed. Center activated: ${centerActivated}, Surrounding expanded: ${expanded}`);
+        // Expansion is successful if any surrounding sectors were added
+        if (expanded) {
+            console.log(`🎯 Expansion completed. ${centerPixelCount} pixels in center triggered expansion`);
             console.log(`🎯 New active sectors:`, Array.from(this.activeSectors));
             // Show visual feedback for expansion
             this.showExpansionNotification(centerX, centerY);
@@ -1753,7 +1741,7 @@ class PixelCanvas {
             this.render();
             this.constrainViewport();
         } else {
-            console.log(`🎯 No expansion needed - center and all surrounding sectors already active`);
+            console.log(`🎯 No expansion needed - all surrounding sectors already active`);
         }
     }
     
@@ -2033,9 +2021,10 @@ class PixelCanvas {
         // Also add to main pixels map for persistence
         this.pixels.set(key, pixelData.color);
         
-        // Track the sector
+        // Update sector pixel count but DON'T automatically add to activeSectors
         const sectorKey = `${pixelData.sector_x},${pixelData.sector_y}`;
-        this.activeSectors.add(sectorKey);
+        const currentCount = this.sectorPixelCounts.get(sectorKey) || 0;
+        this.sectorPixelCounts.set(sectorKey, currentCount + 1);
         
         // Batch render for performance (render every 100ms)
         if (!this.renderTimeout) {
