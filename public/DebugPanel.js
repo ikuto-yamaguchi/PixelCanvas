@@ -10,11 +10,12 @@ export class DebugPanel {
         this.createDebugPanel();
         this.createButtons();
         this.setupEventListeners();
-        this.interceptConsole();
+        // PERFORMANCE: Disable console interception
+        // this.interceptConsole();
         
         // Show panel immediately
         this.panel.style.display = 'block';
-        this.log('🐛 Debug Panel initialized - capturing all console output');
+        console.log('🐛 Debug Panel initialized - logging disabled for performance');
     }
     
     createDebugPanel() {
@@ -119,6 +120,9 @@ export class DebugPanel {
     }
     
     log(message) {
+        // PERFORMANCE: Disable all logging operations
+        return;
+        
         if (this.logsFrozen) return;
         
         const timestamp = Utils.getTimestamp();

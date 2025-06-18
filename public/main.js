@@ -32,69 +32,53 @@ class PixelCanvas {
         
         // Initialize debug panel first to catch all errors
         this.debugPanel = DebugPanel.getInstance();
-        this.debugPanel.log('🚀 PixelCanvas constructor starting...');
+        // this.debugPanel.log('🚀 PixelCanvas constructor starting...');
         
         try {
             // Initialize modules
-            this.debugPanel.log('📦 Initializing PixelStorage...');
+            // this.debugPanel.log('📦 Initializing PixelStorage...');
             this.pixelStorage = new PixelStorage(this);
             
-            this.debugPanel.log('📦 Initializing ViewportController...');
+            // this.debugPanel.log('📦 Initializing ViewportController...');
             this.viewportController = new ViewportController(this);
             
-            this.debugPanel.log('📦 Initializing RenderEngine...');
+            // this.debugPanel.log('📦 Initializing RenderEngine...');
             this.renderEngine = new RenderEngine(this.canvas, this.ctx, this);
             
-            this.debugPanel.log('📦 Initializing SectorManager...');
+            // this.debugPanel.log('📦 Initializing SectorManager...');
             this.sectorManager = new SectorManager(this);
             
-            this.debugPanel.log('📦 Initializing NetworkManager...');
+            // this.debugPanel.log('📦 Initializing NetworkManager...');
             this.networkManager = new NetworkManager(this);
             
-            this.debugPanel.log('📦 Initializing EventHandlers...');
+            // this.debugPanel.log('📦 Initializing EventHandlers...');
             this.eventHandlers = new EventHandlers(this.canvas, this);
             
             // Delegate properties for backward compatibility
             this.pixels = this.pixelStorage.pixels;
             this.pixelStock = this.pixelStorage.pixelStock;
             
-            this.debugPanel.log('✅ All modules initialized successfully');
+            // this.debugPanel.log('✅ All modules initialized successfully');
             this.init();
         } catch (error) {
-            this.debugPanel.log(`❌ Initialization failed: ${error.message}`);
+            // this.debugPanel.log(`❌ Initialization failed: ${error.message}`);
             console.error('Initialization error:', error);
         }
     }
     
     async init() {
         try {
-            this.debugPanel.log('🔧 Setting up canvas...');
+            // Disable all init logging for performance
             this.setupCanvas();
-            
-            this.debugPanel.log('🎨 Setting up color palette...');
             this.renderEngine.setupColorPalette();
-            
-            this.debugPanel.log('📡 Setting up online status handling...');
             this.setupOnlineStatusHandling();
-            
-            this.debugPanel.log('⚙️ Registering service worker...');
             this.registerServiceWorker();
-            
-            this.debugPanel.log('📊 Initializing sectors from database...');
             await this.sectorManager.initializeSectors();
-            
-            this.debugPanel.log('🔄 Starting periodic sector refresh...');
             this.sectorManager.startPeriodicRefresh();
-            
-            this.debugPanel.log('📊 Loading initial pixel data...');
             this.loadInitialData();
-            
-            this.debugPanel.log('📍 Centering viewport on active sectors...');
             this.viewportController.centerViewportOnActiveSectors();
-            
-            this.debugPanel.log('✅ PixelCanvas initialization complete!');
+            console.log('✅ PixelCanvas initialization complete!');
         } catch (error) {
-            this.debugPanel.log(`❌ Init failed: ${error.message}`);
             console.error('Init error:', error);
         }
     }
@@ -235,8 +219,9 @@ class PixelCanvas {
     }
     
     mobileLog(message) {
-        // Delegate to debug panel for mobile logging
-        this.debugPanel.log(message);
+        // PERFORMANCE: Disable mobile logging
+        return;
+        // this.debugPanel.log(message);
     }
     
     constrainViewport() {

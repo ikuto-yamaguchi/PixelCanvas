@@ -11,7 +11,7 @@ export class SectorManager {
     
     async loadSectorsFromDatabase() {
         try {
-            this.pixelCanvas.debugPanel.log('💾 Loading sector states from database...');
+            // this.pixelCanvas.debugPanel.log('💾 Loading sector states from database...');
             
             const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/sectors?select=sector_x,sector_y,pixel_count,is_active`, {
                 headers: {
@@ -44,13 +44,13 @@ export class SectorManager {
             }
             
             this.lastSectorUpdate = Date.now();
-            this.pixelCanvas.debugPanel.log(`✅ Loaded ${sectors.length} sectors from database (${this.pixelCanvas.activeSectors.size} active)`);
+            // this.pixelCanvas.debugPanel.log(`✅ Loaded ${sectors.length} sectors from database (${this.pixelCanvas.activeSectors.size} active)`);
             
             return sectors;
             
         } catch (error) {
             console.error('Failed to load sectors from database:', error);
-            this.pixelCanvas.debugPanel.log(`❌ Sector load failed: ${error.message}`);
+            // this.pixelCanvas.debugPanel.log(`❌ Sector load failed: ${error.message}`);
             return [];
         }
     }
@@ -58,7 +58,7 @@ export class SectorManager {
     async refreshSectorsIfNeeded() {
         const now = Date.now();
         if (now - this.lastSectorUpdate > this.sectorUpdateInterval) {
-            this.pixelCanvas.debugPanel.log('🔄 Refreshing sector states...');
+            // this.pixelCanvas.debugPanel.log('🔄 Refreshing sector states...');
             await this.loadSectorsFromDatabase();
             this.pixelCanvas.render(); // Re-render with updated states
         }
@@ -84,7 +84,7 @@ export class SectorManager {
         
         // Ensure sector (0,0) exists as starting point
         if (!this.sectorsCache.has('0,0')) {
-            this.pixelCanvas.debugPanel.log('🔧 Creating initial sector (0,0)...');
+            // this.pixelCanvas.debugPanel.log('🔧 Creating initial sector (0,0)...');
             await this.createSectorInDatabase(0, 0, true);
             await this.loadSectorsFromDatabase(); // Reload to get the new sector
         }
@@ -109,7 +109,7 @@ export class SectorManager {
             });
             
             if (response.ok) {
-                this.pixelCanvas.debugPanel.log(`✅ Created sector (${sectorX}, ${sectorY}) in database`);
+                // this.pixelCanvas.debugPanel.log(`✅ Created sector (${sectorX}, ${sectorY}) in database`);
             } else {
                 console.error('Failed to create sector:', response.status);
             }
