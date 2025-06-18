@@ -197,6 +197,18 @@ export class PixelStorage {
         }
     }
     
+    // Get pixel count for a specific sector
+    getSectorPixelCount(sectorX, sectorY) {
+        let count = 0;
+        for (const [key, color] of this.pixels) {
+            const [pSectorX, pSectorY] = key.split(',').map(Number);
+            if (pSectorX === sectorX && pSectorY === sectorY) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
     // Utility methods for pixel operations
     drawPixel(sectorX, sectorY, localX, localY, color) {
         // Check if we have stock

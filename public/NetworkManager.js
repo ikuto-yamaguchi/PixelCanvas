@@ -109,7 +109,9 @@ export class NetworkManager {
                 
                 // Update sector count in database
                 const sectorKey = Utils.createSectorKey(sectorX, sectorY);
-                this.pixelCanvas.sectorManager.updateSectorCountInDatabase(sectorKey);
+                // Get current pixel count for this sector
+                const pixelCount = this.pixelCanvas.pixelStorage.getSectorPixelCount(sectorX, sectorY);
+                this.pixelCanvas.sectorManager.updateSectorCountInDatabase(sectorX, sectorY, pixelCount);
             } else {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }

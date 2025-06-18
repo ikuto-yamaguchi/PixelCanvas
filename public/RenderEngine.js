@@ -156,15 +156,12 @@ export class RenderEngine {
                     const isActiveFromClient = this.pixelCanvas.activeSectors.has(sectorKey);
                     const isActive = isActiveFromDB || isActiveFromClient;
                     
-                    if (actualPixelCount > 0) {
-                        // Sector has pixels - show as LOCKED (highest priority)
-                        this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
-                    } else if (isActive) {
-                        // Active and empty sector - show as drawable
+                    if (isActive) {
+                        // Active sector - can draw here (green border)
                         this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
-                    } else if (sectorState.pixelCount > 0 || this.pixelCanvas.sectorPixelCounts.get(sectorKey) > 0) {
-                        // Database shows pixels but not visible locally - show as LOCKED anyway
-                        this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, sectorState.pixelCount || 0);
+                    } else {
+                        // Inactive sector - LOCKED (red border, dark overlay)
+                        this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
                     }
                 }
             }

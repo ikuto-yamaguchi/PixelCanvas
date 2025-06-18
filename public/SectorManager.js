@@ -124,4 +124,78 @@ export class SectorManager {
             this.refreshSectorsIfNeeded();
         }, 10000); // Check every 10 seconds
     }
+    
+    // Add missing methods called from other files
+    async expandSectorsLocally(sectorX, sectorY) {
+        // Local expansion - create adjacent sectors around a full sector
+        const adjacentOffsets = [
+            [-1, -1], [-1, 0], [-1, 1],
+            [0, -1],           [0, 1],
+            [1, -1],  [1, 0],  [1, 1]
+        ];
+        
+        console.log(`🚀 Expanding around sector (${sectorX}, ${sectorY})`);
+        
+        for (const [dx, dy] of adjacentOffsets) {
+            const newSectorX = sectorX + dx;
+            const newSectorY = sectorY + dy;
+            const sectorKey = Utils.createSectorKey(newSectorX, newSectorY);
+            
+            // Only create if doesn't exist
+            if (!this.sectorsCache.has(sectorKey)) {
+                await this.createSectorInDatabase(newSectorX, newSectorY, true);
+                this.pixelCanvas.activeSectors.add(sectorKey);
+                console.log(`✅ Created new sector (${newSectorX}, ${newSectorY})`);
+            }
+        }
+        
+        // Refresh sectors to get latest state
+        await this.loadSectorsFromDatabase();
+    }
+    
+    async updateSectorCountInDatabase(sectorX, sectorY, pixelCount) {
+        try {
+            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/sectors?sector_x=eq.${sectorX}&sector_y=eq.${sectorY}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': CONFIG.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    pixel_count: pixelCount
+                })
+            });
+            
+            if (response.ok) {
+                console.log(`📊 Updated sector (${sectorX}, ${sectorY}) count to ${pixelCount}`);
+                
+                // Update local cache
+                const sectorKey = Utils.createSectorKey(sectorX, sectorY);
+                const cachedSector = this.sectorsCache.get(sectorKey) || { pixelCount: 0, isActive: false };
+                cachedSector.pixelCount = pixelCount;
+                this.sectorsCache.set(sectorKey, cachedSector);
+            } else {
+                console.error('Failed to update sector count:', response.status);
+            }
+        } catch (error) {
+            console.error('Failed to update sector count in database:', error);
+        }
+    }
+    
+    async checkLoadedSectorsForExpansion() {
+        // Check all loaded sectors for expansion potential
+        const maxPixelsPerSector = CONFIG.GRID_SIZE * CONFIG.GRID_SIZE;
+        
+        for (const [sectorKey, sectorState] of this.sectorsCache) {
+            const fillPercentage = sectorState.pixelCount / maxPixelsPerSector;
+            
+            if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
+                const [sectorX, sectorY] = sectorKey.split(',').map(Number);
+                console.log(`🎯 Sector (${sectorX}, ${sectorY}) ready for expansion: ${(fillPercentage * 100).toFixed(1)}% full`);
+                await this.expandSectorsLocally(sectorX, sectorY);
+            }
+        }
+    }
 }
