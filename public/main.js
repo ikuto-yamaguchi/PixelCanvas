@@ -367,16 +367,33 @@ class PixelCanvas {
         console.error('❌ vConsole Test: Error message');
         console.info('ℹ️ vConsole Test: Info message');
         
+        // Test error throwing
+        try {
+            throw new Error('Test error for vConsole debugging');
+        } catch (error) {
+            console.error('📱 vConsole Test: Caught error:', error);
+        }
+        
         // Test network logging
-        fetch('/test-api-call').catch(() => {
-            console.log('📱 vConsole Test: Network request logged (expected to fail)');
+        fetch('/test-api-call').catch((error) => {
+            console.error('📱 vConsole Test: Network request failed as expected:', error);
         });
         
         // Test object logging
         console.log('📱 vConsole Test: Object logging', {
             pixelCount: this.pixels.size,
             renderMode: this.renderEngine.renderMode,
-            performance: this.getPerformanceStats()
+            performance: this.getPerformanceStats(),
+            userAgent: navigator.userAgent,
+            windowSize: { width: window.innerWidth, height: window.innerHeight }
+        });
+        
+        // Test stack trace
+        console.trace('📱 vConsole Test: Stack trace');
+        
+        // Test promise rejection
+        Promise.reject('Test promise rejection for vConsole').catch(error => {
+            console.error('📱 vConsole Test: Promise rejection caught:', error);
         });
         
         return 'vConsole test completed - check vConsole panel for results';

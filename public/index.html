@@ -59,14 +59,34 @@
     <!-- vConsole for mobile debugging -->
     <script src="vconsole.min.js"></script>
     <script>
-        // Initialize vConsole for mobile debugging
-        if (window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-            new VConsole({
-                theme: 'dark',
-                defaultPlugins: ['system', 'network', 'element', 'storage'],
-                maxLogNumber: 1000
-            });
-            console.log('📱 vConsole initialized for mobile debugging');
+        // Initialize vConsole for debugging
+        try {
+            const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            // Enable for mobile OR when URL contains debug=vconsole
+            const forceVConsole = new URLSearchParams(window.location.search).get('debug') === 'vconsole';
+            
+            if (isMobile || forceVConsole) {
+                const vConsole = new VConsole({
+                    theme: 'dark',
+                    defaultPlugins: ['system', 'network', 'element', 'storage'],
+                    maxLogNumber: 2000,
+                    onReady: function() {
+                        console.log('📱 vConsole ready for debugging!');
+                        console.warn('⚠️ Warning test message');
+                        console.error('❌ Error test message');
+                    }
+                });
+                
+                console.log(`📱 vConsole initialized - Mobile: ${isMobile}, Forced: ${forceVConsole}`);
+                
+                // Store reference globally for testing
+                window.vConsole = vConsole;
+            } else {
+                console.log('💻 Desktop mode - vConsole disabled (add ?debug=vconsole to URL to force enable)');
+            }
+        } catch (error) {
+            console.error('❌ Failed to initialize vConsole:', error);
         }
     </script>
     
