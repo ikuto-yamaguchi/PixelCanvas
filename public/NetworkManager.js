@@ -264,23 +264,45 @@ export class NetworkManager {
         this.pixelCanvas.debugPanel.log('📥 Loading pixels from Supabase...');
         
         try {
-            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*`, {
-                headers: {
-                    'apikey': CONFIG.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
-                }
-            });
+            let allPixels = [];
+            let offset = 0;
+            const limit = 1000; // Supabase default limit
+            let hasMore = true;
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            // Load all pixels with pagination
+            while (hasMore) {
+                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=${limit}&offset=${offset}`, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const pixels = await response.json();
+                allPixels = allPixels.concat(pixels);
+                
+                this.pixelCanvas.debugPanel.log(`📦 Loaded batch ${Math.floor(offset/limit) + 1}: ${pixels.length} pixels (total: ${allPixels.length})`);
+                
+                // Check if we have more pixels to load
+                hasMore = pixels.length === limit;
+                offset += limit;
+                
+                // Safety check to prevent infinite loop
+                if (offset > 100000) {
+                    this.pixelCanvas.debugPanel.log('⚠️ Safety limit reached, stopping pagination');
+                    break;
+                }
             }
             
-            const pixels = await response.json();
-            this.pixelCanvas.debugPanel.log(`📦 Loaded ${pixels.length} pixels from database`);
+            this.pixelCanvas.debugPanel.log(`📦 Loaded ${allPixels.length} total pixels from database`);
             
             // Add each pixel to the pixels map and calculate occupied sectors
             const occupiedSectors = new Set();
-            for (const pixel of pixels) {
+            for (const pixel of allPixels) {
                 const key = Utils.createPixelKey(
                     pixel.sector_x,
                     pixel.sector_y,
