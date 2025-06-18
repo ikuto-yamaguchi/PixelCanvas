@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LOD Generation Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }
+        .test-section { margin: 20px 0; padding: 15px; background: #2a2a2a; border-radius: 8px; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 15px; margin: 5px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #45a049; }
+        .results { background: #333; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace; }
+        .progress { background: #555; padding: 8px; border-radius: 4px; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>🏗️ LOD Generation System Test</h1>
+    
+    <div class="test-section">
+        <h2>Quick LOD Demo</h2>
+        <p>Test LOD generation with synthetic checkerboard pattern</p>
+        <button onclick="runLODDemo()">🧪 Run LOD Demo</button>
+        <button onclick="checkLODTable()">📊 Check LOD Table</button>
+        <div id="demo-results" class="results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Real Data LOD Generation</h2>
+        <p>Generate LOD for actual pixel data from sector (0, 0)</p>
+        <button onclick="generateRealLOD()">🎯 Generate Real LOD</button>
+        <button onclick="verifyResults()">✅ Verify Results</button>
+        <div id="real-results" class="results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Performance Stats</h2>
+        <button onclick="showStats()">📈 Show Stats</button>
+        <div id="stats-results" class="results"></div>
+    </div>
+
+    <script type="module">
+        import { CONFIG } from './public/Config.js';
+        import { LODGenerator } from './public/LODGenerator.js';
+        
+        let lodGenerator;
+        let testResults = {};
+        
+        // Initialize LOD generator
+        const mockPixelCanvas = {
+            activeSectors: new Set(['0,0', '-1,-1', '3,-4']),
+            pixelStorage: {
+                getPixel: (sectorX, sectorY, localX, localY) => {
+                    // Mock pixel data - return some test colors
+                    if (sectorX === 0 && sectorY === 0) {
+                        return ((localX + localY) % 3) + 1; // Colors 1, 2, 3
+                    }
+                    return 0;
+                },
+                getSectorPixelCount: (sectorX, sectorY) => {
+                    if (sectorX === 0 && sectorY === 0) return 1000;
+                    return 100;
+                }
+            }
+        };
+        
+        try {
+            lodGenerator = new LODGenerator(mockPixelCanvas);
+            log('demo-results', '✅ LOD Generator initialized successfully');
+        } catch (error) {
+            log('demo-results', '❌ Failed to initialize LOD Generator: ' + error.message);
+        }
+        
+        window.runLODDemo = async function() {
+            if (!lodGenerator) {
+                log('demo-results', '❌ LOD Generator not available');
+                return;
+            }
+            
+            log('demo-results', '🚀 Starting LOD demo...');
+            
+            try {
+                await lodGenerator.testLODGeneration();
+                log('demo-results', '✅ LOD demo completed! Check console for details.');
+            } catch (error) {
+                log('demo-results', '❌ Demo failed: ' + error.message);
+                console.error('Demo error:', error);
+            }
+        }
+        
+        window.generateRealLOD = async function() {
+            if (!lodGenerator) {
+                log('real-results', '❌ LOD Generator not available');
+                return;
+            }
+            
+            log('real-results', '🎯 Generating LOD for sector (0, 0)...');
+            
+            try {
+                await lodGenerator.generateAllLODsForSector(0, 0);
+                log('real-results', '✅ Real LOD generation completed for sector (0, 0)');
+            } catch (error) {
+                log('real-results', '❌ Real LOD generation failed: ' + error.message);
+                console.error('Real LOD error:', error);
+            }
+        }
+        
+        window.checkLODTable = async function() {
+            log('demo-results', '📊 Checking LOD table...');
+            
+            try {
+                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/sector_lod?limit=10`, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const records = await response.json();
+                    log('demo-results', `📊 Found ${records.length} LOD records in database`);
+                    
+                    if (records.length > 0) {
+                        const sample = records[0];
+                        log('demo-results', `Sample: Sector(${sample.sector_x}, ${sample.sector_y}) Level ${sample.lod_level}, ${sample.width}x${sample.height}`);
+                    }
+                } else {
+                    log('demo-results', '❌ Failed to check LOD table: ' + response.status);
+                }
+            } catch (error) {
+                log('demo-results', '❌ Table check failed: ' + error.message);
+            }
+        }
+        
+        window.verifyResults = async function() {
+            if (!lodGenerator) {
+                log('real-results', '❌ LOD Generator not available');
+                return;
+            }
+            
+            try {
+                const results = await lodGenerator.verifyLODTest(0, 0);
+                if (results && results.length > 0) {
+                    log('real-results', `✅ Verification completed: ${results.length} LOD levels found`);
+                } else {
+                    log('real-results', '⚠️ No LOD records found for sector (0, 0)');
+                }
+            } catch (error) {
+                log('real-results', '❌ Verification failed: ' + error.message);
+            }
+        }
+        
+        window.showStats = function() {
+            if (!lodGenerator) {
+                log('stats-results', '❌ LOD Generator not available');
+                return;
+            }
+            
+            const stats = lodGenerator.getStats();
+            log('stats-results', '📈 LOD Generator Stats:');
+            log('stats-results', `  Worker Initialized: ${stats.workerInitialized}`);
+            log('stats-results', `  Pending Operations: ${stats.pendingOperations}`);
+            log('stats-results', `  Generation Queue: ${stats.generationQueue}`);
+            log('stats-results', `  Is Generating: ${stats.isGenerating}`);
+        }
+        
+        function log(elementId, message) {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            element.innerHTML += `[${timestamp}] ${message}<br>`;
+            element.scrollTop = element.scrollHeight;
+            console.log(message);
+        }
+        
+        // Initial status
+        log('demo-results', '🔧 LOD Generation Test Page Ready');
+        if (lodGenerator) {
+            showStats();
+        }
+    </script>
+</body>
+</html>

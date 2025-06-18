@@ -1,0 +1,240 @@
+:root {
+    --color-bg: #1a1a1a;
+    --color-header: #2a2a2a;
+    --color-text: #ffffff;
+    --color-border: #3a3a3a;
+    --color-active: #4a9eff;
+    --color-canvas-bg: #404040;
+    --color-grid: #606060;
+    --header-height: 50px;
+    --controls-height: 90px;
+    --gap: 8px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    touch-action: manipulation;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    height: var(--header-height);
+    background-color: var(--color-header);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.header__title {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.header__controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.grid-toggle {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.grid-toggle:hover {
+    background-color: var(--color-border);
+}
+
+.grid-toggle.active {
+    background-color: var(--color-active);
+    border-color: var(--color-active);
+}
+
+.pixel-count {
+    font-size: 12px;
+    color: #888;
+    font-family: monospace;
+    min-width: 40px;
+    text-align: center;
+}
+
+.cooldown-indicator {
+    font-size: 10px;
+    color: #888;
+    font-family: monospace;
+    min-width: 80px;
+    text-align: center;
+    display: none;
+    white-space: nowrap;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #4ade80;
+}
+
+.status-indicator.offline {
+    background-color: #f87171;
+}
+
+.main {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.canvas-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    cursor: crosshair;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.canvas-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.controls {
+    height: var(--controls-height);
+    background-color: var(--color-header);
+    border-top: 1px solid var(--color-border);
+    padding: var(--gap);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.color-palette {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: var(--gap);
+    max-width: 400px;
+    width: 100%;
+}
+
+.color-button {
+    aspect-ratio: 1;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.1s;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+.color-button:hover {
+    transform: scale(1.1);
+}
+
+.color-button:active {
+    transform: scale(0.95);
+}
+
+.color-button.active {
+    border-color: var(--color-active);
+    box-shadow: 0 0 0 1px var(--color-bg), 0 0 0 3px var(--color-active);
+}
+
+@media (max-width: 400px) {
+    .color-palette {
+        grid-template-columns: repeat(8, 1fr);
+        max-width: 100%;
+    }
+    
+    .color-button {
+        min-width: 0;
+        min-height: 0;
+    }
+}
+
+/* Improvements for mobile devices viewing desktop version */
+@media (max-width: 768px) and (orientation: landscape) {
+    .header {
+        height: 44px;
+    }
+    
+    .controls {
+        height: 70px;
+    }
+    
+    .color-palette {
+        grid-template-columns: repeat(8, 1fr);
+        max-width: 90vw;
+    }
+}
+
+/* Desktop styles */
+@media (min-width: 768px) {
+    .header__title {
+        font-size: 20px;
+    }
+    
+    .color-button {
+        min-width: 40px;
+        min-height: 40px;
+    }
+}
+
+/* High DPI mobile devices */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .canvas {
+        image-rendering: pixelated;
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: -moz-crisp-edges;
+        image-rendering: crisp-edges;
+    }
+}
+
+.loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    color: #888;
+}

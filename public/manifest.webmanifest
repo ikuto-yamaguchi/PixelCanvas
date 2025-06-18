@@ -1,0 +1,25 @@
+{
+  "name": "PixelCanvas",
+  "short_name": "PixelCanvas",
+  "description": "共同ピクセルアートプラットフォーム",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%231a1a1a'/%3E%3Crect x='48' y='48' width='32' height='32' fill='%23FF0000'/%3E%3Crect x='80' y='48' width='32' height='32' fill='%2300FF00'/%3E%3Crect x='112' y='48' width='32' height='32' fill='%230000FF'/%3E%3Crect x='48' y='80' width='32' height='32' fill='%23FFFF00'/%3E%3Crect x='80' y='80' width='32' height='32' fill='%23FF00FF'/%3E%3Crect x='112' y='80' width='32' height='32' fill='%2300FFFF'/%3E%3Crect x='48' y='112' width='32' height='32' fill='%23FFFFFF'/%3E%3Crect x='80' y='112' width='32' height='32' fill='%23808080'/%3E%3Crect x='112' y='112' width='32' height='32' fill='%23000000'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%231a1a1a'/%3E%3Crect x='128' y='128' width='85' height='85' fill='%23FF0000'/%3E%3Crect x='213' y='128' width='86' height='85' fill='%2300FF00'/%3E%3Crect x='299' y='128' width='85' height='85' fill='%230000FF'/%3E%3Crect x='128' y='213' width='85' height='86' fill='%23FFFF00'/%3E%3Crect x='213' y='213' width='86' height='86' fill='%23FF00FF'/%3E%3Crect x='299' y='213' width='85' height='86' fill='%2300FFFF'/%3E%3Crect x='128' y='299' width='85' height='85' fill='%23FFFFFF'/%3E%3Crect x='213' y='299' width='86' height='85' fill='%23808080'/%3E%3Crect x='299' y='299' width='85' height='85' fill='%23000000'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment", "games", "social"]
+}

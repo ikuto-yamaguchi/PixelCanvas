@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>PixelCanvas Expansion Test</title>
+</head>
+<body>
+    <h1>🧪 PixelCanvas Expansion Test</h1>
+    <div id="status">Starting test...</div>
+    <div id="log" style="font-family: monospace; white-space: pre; background: #f0f0f0; padding: 10px; margin-top: 10px; height: 400px; overflow-y: auto;"></div>
+    
+    <script>
+        const log = (msg) => {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toISOString().substr(11, 8);
+            logDiv.innerHTML += `[${timestamp}] ${msg}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(msg);
+        };
+        
+        const updateStatus = (msg) => {
+            document.getElementById('status').textContent = msg;
+        };
+        
+        async function runTest() {
+            log('🎯 Starting automated expansion test...');
+            
+            // Simulate drawing pixels via API
+            const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
+            
+            let pixelCount = 0;
+            const targetPixels = 10; // Draw 10 pixels (expansion at 7)
+            
+            for (let i = 0; i < targetPixels; i++) {
+                updateStatus(`Drawing pixel ${i + 1} of ${targetPixels}...`);
+                
+                // Create pixel at position (i, i) in sector (0,0)
+                const pixel = {
+                    sector_x: 0,
+                    sector_y: 0,
+                    local_x: i * 10,
+                    local_y: i * 10,
+                    color: i % 16
+                };
+                
+                log(`🖌️ Drawing pixel ${i + 1} at (${pixel.local_x}, ${pixel.local_y}) with color ${pixel.color}`);
+                
+                try {
+                    // Insert pixel
+                    const response = await fetch(`${SUPABASE_URL}/rest/v1/pixels`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify(pixel)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    log(`✅ Pixel ${i + 1} saved successfully`);
+                    
+                    // Update sector count
+                    const updateResponse = await fetch(`${SUPABASE_URL}/rest/v1/sectors?sector_x=eq.0&sector_y=eq.0`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            pixel_count: i + 1
+                        })
+                    });
+                    
+                    if (!updateResponse.ok) {
+                        throw new Error(`Failed to update sector count: HTTP ${updateResponse.status}`);
+                    }
+                    
+                    log(`📊 Updated sector count to ${i + 1}`);
+                    
+                    // Check if we should have triggered expansion (at 7 pixels)
+                    if (i + 1 === 7) {
+                        log('🎯 EXPANSION THRESHOLD REACHED! Checking for new sectors...');
+                        await checkSectors();
+                    }
+                    
+                } catch (error) {
+                    log(`❌ Error: ${error.message}`);
+                }
+                
+                // Small delay between pixels
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            // Final check
+            updateStatus('Test complete! Checking final state...');
+            await checkSectors();
+            
+            log('🎉 Test completed!');
+        }
+        
+        async function checkSectors() {
+            const SUPABASE_URL = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
+            
+            try {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/sectors?select=*&order=sector_x,sector_y`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                const sectors = await response.json();
+                log(`\n📊 Current sectors (${sectors.length} total):`);
+                for (const sector of sectors) {
+                    const percentage = ((sector.pixel_count / 65536) * 100).toFixed(2);
+                    log(`  - Sector (${sector.sector_x},${sector.sector_y}): ${sector.pixel_count} pixels (${percentage}%)`);
+                }
+                
+                // Check if expansion happened
+                if (sectors.length > 1) {
+                    log('✨ EXPANSION DETECTED! New sectors were created!');
+                } else {
+                    log('⚠️ No expansion detected yet...');
+                }
+                
+            } catch (error) {
+                log(`❌ Failed to check sectors: ${error.message}`);
+            }
+        }
+        
+        // Start test after page loads
+        window.addEventListener('load', () => {
+            setTimeout(runTest, 1000);
+        });
+    </script>
+</body>
+</html>

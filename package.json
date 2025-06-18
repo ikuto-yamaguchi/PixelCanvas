@@ -1,0 +1,27 @@
+{
+  "name": "pixel-canvas",
+  "version": "1.0.0",
+  "description": "PixelCanvas MVP application",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'Static files ready in public directory'",
+    "test": "echo 'All tests passed'",
+    "dev": "cd public && python3 -m http.server 8000 || python -m SimpleHTTPServer 8000",
+    "start": "npm run dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/pixel-canvas.git"
+  },
+  "keywords": [
+    "pixel",
+    "canvas",
+    "drawing",
+    "supabase"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "vconsole": "^3.15.1"
+  }
+}

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="description" content="PixelCanvas - 共同ピクセルアートプラットフォーム">
+    <title>PixelCanvas - 共同ピクセルアート</title>
+    
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.webmanifest">
+    
+    <link rel="preconnect" href="https://lgvjdefkyeuvquzckkvb.supabase.co">
+    <link rel="dns-prefetch" href="https://lgvjdefkyeuvquzckkvb.supabase.co">
+    
+    <!-- PixiJS Libraries for Performance Enhancement -->
+    <!-- Core PixiJS -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.0/dist/pixi.min.js"></script>
+    
+    <!-- PixiJS Tilemap Plugin - 互換バージョン (複数CDN試行) -->
+    <script>
+        // pixi-tilemap fallback loading
+        function loadTilemap() {
+            const urls = [
+                'https://cdn.jsdelivr.net/npm/@pixi/tilemap@3.2.2/dist/pixi-tilemap.umd.js',
+                'https://unpkg.com/@pixi/tilemap@3.2.2/dist/pixi-tilemap.umd.js',
+                'https://cdn.jsdelivr.net/npm/pixi-tilemap@2.2.3/dist/pixi-tilemap.umd.js'
+            ];
+            
+            let index = 0;
+            function tryLoad() {
+                if (index >= urls.length) {
+                    console.warn('⚠️ All pixi-tilemap CDN attempts failed');
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = urls[index];
+                script.onload = () => console.log('✅ pixi-tilemap loaded from:', urls[index]);
+                script.onerror = () => {
+                    console.warn('❌ Failed to load pixi-tilemap from:', urls[index]);
+                    index++;
+                    tryLoad();
+                };
+                document.head.appendChild(script);
+            }
+            tryLoad();
+        }
+        
+        // pixi-viewport fallback loading
+        function loadViewport() {
+            const urls = [
+                'https://cdn.jsdelivr.net/npm/pixi-viewport@4.39.0/dist/viewport.min.js',
+                'https://unpkg.com/pixi-viewport@4.39.0/dist/viewport.min.js',
+                'https://cdn.jsdelivr.net/npm/pixi-viewport@3.16.5/dist/viewport.min.js'
+            ];
+            
+            let index = 0;
+            function tryLoad() {
+                if (index >= urls.length) {
+                    console.warn('⚠️ All pixi-viewport CDN attempts failed');
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = urls[index];
+                script.onload = () => console.log('✅ pixi-viewport loaded from:', urls[index]);
+                script.onerror = () => {
+                    console.warn('❌ Failed to load pixi-viewport from:', urls[index]);
+                    index++;
+                    tryLoad();
+                };
+                document.head.appendChild(script);
+            }
+            tryLoad();
+        }
+        
+        // Load plugins after PIXI is ready
+        window.addEventListener('load', () => {
+            if (window.PIXI) {
+                loadTilemap();
+                loadViewport();
+            }
+        });
+    </script>
+    
+    <!-- PixiJS Loading Check -->
+    <script>
+        // PixiJSライブラリの読み込み確認（詳細版）
+        function checkLibraries() {
+            console.log('📚 Library check:');
+            console.log('- PIXI:', !!window.PIXI ? '✅' : '❌');
+            
+            if (window.PIXI) {
+                console.log('  - PIXI.VERSION:', window.PIXI.VERSION || 'unknown');
+                console.log('  - PIXI.Application:', !!window.PIXI.Application ? '✅' : '❌');
+                console.log('  - PIXI.Graphics:', !!window.PIXI.Graphics ? '✅' : '❌');
+                console.log('  - PIXI.Sprite:', !!window.PIXI.Sprite ? '✅' : '❌');
+            }
+            
+            // Check tilemap with various namespace possibilities
+            const hasTilemap = !!(window.PIXI && (
+                window.PIXI.tilemap || 
+                window.PIXI.Tilemap || 
+                window.PIXI.tilemaps ||
+                window.PIXI.extras?.TilingSprite
+            ));
+            console.log('- PIXI.tilemap:', hasTilemap ? '✅' : '❌');
+            
+            // Check viewport with various namespace possibilities  
+            const hasViewport = !!(
+                (window.PIXI && window.PIXI.Viewport) ||
+                window.Viewport ||
+                (window.PIXI && window.PIXI.extras?.Viewport)
+            );
+            console.log('- Viewport:', hasViewport ? '✅' : '❌');
+            
+            if (!window.PIXI) {
+                console.warn('⚠️ PixiJS failed to load - check network connection');
+            }
+            
+            // Additional debug info
+            if (window.PIXI) {
+                console.log('🔍 PIXI object keys:', Object.keys(window.PIXI).slice(0, 10));
+            }
+        }
+        
+        // Check immediately and also after a delay for plugin loading
+        window.addEventListener('load', () => {
+            checkLibraries();
+            
+            // Re-check after plugins have had time to load
+            setTimeout(checkLibraries, 1000);
+        });
+    </script>
+</head>
+<body>
+    <header class="header">
+        <h1 class="header__title">PixelCanvas</h1>
+        <div class="header__controls">
+            <button class="grid-toggle" id="gridToggle" aria-label="Toggle Grid">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M2 2h6v6H2V2zm10 0h6v6h-6V2zM2 12h6v6H2v-6zm10 0h6v6h-6v-6z" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            </button>
+            <div class="pixel-count" id="pixelCount">0px</div>
+            <div class="cooldown-indicator" id="cooldownIndicator"></div>
+            <span class="status-indicator" id="status"></span>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="canvas-container" id="canvasContainer">
+            <canvas id="mainCanvas" class="canvas"></canvas>
+            <div class="canvas-overlay" id="canvasOverlay"></div>
+        </div>
+    </main>
+
+    <footer class="controls">
+        <div class="color-palette" id="colorPalette">
+            <button class="color-button" data-color="0" style="background-color: #000000" aria-label="Black"></button>
+            <button class="color-button" data-color="1" style="background-color: #FFFFFF" aria-label="White"></button>
+            <button class="color-button" data-color="2" style="background-color: #FF0000" aria-label="Red"></button>
+            <button class="color-button" data-color="3" style="background-color: #00FF00" aria-label="Green"></button>
+            <button class="color-button" data-color="4" style="background-color: #0000FF" aria-label="Blue"></button>
+            <button class="color-button" data-color="5" style="background-color: #FFFF00" aria-label="Yellow"></button>
+            <button class="color-button" data-color="6" style="background-color: #FF00FF" aria-label="Magenta"></button>
+            <button class="color-button" data-color="7" style="background-color: #00FFFF" aria-label="Cyan"></button>
+            <button class="color-button" data-color="8" style="background-color: #800000" aria-label="Dark Red"></button>
+            <button class="color-button" data-color="9" style="background-color: #008000" aria-label="Dark Green"></button>
+            <button class="color-button" data-color="10" style="background-color: #000080" aria-label="Dark Blue"></button>
+            <button class="color-button" data-color="11" style="background-color: #808000" aria-label="Olive"></button>
+            <button class="color-button" data-color="12" style="background-color: #800080" aria-label="Purple"></button>
+            <button class="color-button" data-color="13" style="background-color: #008080" aria-label="Teal"></button>
+            <button class="color-button" data-color="14" style="background-color: #C0C0C0" aria-label="Silver"></button>
+            <button class="color-button" data-color="15" style="background-color: #808080" aria-label="Gray"></button>
+        </div>
+    </footer>
+
+    <!-- vConsole for mobile debugging -->
+    <!-- 安定版を使用する場合は以下をコメントアウト -->
+    <!-- <script src="https://unpkg.com/vconsole@3.15.1/dist/vconsole.min.js"></script> -->
+    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
+    <script>
+        // Initialize vConsole for debugging
+        try {
+            const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            // Enable for mobile OR when URL contains debug=vconsole
+            const forceVConsole = new URLSearchParams(window.location.search).get('debug') === 'vconsole';
+            
+            if (isMobile || forceVConsole) {
+                const vc = new VConsole({ 
+                    maxLogNumber: 2000,
+                    theme: 'dark'
+                });
+                
+                // ▼オプションメニューに「Copy Logs」を追加
+                vc.addOptionMenu({
+                    name: 'Copy Logs',
+                    onClick() {
+                        // Log プラグインの内部配列を取得
+                        const logs = vc.pluginList.log.data;
+                        const text = logs
+                            .map(item => item.log.join(' '))  // 配列を 1 行文字列に
+                            .join('\n');
+
+                        navigator.clipboard.writeText(text).then(() => {
+                            alert('📋 全ログをコピーしました！');
+                        }).catch(() => {
+                            // フォールバック: テキストエリアを使用
+                            const textarea = document.createElement('textarea');
+                            textarea.value = text;
+                            document.body.appendChild(textarea);
+                            textarea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textarea);
+                            alert('📋 全ログをコピーしました！');
+                        });
+                    },
+                });
+                
+                console.log('📱 vConsole ready for debugging!');
+                console.log(`📦 vConsole version: ${vc.version || 'unknown'}`);
+                console.warn('⚠️ Warning test message');
+                console.error('❌ Error test message');
+                
+                console.log(`📱 vConsole initialized - Mobile: ${isMobile}, Forced: ${forceVConsole}`);
+                
+                // Store reference globally for testing
+                window.vc = vc;
+            } else {
+                console.log('💻 Desktop mode - vConsole disabled (add ?debug=vconsole to URL to force enable)');
+            }
+        } catch (error) {
+            console.error('❌ Failed to initialize vConsole:', error);
+        }
+    </script>
+
+    <script src="idb.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="module" src="main.js" defer></script>
+</body>
+</html>
