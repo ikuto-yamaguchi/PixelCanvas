@@ -491,6 +491,63 @@ class PixelCanvas {
         
         return 'vConsole test completed - check vConsole panel for results';
     }
+    
+    // 🚀 PixiJS + LOD デバッグコマンド
+    async generateLODs() {
+        if (!this.pixiRenderer || !this.pixiRenderer.lodGenerator) {
+            return 'PixiJS renderer not available';
+        }
+        
+        console.log('🏗️ Starting LOD generation...');
+        await this.pixiRenderer.lodGenerator.generateAllLODs();
+        return 'LOD generation completed - check console for details';
+    }
+    
+    switchRenderer(type = 'auto') {
+        const oldRenderer = CONFIG.USE_PIXI_RENDERER ? 'PixiJS' : 'Canvas2D';
+        
+        switch (type) {
+            case 'pixi':
+                CONFIG.USE_PIXI_RENDERER = true;
+                break;
+            case 'canvas':
+                CONFIG.USE_PIXI_RENDERER = false;
+                break;
+            case 'auto':
+                CONFIG.USE_PIXI_RENDERER = !CONFIG.USE_PIXI_RENDERER;
+                break;
+        }
+        
+        const newRenderer = CONFIG.USE_PIXI_RENDERER ? 'PixiJS' : 'Canvas2D';
+        this.render();
+        
+        return `Renderer switched: ${oldRenderer} → ${newRenderer}`;
+    }
+    
+    getLODStats() {
+        if (!this.pixiRenderer || !this.pixiRenderer.isInitialized) {
+            return 'PixiJS renderer not available';
+        }
+        
+        return {
+            currentLOD: this.pixiRenderer.currentLOD,
+            scale: this.pixiRenderer.viewport?.scale.x || 1,
+            textureCount: this.pixiRenderer.textureCache.size,
+            lodThresholds: CONFIG.LOD_THRESHOLDS,
+            performance: this.getPerformanceStats()
+        };
+    }
+    
+    async testLODGeneration(sectorX = 0, sectorY = 0) {
+        if (!this.pixiRenderer || !this.pixiRenderer.lodGenerator) {
+            return 'PixiJS renderer not available';
+        }
+        
+        console.log(`🧪 Testing LOD generation for sector (${sectorX}, ${sectorY})`);
+        await this.pixiRenderer.lodGenerator.generateAllLODsForSector(sectorX, sectorY);
+        
+        return `LOD test completed for sector (${sectorX}, ${sectorY})`;
+    }
 }
 
 // Initialize when DOM is ready with error catching

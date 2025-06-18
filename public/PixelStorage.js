@@ -257,6 +257,11 @@ export class PixelStorage {
         // Calculate world coordinates for rendering
         const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
         
+        // 🚀 PixiJS LOD更新通知
+        if (this.pixelCanvas.pixiRenderer && this.pixelCanvas.pixiRenderer.isInitialized) {
+            this.pixelCanvas.pixiRenderer.updateLODForPixelChange(sectorX, sectorY, localX, localY, color);
+        }
+        
         // Force a complete re-render to ensure pixel is drawn
         this.pixelCanvas.render();
         

@@ -1,5 +1,6 @@
 // PixiJS + LOD による高性能レンダリングエンジン
 import { CONFIG, Utils } from './Config.js';
+import { LODGenerator } from './LODGenerator.js';
 
 export class PixiRenderer {
     constructor(pixelCanvas) {
@@ -22,6 +23,14 @@ export class PixiRenderer {
         this.isInitialized = false;
         this.lastScale = 1.0;
         this.lastViewport = { x: 0, y: 0, width: 800, height: 600 };
+        
+        // LOD生成システム
+        this.lodGenerator = new LODGenerator(pixelCanvas);
+        this.lodGenerationPromise = null;
+        
+        // プログレッシブ読み込み
+        this.loadingQueue = new Map();
+        this.preloadRadius = 1; // 周辺セクター先読み範囲
         
         this.initialize();
     }
@@ -68,6 +77,9 @@ export class PixiRenderer {
             
             this.isInitialized = true;
             console.log('✅ PixiJS renderer initialized successfully');
+            
+            // 初回LOD生成を開始（非同期）
+            this.startInitialLODGeneration();
             
             return true;
             
@@ -235,25 +247,85 @@ export class PixiRenderer {
     }
     
     decodeRLEToCanvas(rleData, ctx, width, height) {
-        // 簡略版：実際はバイナリRLEデコードが必要
-        // とりあえず既存のピクセルストレージから描画
+        if (!rleData) {
+            // データがない場合は空のキャンバス
+            ctx.clearRect(0, 0, width, height);
+            return;
+        }
+        
+        try {
+            // Base64デコード
+            const binaryString = atob(rleData);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            // RLEデコード
+            const pixelArray = new Uint8Array(width * height);
+            let pos = 0;
+            
+            for (let i = 0; i < bytes.length; i += 2) {
+                if (i + 1 >= bytes.length) break;
+                
+                const color = bytes[i];
+                const count = bytes[i + 1];
+                
+                for (let j = 0; j < count && pos < pixelArray.length; j++) {
+                    pixelArray[pos++] = color;
+                }
+            }
+            
+            // ImageDataに変換
+            const imageData = ctx.createImageData(width, height);
+            const data = imageData.data;
+            
+            for (let i = 0; i < pixelArray.length; i++) {
+                const colorIndex = pixelArray[i];
+                const color = CONFIG.PALETTE[colorIndex] || '#000000';
+                
+                // 色文字列をRGBに変換
+                const rgb = this.hexToRgb(color);
+                const pixelIndex = i * 4;
+                
+                data[pixelIndex] = rgb.r;     // R
+                data[pixelIndex + 1] = rgb.g; // G
+                data[pixelIndex + 2] = rgb.b; // B
+                data[pixelIndex + 3] = colorIndex === 0 ? 0 : 255; // A (透明 or 不透明)
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            
+        } catch (error) {
+            console.error('❌ RLE decode failed:', error);
+            // フォールバック: 既存ピクセルストレージから直接描画
+            this.renderSectorFromStorage(ctx, width, height);
+        }
+    }
+    
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 0, g: 0, b: 0 };
+    }
+    
+    renderSectorFromStorage(ctx, width, height) {
+        // フォールバック: ピクセルストレージから直接描画
         const imageData = ctx.createImageData(width, height);
         const data = imageData.data;
         
-        // 仮実装：グリッド風のテストパターン
+        // とりあえずテストパターン
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const index = (y * width + x) * 4;
-                if ((x + y) % 8 < 4) {
-                    data[index] = 100;     // R
-                    data[index + 1] = 100; // G
-                    data[index + 2] = 100; // B
-                } else {
-                    data[index] = 200;     // R
-                    data[index + 1] = 200; // G
-                    data[index + 2] = 200; // B
-                }
-                data[index + 3] = 255; // A
+                const intensity = ((x + y) % 32) * 8;
+                data[index] = intensity;     // R
+                data[index + 1] = intensity; // G
+                data[index + 2] = intensity; // B
+                data[index + 3] = 255;       // A
             }
         }
         
@@ -354,6 +426,109 @@ export class PixiRenderer {
         this.loadVisibleSectors();
     }
     
+    // LOD生成関連メソッド
+    async startInitialLODGeneration() {
+        if (this.lodGenerationPromise) return;
+        
+        console.log('🏗️ Starting initial LOD generation...');
+        
+        this.lodGenerationPromise = this.lodGenerator.generateAllLODs()
+            .then(() => {
+                console.log('✅ Initial LOD generation completed');
+                this.loadVisibleSectors(); // LOD生成後に再描画
+            })
+            .catch(error => {
+                console.error('❌ LOD generation failed:', error);
+            })
+            .finally(() => {
+                this.lodGenerationPromise = null;
+            });
+    }
+    
+    // プログレッシブ読み込み: 低LOD→高LODの順で読み込み
+    async loadSectorProgressive(sectorX, sectorY) {
+        const currentLOD = this.currentLOD;
+        
+        // 低LODから高LODまで段階的に読み込み
+        for (let lod = Math.min(3, currentLOD + 1); lod >= Math.max(0, currentLOD - 1); lod--) {
+            await this.loadSectorLOD(sectorX, sectorY, lod);
+            
+            // 高優先度LODが見つかったら即座に表示
+            const cacheKey = `${sectorX},${sectorY}:${lod}`;
+            if (this.textureCache.has(cacheKey)) {
+                this.renderSectorTexture(sectorX, sectorY, lod);
+                
+                // 現在のLODに合った解像度なら完了
+                if (lod === currentLOD) break;
+            }
+        }
+    }
+    
+    // 周辺セクターの先読み
+    async preloadAdjacentSectors(centerX, centerY, radius = 1) {
+        const preloadPromises = [];
+        
+        for (let dx = -radius; dx <= radius; dx++) {
+            for (let dy = -radius; dy <= radius; dy++) {
+                if (dx === 0 && dy === 0) continue; // 中央は既に読み込み済み
+                
+                const sectorX = centerX + dx;
+                const sectorY = centerY + dy;
+                
+                preloadPromises.push(
+                    this.loadSectorLOD(sectorX, sectorY, this.currentLOD)
+                        .catch(error => {
+                            // エラーは静かに無視（先読みなので）
+                            console.debug(`Preload failed for (${sectorX}, ${sectorY}):`, error);
+                        })
+                );
+            }
+        }
+        
+        // 先読みは低優先度なので、一部失敗しても続行
+        await Promise.allSettled(preloadPromises);
+    }
+    
+    // ピクセル更新時のLOD同期更新
+    async updateLODForPixelChange(sectorX, sectorY, localX, localY, color) {
+        // リアルタイム更新
+        await this.lodGenerator.updateLODForPixelChange(sectorX, sectorY, localX, localY, color);
+        
+        // 影響を受けるテクスチャをキャッシュから削除
+        for (let lod = 0; lod <= 3; lod++) {
+            const cacheKey = `${sectorX},${sectorY}:${lod}`;
+            const texture = this.textureCache.get(cacheKey);
+            if (texture) {
+                texture.destroy(true);
+                this.textureCache.delete(cacheKey);
+            }
+        }
+        
+        // 現在表示中のLODを再読み込み
+        await this.loadSectorLOD(sectorX, sectorY, this.currentLOD);
+    }
+    
+    // ヒステリシス付きLOD切り替え
+    calculateLODWithHysteresis(scale) {
+        const newLOD = this.calculateLOD(scale);
+        
+        // ヒステリシス: 閾値付近での頻繁な切り替えを防ぐ
+        if (Math.abs(newLOD - this.currentLOD) === 1) {
+            const threshold = this.lodThresholds[Math.min(newLOD, this.currentLOD)];
+            const hysteresis = threshold * 0.1; // 10%のバッファ
+            
+            if (newLOD > this.currentLOD) {
+                // より高詳細への切り替え: より厳格な条件
+                return scale >= threshold + hysteresis ? newLOD : this.currentLOD;
+            } else {
+                // より低詳細への切り替え: より緩い条件
+                return scale <= threshold - hysteresis ? newLOD : this.currentLOD;
+            }
+        }
+        
+        return newLOD;
+    }
+    
     destroy() {
         if (this.app) {
             this.app.destroy(true);
@@ -365,6 +540,11 @@ export class PixiRenderer {
         
         this.textureCache.clear();
         this.lodCache.clear();
+        this.loadingQueue.clear();
+        
+        if (this.lodGenerator) {
+            this.lodGenerator.destroy();
+        }
     }
     
     // デバッグ用
