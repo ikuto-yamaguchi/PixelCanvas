@@ -119,9 +119,6 @@ export class RenderEngine {
     }
     
     renderActiveSectorBounds() {
-        // Don't show sector boundaries when grid is hidden
-        if (!this.pixelCanvas.showGrid) return;
-        
         const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
         
         // Only show visual bounds when sectors are large enough to see
@@ -159,11 +156,11 @@ export class RenderEngine {
                     const isActiveFromClient = this.pixelCanvas.activeSectors.has(sectorKey);
                     const isActive = isActiveFromDB || isActiveFromClient;
                     
-                    if (isActive) {
-                        // Active sector - can draw here (green border)
+                    if (isActive && this.pixelCanvas.showGrid) {
+                        // Active sector - can draw here (green border) - only when grid is shown
                         this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
-                    } else {
-                        // Inactive sector - LOCKED (red border, dark overlay)
+                    } else if (!isActive) {
+                        // Inactive sector - LOCKED (red border, dark overlay) - always show
                         this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
                     }
                 }
