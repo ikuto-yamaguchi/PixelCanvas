@@ -46,14 +46,30 @@ class PixelCanvas {
             // this.debugPanel.log('📦 Initializing RenderEngine...');
             this.renderEngine = new RenderEngine(this.canvas, this.ctx, this);
             
-            // 🚀 NEW: Initialize Optimized Render System
-            this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, window.supabase);
+            // this.debugPanel.log('📦 Initializing NetworkManager...');
+            this.networkManager = new NetworkManager(this);
+            
+            // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection
+            this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, null);
+            
+            // Supabaseクライアントを後で設定
+            setTimeout(() => {
+                if (this.networkManager.supabaseClient) {
+                    this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
+                    console.error('✅ Supabase client connected to OptimizedRenderSystem');
+                } else {
+                    console.error('⚠️ Supabase client not available, retrying...');
+                    setTimeout(() => {
+                        if (this.networkManager.supabaseClient) {
+                            this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
+                            console.error('✅ Supabase client connected to OptimizedRenderSystem (retry)');
+                        }
+                    }, 1000);
+                }
+            }, 100);
             
             // this.debugPanel.log('📦 Initializing SectorManager...');
             this.sectorManager = new SectorManager(this);
-            
-            // this.debugPanel.log('📦 Initializing NetworkManager...');
-            this.networkManager = new NetworkManager(this);
             
             // this.debugPanel.log('📦 Initializing EventHandlers...');
             this.eventHandlers = new EventHandlers(this.canvas, this);

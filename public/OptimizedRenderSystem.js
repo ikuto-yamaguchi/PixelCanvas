@@ -14,6 +14,16 @@ export class OptimizedRenderSystem {
         this.dataLoader = new ViewportDataLoader(supabaseClient);
         this.adaptiveRenderer = new AdaptiveRenderer(canvas, ctx);
         
+        // デバッグ情報
+        console.error('🚀 OptimizedRenderSystem initialized:', {
+            canvas: !!canvas,
+            ctx: !!ctx,
+            supabaseClient: !!supabaseClient,
+            dataLoader: !!this.dataLoader,
+            viewportCalculator: !!this.viewportCalculator,
+            adaptiveRenderer: !!this.adaptiveRenderer
+        });
+        
         // レンダリング制御
         this.isRendering = false;
         this.renderQueue = [];
@@ -61,6 +71,11 @@ export class OptimizedRenderSystem {
             const dataStartTime = performance.now();
             const pixelData = await this.dataLoader.loadViewportData(bounds);
             const dataTime = performance.now() - dataStartTime;
+            
+            // データ取得エラーチェック
+            if (pixelData.error) {
+                console.error('⚠️ Data loading failed, using empty dataset:', pixelData.error);
+            }
             
             // 3. ズームレベルに応じて最適描画
             const renderStartTime = performance.now();
@@ -250,6 +265,14 @@ export class OptimizedRenderSystem {
         this.dataLoader.sectorCache.clear();
         this.dataLoader.sectorTimestamps.clear();
         this.viewportCalculator.cache.result = null;
+    }
+    
+    /**
+     * Supabaseクライアントを後から設定
+     */
+    updateSupabaseClient(supabaseClient) {
+        this.dataLoader.supabase = supabaseClient;
+        console.error('🔄 Supabase client updated in OptimizedRenderSystem');
     }
     
     /**

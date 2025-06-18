@@ -23,6 +23,12 @@ export class ViewportDataLoader {
         const startTime = performance.now();
         
         try {
+            // Supabaseクライアントの有効性チェック
+            if (!this.supabase) {
+                console.error('❌ Supabase client not initialized');
+                return { pixels: new Map(), sectors: new Map(), totalPixels: 0, error: 'No database connection' };
+            }
+            
             // 描画モードに応じた最適化戦略
             const priority = this.calculateLoadPriority(bounds);
             
@@ -53,7 +59,13 @@ export class ViewportDataLoader {
             
         } catch (error) {
             console.error('❌ Failed to load viewport data:', error);
-            return { pixels: new Map(), sectors: new Map(), totalPixels: 0 };
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                supabaseClient: !!this.supabase,
+                bounds: bounds
+            });
+            return { pixels: new Map(), sectors: new Map(), totalPixels: 0, error: error.message };
         }
     }
     
