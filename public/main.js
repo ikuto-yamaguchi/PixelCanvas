@@ -8,6 +8,8 @@ import { OptimizedRenderSystem } from './OptimizedRenderSystem.js';
 import { SectorManager } from './SectorManager.js';
 import { NetworkManager } from './NetworkManager.js';
 import { PixelStorage } from './PixelStorage.js';
+import { LayerManager } from './LayerManager.js';
+import { LayeredRenderer } from './LayeredRenderer.js';
 
 class PixelCanvas {
     constructor() {
@@ -48,6 +50,11 @@ class PixelCanvas {
             
             // this.debugPanel.log('📦 Initializing NetworkManager...');
             this.networkManager = new NetworkManager(this);
+            
+            // 🚀 NEW: Initialize Layer Management System
+            console.error('🔧 Initializing Layer Management System...');
+            this.layerManager = new LayerManager(this);
+            this.layeredRenderer = new LayeredRenderer(this);
             
             // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection
             this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, null);
@@ -266,16 +273,13 @@ class PixelCanvas {
     
     // Delegate methods to appropriate modules
     render() {
-        // 🚨 EMERGENCY FALLBACK: Use legacy render system until optimized system is fixed
-        this.renderEngine.render();
-        
-        // TODO: Fix optimized renderer and re-enable
-        // this.optimizedRenderer.renderThrottled(
-        //     this.offsetX, 
-        //     this.offsetY, 
-        //     this.scale, 
-        //     this.showGrid
-        // );
+        // 🔧 NEW: Use layered rendering system for performance
+        if (this.layeredRenderer && this.layerManager.supabase) {
+            this.layeredRenderer.render();
+        } else {
+            // Fallback to legacy rendering
+            this.renderEngine.render();
+        }
     }
     
     // Legacy render method for fallback
@@ -283,19 +287,37 @@ class PixelCanvas {
         this.renderEngine.render();
     }
     
-    // 🚨 EMERGENCY FALLBACK: Use legacy pixel drawing until optimized system is fixed
+    // 🔧 Enhanced pixel drawing with layer updates
     async drawPixelOptimized(worldX, worldY, color) {
         // Convert to local coordinates 
         const local = Utils.worldToLocal(worldX, worldY);
         
         // Use legacy PixelStorage.drawPixel method
-        return this.pixelStorage.drawPixel(
+        const result = this.pixelStorage.drawPixel(
             local.sectorX,
             local.sectorY,
             local.localX,
             local.localY,
             color
         );
+        
+        // 🔧 NEW: Update upper layers for performance
+        if (this.layerManager && this.layerManager.supabase) {
+            try {
+                await this.layerManager.updateUpperLayers(
+                    local.sectorX,
+                    local.sectorY,
+                    local.localX,
+                    local.localY,
+                    color
+                );
+                console.log('🔧 Upper layers updated');
+            } catch (error) {
+                console.error('⚠️ Layer update failed:', error);
+            }
+        }
+        
+        return result;
     }
     
     mobileLog(message) {
