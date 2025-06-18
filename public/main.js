@@ -331,13 +331,13 @@ class PixelCanvas {
         };
     }
     
-    // Performance control methods
-    toggleOptimization(enabled) {
-        return this.renderEngine.toggleOptimization(enabled);
+    // Performance control methods - New simplified API
+    setRenderMode(mode) {
+        return this.renderEngine.setRenderMode(mode);
     }
     
-    setOptimizationLevel(level) {
-        return this.renderEngine.setOptimizationLevel(level);
+    toggleRenderMode() {
+        return this.renderEngine.toggleRenderMode();
     }
     
     getPerformanceStats() {
