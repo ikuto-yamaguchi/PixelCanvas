@@ -1,20 +1,31 @@
 // Service Worker for PixelCanvas
-const CACHE_NAME = 'pixelcanvas-v1';
+const CACHE_NAME = 'pixelcanvas-v2';
 const STATIC_ASSETS = [
-    '/',
-    '/index.html',
-    '/style.css',
-    '/main.js',
-    '/idb.js',
-    '/vconsole.min.js',
-    '/manifest.webmanifest'
+    './',
+    './index.html',
+    './style.css',
+    './main.js',
+    './idb.js',
+    './vconsole.min.js',
+    './manifest.webmanifest'
 ];
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(STATIC_ASSETS))
-            .then(() => self.skipWaiting())
+            .then(cache => {
+                console.log('📦 Caching static assets...');
+                return cache.addAll(STATIC_ASSETS);
+            })
+            .then(() => {
+                console.log('✅ All assets cached successfully');
+                return self.skipWaiting();
+            })
+            .catch(error => {
+                console.error('❌ Failed to cache assets:', error);
+                // Continue without caching to avoid breaking the app
+                return self.skipWaiting();
+            })
     );
 });
 
