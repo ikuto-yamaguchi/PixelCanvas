@@ -130,35 +130,23 @@ export class RenderEngine {
         const startSectorY = Math.floor(-this.pixelCanvas.offsetY / sectorSize);
         const endSectorY = Math.ceil((this.canvas.height - this.pixelCanvas.offsetY) / sectorSize);
         
-        // Draw each visible sector with appropriate styling
-        console.log(`🎨 RENDER: Drawing sectors in range X[${startSectorX} to ${endSectorX}] Y[${startSectorY} to ${endSectorY}]`);
-        console.log(`🎨 RENDER: Current active sectors: ${Array.from(this.pixelCanvas.activeSectors).join(', ')}`);
-        
+        // Draw each visible sector using database state
         for (let sectorX = startSectorX; sectorX <= endSectorX; sectorX++) {
             for (let sectorY = startSectorY; sectorY <= endSectorY; sectorY++) {
                 const sectorKey = `${sectorX},${sectorY}`;
-                const isActive = this.pixelCanvas.activeSectors.has(sectorKey);
-                
-                // Count actual pixels in this sector for debugging
-                let pixelCount = 0;
-                for (const [key, color] of this.pixelCanvas.pixels) {
-                    const [pSectorX, pSectorY] = key.split(',').map(Number);
-                    if (pSectorX === sectorX && pSectorY === sectorY) {
-                        pixelCount++;
-                    }
-                }
-                
-                const shouldBeActive = pixelCount > 0 && (pixelCount / (CONFIG.GRID_SIZE * CONFIG.GRID_SIZE)) >= CONFIG.SECTOR_EXPANSION_THRESHOLD;
-                console.log(`🎨 RENDER: Sector ${sectorKey} - IsActive: ${isActive}, Pixels: ${pixelCount}, ShouldBeActive: ${shouldBeActive}`);
+                const sectorState = this.pixelCanvas.sectorManager.getSectorState(sectorKey);
                 
                 // Calculate screen position of sector
                 const screenX = this.pixelCanvas.offsetX + sectorX * sectorSize;
                 const screenY = this.pixelCanvas.offsetY + sectorY * sectorSize;
                 
-                if (isActive) {
-                    this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY);
-                } else {
-                    this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY);
+                // Only render if visible on screen
+                if (this.isSectorVisible(screenX, screenY, sectorSize)) {
+                    if (sectorState.isActive) {
+                        this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, sectorState.pixelCount);
+                    } else if (sectorState.pixelCount > 0) {
+                        this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, sectorState.pixelCount);
+                    }
                 }
             }
         }
@@ -172,7 +160,7 @@ export class RenderEngine {
                screenY + sectorSize >= 0 && screenY <= this.canvas.height;
     }
     
-    renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY) {
+    renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, pixelCount = 0) {
         // Active sector: bright green border
         this.ctx.strokeStyle = '#00ff00';
         this.ctx.lineWidth = Math.max(1, Math.min(3, 2 / this.pixelCanvas.scale));
@@ -182,17 +170,9 @@ export class RenderEngine {
         
         // Show sector info when zoomed in enough and text fits
         if (sectorSize > 80) {
-            // Count actual pixels in this sector for accurate display
-            let actualPixelCount = 0;
-            for (const [key, color] of this.pixelCanvas.pixels) {
-                const [pSectorX, pSectorY] = key.split(',').map(Number);
-                if (pSectorX === sectorX && pSectorY === sectorY) {
-                    actualPixelCount++;
-                }
-            }
             
             const coordinateText = `(${sectorX},${sectorY})`;
-            const pixelText = `${actualPixelCount}px`;
+            const pixelText = `${pixelCount}px`;
             
             // Calculate appropriate font size that fits within sector
             const maxFontSize = Math.floor(sectorSize / 8);
@@ -235,7 +215,7 @@ export class RenderEngine {
         }
     }
     
-    renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY) {
+    renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, pixelCount = 0) {
         // Inactive sector: dim overlay
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         this.ctx.fillRect(screenX, screenY, sectorSize, sectorSize);

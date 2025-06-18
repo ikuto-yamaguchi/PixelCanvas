@@ -66,7 +66,7 @@ class PixelCanvas {
         }
     }
     
-    init() {
+    async init() {
         try {
             this.debugPanel.log('🔧 Setting up canvas...');
             this.setupCanvas();
@@ -80,7 +80,13 @@ class PixelCanvas {
             this.debugPanel.log('⚙️ Registering service worker...');
             this.registerServiceWorker();
             
-            this.debugPanel.log('📊 Loading initial data...');
+            this.debugPanel.log('📊 Initializing sectors from database...');
+            await this.sectorManager.initializeSectors();
+            
+            this.debugPanel.log('🔄 Starting periodic sector refresh...');
+            this.sectorManager.startPeriodicRefresh();
+            
+            this.debugPanel.log('📊 Loading initial pixel data...');
             this.loadInitialData();
             
             this.debugPanel.log('📍 Centering viewport on active sectors...');
