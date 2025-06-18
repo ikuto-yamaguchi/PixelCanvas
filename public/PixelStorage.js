@@ -97,6 +97,12 @@ export class PixelStorage {
             this.pixelStock--;
             this.updateStockDisplay();
             this.saveStockState();
+            
+            // PERFORMANCE FIX: Restart timer only when stock is consumed
+            if (this.pixelStock < CONFIG.MAX_PIXEL_STOCK && !this.stockRecoveryInterval) {
+                this.startOptimizedStockRecovery();
+            }
+            
             return true;
         }
         return false;
@@ -117,16 +123,35 @@ export class PixelStorage {
             clearInterval(this.stockRecoveryInterval);
         }
         
-        // Recover 1 stock every STOCK_RECOVER_MS
-        this.stockRecoveryInterval = setInterval(() => {
-            if (this.pixelStock < CONFIG.MAX_PIXEL_STOCK) {
-                this.pixelStock++;
+        // PERFORMANCE FIX: Use demand-based recovery instead of constant timer
+        this.lastStockCheck = Date.now();
+        this.startOptimizedStockRecovery();
+    }
+    
+    startOptimizedStockRecovery() {
+        // PERFORMANCE FIX: Check stock only when needed, not constantly
+        this.checkStockRecovery = () => {
+            const now = Date.now();
+            const timeSinceLastCheck = now - this.lastStockCheck;
+            
+            if (this.pixelStock < CONFIG.MAX_PIXEL_STOCK && timeSinceLastCheck >= CONFIG.STOCK_RECOVER_MS) {
+                const stockToRecover = Math.floor(timeSinceLastCheck / CONFIG.STOCK_RECOVER_MS);
+                this.pixelStock = Math.min(CONFIG.MAX_PIXEL_STOCK, this.pixelStock + stockToRecover);
+                this.lastStockCheck = now;
                 this.updateStockDisplay();
                 this.saveStockState();
-                
-                // this.pixelCanvas.debugPanel.log(`💰 Stock recovered: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK}`);
             }
-        }, CONFIG.STOCK_RECOVER_MS);
+        };
+        
+        // Only run timer when stock is not full - much more efficient
+        this.stockRecoveryInterval = setInterval(() => {
+            if (this.pixelStock >= CONFIG.MAX_PIXEL_STOCK) {
+                clearInterval(this.stockRecoveryInterval);
+                this.stockRecoveryInterval = null;
+                return;
+            }
+            this.checkStockRecovery();
+        }, CONFIG.STOCK_RECOVER_MS * 3); // Check 3x less frequently
     }
     
     updateStockDisplay() {

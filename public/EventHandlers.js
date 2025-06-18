@@ -23,6 +23,10 @@ export class EventHandlers {
             gestureEndTime: 0
         };
         
+        // PERFORMANCE FIX: Throttle rendering to prevent excessive calls
+        this.lastRenderTime = 0;
+        this.renderThrottle = 16; // ~60 FPS limit
+        
         // Mouse state
         this.mouseState = {
             down: false,
@@ -33,6 +37,15 @@ export class EventHandlers {
         };
         
         this.setupEventListeners();
+    }
+    
+    // PERFORMANCE FIX: Throttled render method
+    throttledRender() {
+        const now = performance.now();
+        if (now - this.lastRenderTime >= this.renderThrottle) {
+            this.pixelCanvas.render();
+            this.lastRenderTime = now;
+        }
     }
     
     setupEventListeners() {
@@ -127,7 +140,7 @@ export class EventHandlers {
             this.pixelCanvas.offsetX = this.touchState.initialOffsetX + dx;
             this.pixelCanvas.offsetY = this.touchState.initialOffsetY + dy;
             this.pixelCanvas.constrainViewport();
-            this.pixelCanvas.render();
+            this.throttledRender(); // PERFORMANCE FIX: Use throttled render
         }
     }
     
@@ -149,7 +162,7 @@ export class EventHandlers {
         this.pixelCanvas.scale = newScale;
         
         this.pixelCanvas.constrainViewport();
-        this.pixelCanvas.render();
+        this.throttledRender(); // PERFORMANCE FIX: Use throttled render
         this.touchState.moved = true;
     }
     
@@ -244,7 +257,7 @@ export class EventHandlers {
         this.pixelCanvas.offsetX = this.mouseState.initialOffsetX + dx;
         this.pixelCanvas.offsetY = this.mouseState.initialOffsetY + dy;
         this.pixelCanvas.constrainViewport();
-        this.pixelCanvas.render();
+        this.throttledRender(); // PERFORMANCE FIX: Use throttled render
     }
     
     handleMouseUp(e) {
@@ -294,7 +307,7 @@ export class EventHandlers {
         this.pixelCanvas.scale = newScale;
         
         this.pixelCanvas.constrainViewport();
-        this.pixelCanvas.render();
+        this.throttledRender(); // PERFORMANCE FIX: Use throttled render
         
         // Schedule expansion check after zoom
         if (!this.pixelCanvas.isExpansionRunning) {

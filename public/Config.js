@@ -21,8 +21,8 @@ export const CONFIG = {
     SUPABASE_URL: 'https://lgvjdefkyeuvquzckkvb.supabase.co',
     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY',
     
-    // Sector expansion
-    SECTOR_EXPANSION_THRESHOLD: 0.0001, // 0.01% filled (7 pixels)
+    // Sector expansion - Fixed: was 0.0001 causing infinite expansion
+    SECTOR_EXPANSION_THRESHOLD: 0.7, // 70% filled (reasonable threshold)
     
     // Debug settings
     MAX_DEBUG_LOGS: 200,

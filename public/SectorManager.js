@@ -7,6 +7,8 @@ export class SectorManager {
         this.sectorsCache = new Map(); // Cache for sector states from DB
         this.lastSectorUpdate = 0;
         this.sectorUpdateInterval = 30000; // Refresh every 30 seconds
+        this.lastExpansionCheck = 0;
+        this.expansionCheckCooldown = 5000; // Limit expansion checks to every 5 seconds
     }
     
     async loadSectorsFromDatabase() {
@@ -118,11 +120,20 @@ export class SectorManager {
         }
     }
     
-    // Simple periodic refresh instead of complex expansion logic
+    // PERFORMANCE FIX: Reduced frequency and smarter refresh
     startPeriodicRefresh() {
-        setInterval(() => {
+        // Increase interval from 10s to 30s for less CPU usage
+        this.periodicInterval = setInterval(() => {
             this.refreshSectorsIfNeeded();
-        }, 10000); // Check every 10 seconds
+        }, 30000); // Check every 30 seconds instead of 10
+    }
+    
+    // PERFORMANCE FIX: Add cleanup method
+    stopPeriodicRefresh() {
+        if (this.periodicInterval) {
+            clearInterval(this.periodicInterval);
+            this.periodicInterval = null;
+        }
     }
     
     // Add missing methods called from other files
@@ -185,17 +196,42 @@ export class SectorManager {
     }
     
     async checkLoadedSectorsForExpansion() {
+        // PERFORMANCE FIX: Add cooldown to prevent excessive checking
+        const now = Date.now();
+        if (now - this.lastExpansionCheck < this.expansionCheckCooldown) {
+            return; // Skip check if too soon
+        }
+        this.lastExpansionCheck = now;
+        
         // Check all loaded sectors for expansion potential
         const maxPixelsPerSector = CONFIG.GRID_SIZE * CONFIG.GRID_SIZE;
+        let expansionsTriggered = 0;
         
         for (const [sectorKey, sectorState] of this.sectorsCache) {
             const fillPercentage = sectorState.pixelCount / maxPixelsPerSector;
             
             if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
                 const [sectorX, sectorY] = sectorKey.split(',').map(Number);
-                console.log(`🎯 Sector (${sectorX}, ${sectorY}) ready for expansion: ${(fillPercentage * 100).toFixed(1)}% full`);
+                
+                // PERFORMANCE FIX: Limit log frequency
+                if (expansionsTriggered === 0) { // Only log first expansion
+                    console.log(`🎯 Sector (${sectorX}, ${sectorY}) ready for expansion: ${(fillPercentage * 100).toFixed(1)}% full`);
+                }
+                
                 await this.expandSectorsLocally(sectorX, sectorY);
+                expansionsTriggered++;
+                
+                // PERFORMANCE FIX: Limit expansions per check
+                if (expansionsTriggered >= 3) {
+                    console.log(`⚠️ Limited expansion check to 3 sectors for performance`);
+                    break;
+                }
             }
+        }
+        
+        // Summary log instead of per-sector spam
+        if (expansionsTriggered > 1) {
+            console.log(`✅ Expansion check complete: ${expansionsTriggered} sectors processed`);
         }
     }
 }
