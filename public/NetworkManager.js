@@ -43,15 +43,17 @@ export class NetworkManager {
     }
     
     handleRemotePixel(pixelData) {
-        const key = Utils.createPixelKey(
+        // 🚨 EMERGENCY FIX: Add remote pixel to PixelStorage and trigger render
+        this.pixelCanvas.pixelStorage.addPixel(
             pixelData.sector_x,
-            pixelData.sector_y, 
+            pixelData.sector_y,
             pixelData.local_x,
-            pixelData.local_y
+            pixelData.local_y,
+            pixelData.color
         );
         
-        // Add to render engine for batched rendering
-        this.pixelCanvas.renderEngine.addRemotePixel(pixelData);
+        // Trigger re-render to show the new pixel
+        this.pixelCanvas.render();
     }
     
     async sendPixel(pixel) {
@@ -255,7 +257,7 @@ export class NetworkManager {
     }
     
     async loadPixelsFromSupabase() {
-        this.pixelCanvas.debugPanel.log('📥 Loading pixels from Supabase...');
+        console.error('🚨 EMERGENCY DEBUG: Starting pixel load from Supabase...');
         
         try {
             let allPixels = [];
@@ -265,12 +267,16 @@ export class NetworkManager {
             
             // Load all pixels with pagination
             while (hasMore) {
+                console.error(`🚨 EMERGENCY DEBUG: Fetching pixels batch ${Math.floor(offset/limit) + 1}...`);
+                
                 const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=${limit}&offset=${offset}`, {
                     headers: {
                         'apikey': CONFIG.SUPABASE_ANON_KEY,
                         'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
                     }
                 });
+                
+                console.error(`🚨 EMERGENCY DEBUG: Response status: ${response.status}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -279,7 +285,7 @@ export class NetworkManager {
                 const pixels = await response.json();
                 allPixels = allPixels.concat(pixels);
                 
-                this.pixelCanvas.debugPanel.log(`📦 Loaded batch ${Math.floor(offset/limit) + 1}: ${pixels.length} pixels (total: ${allPixels.length})`);
+                console.error(`🚨 EMERGENCY DEBUG: Loaded batch ${Math.floor(offset/limit) + 1}: ${pixels.length} pixels (total: ${allPixels.length})`);
                 
                 // Check if we have more pixels to load
                 hasMore = pixels.length === limit;
@@ -287,40 +293,47 @@ export class NetworkManager {
                 
                 // Safety check to prevent infinite loop
                 if (offset > 100000) {
-                    this.pixelCanvas.debugPanel.log('⚠️ Safety limit reached, stopping pagination');
+                    console.error('🚨 EMERGENCY DEBUG: Safety limit reached, stopping pagination');
                     break;
                 }
             }
             
-            this.pixelCanvas.debugPanel.log(`📦 Loaded ${allPixels.length} total pixels from database`);
+            console.error(`🚨 EMERGENCY DEBUG: Loaded ${allPixels.length} total pixels from database`);
             
             // Add each pixel to the pixels map and calculate occupied sectors
             const occupiedSectors = new Set();
+            console.error(`🚨 EMERGENCY DEBUG: Processing ${allPixels.length} pixels into pixels map...`);
+            console.error(`🚨 EMERGENCY DEBUG: pixelCanvas.pixels exists: ${!!this.pixelCanvas.pixels}`);
+            
             for (const pixel of allPixels) {
-                const key = Utils.createPixelKey(
+                // 🚨 EMERGENCY FIX: Use PixelStorage.addPixel instead of direct map access
+                this.pixelCanvas.pixelStorage.addPixel(
                     pixel.sector_x,
                     pixel.sector_y,
                     pixel.local_x,
-                    pixel.local_y
+                    pixel.local_y,
+                    pixel.color
                 );
-                this.pixelCanvas.pixels.set(key, pixel.color);
                 
                 // Track which sectors have pixels
                 const sectorKey = Utils.createSectorKey(pixel.sector_x, pixel.sector_y);
                 occupiedSectors.add(sectorKey);
             }
             
+            console.error(`🚨 EMERGENCY DEBUG: Final pixels map size: ${this.pixelCanvas.pixels.size}`);
+            console.error(`🚨 EMERGENCY DEBUG: Occupied sectors: ${occupiedSectors.size}`);
+            
             // Initialize active sectors: start with (0,0) and add neighbors of any occupied sectors
             this.initializeActiveSectors(occupiedSectors);
             
-            // Also save to localStorage for offline access
+            // Also save to localStorage for offline access  
             const pixelsObject = {};
-            for (const [key, color] of this.pixelCanvas.pixels) {
+            for (const [key, color] of this.pixelCanvas.pixelStorage.pixels) {
                 pixelsObject[key] = color;
             }
             localStorage.setItem('pixelcanvas_pixels', JSON.stringify(pixelsObject));
             
-            this.pixelCanvas.debugPanel.log('✅ Pixels loaded and cached locally');
+            console.error('🚨 EMERGENCY DEBUG: ✅ Pixels loaded and cached locally');
             
         } catch (error) {
             console.error('Failed to load pixels from Supabase:', error);
@@ -334,10 +347,11 @@ export class NetworkManager {
     loadPixelsFromLocalStorage() {
         try {
             const savedPixels = JSON.parse(localStorage.getItem('pixelcanvas_pixels') || '{}');
+            // 🚨 EMERGENCY FIX: Set pixels directly to PixelStorage.pixels
             for (const [key, color] of Object.entries(savedPixels)) {
-                this.pixelCanvas.pixels.set(key, color);
+                this.pixelCanvas.pixelStorage.pixels.set(key, color);
             }
-            this.pixelCanvas.debugPanel.log(`📱 Loaded ${Object.keys(savedPixels).length} pixels from local storage`);
+            console.error(`🚨 EMERGENCY DEBUG: 📱 Loaded ${Object.keys(savedPixels).length} pixels from local storage`);
         } catch (error) {
             console.error('Failed to load pixels from localStorage:', error);
         }

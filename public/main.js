@@ -257,13 +257,16 @@ class PixelCanvas {
     
     // Delegate methods to appropriate modules
     render() {
-        // 🚀 Use new optimized render system
-        this.optimizedRenderer.renderThrottled(
-            this.offsetX, 
-            this.offsetY, 
-            this.scale, 
-            this.showGrid
-        );
+        // 🚨 EMERGENCY FALLBACK: Use legacy render system until optimized system is fixed
+        this.renderEngine.render();
+        
+        // TODO: Fix optimized renderer and re-enable
+        // this.optimizedRenderer.renderThrottled(
+        //     this.offsetX, 
+        //     this.offsetY, 
+        //     this.scale, 
+        //     this.showGrid
+        // );
     }
     
     // Legacy render method for fallback
@@ -271,55 +274,19 @@ class PixelCanvas {
         this.renderEngine.render();
     }
     
-    // 🚀 Optimized pixel drawing
+    // 🚨 EMERGENCY FALLBACK: Use legacy pixel drawing until optimized system is fixed
     async drawPixelOptimized(worldX, worldY, color) {
-        try {
-            // ストックチェック
-            if (!this.pixelStorage.hasStock()) {
-                console.error('🚫 NO STOCK AVAILABLE');
-                return false;
-            }
-            
-            // ストック消費
-            if (!this.pixelStorage.consumeStock()) {
-                console.error('🚫 FAILED TO CONSUME STOCK');
-                return false;
-            }
-            
-            // 最適化されたピクセル描画（キャッシュ統合）
-            const coords = await this.optimizedRenderer.drawPixelOptimized(worldX, worldY, color);
-            
-            // PixelStorageにも保存（互換性のため）
-            this.pixelStorage.addPixel(coords.sectorX, coords.sectorY, coords.localX, coords.localY, color);
-            
-            // ネットワーク送信
-            const pixel = { 
-                s: coords.sectorKey, 
-                x: coords.localX, 
-                y: coords.localY, 
-                c: color 
-            };
-            
-            if (navigator.onLine) {
-                this.networkManager.sendPixel(pixel);
-            } else {
-                this.networkManager.queuePixel(pixel);
-            }
-            
-            return true;
-            
-        } catch (error) {
-            console.error('❌ Optimized pixel draw failed:', error);
-            
-            // フォールバック: 従来方式
-            return this.pixelStorage.drawPixel(
-                Utils.worldToLocal(worldX, worldY).sectorX,
-                Utils.worldToLocal(worldX, worldY).sectorY,
-                Utils.worldToLocal(worldX, worldY).localX,
-                Utils.worldToLocal(worldX, worldY).localY,
-                color
-            );
-        }
+        // Convert to local coordinates 
+        const local = Utils.worldToLocal(worldX, worldY);
+        
+        // Use legacy PixelStorage.drawPixel method
+        return this.pixelStorage.drawPixel(
+            local.sectorX,
+            local.sectorY,
+            local.localX,
+            local.localY,
+            color
+        );
     }
     
     mobileLog(message) {
