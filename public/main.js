@@ -331,10 +331,33 @@ class PixelCanvas {
         };
     }
     
+    // Performance control methods
+    toggleOptimization(enabled) {
+        return this.renderEngine.toggleOptimization(enabled);
+    }
+    
+    setOptimizationLevel(level) {
+        return this.renderEngine.setOptimizationLevel(level);
+    }
+    
+    getPerformanceStats() {
+        return this.renderEngine.getPerformanceStats();
+    }
+    
+    benchmark(seconds) {
+        return this.renderEngine.benchmark(seconds);
+    }
+    
     // Debug methods
     logState() {
         const stats = this.getStats();
         this.debugPanel.log(`📊 App State: ${JSON.stringify(stats, null, 2)}`);
+    }
+    
+    logPerformance() {
+        const stats = this.getPerformanceStats();
+        console.log('🚀 Performance Stats:', stats);
+        return stats;
     }
 }
 

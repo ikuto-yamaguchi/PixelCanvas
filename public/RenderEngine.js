@@ -8,9 +8,27 @@ export class RenderEngine {
         this.pixelCanvas = pixelCanvas;
         this.remotePixelsBuffer = new Map();
         this.renderTimeout = null;
+        
+        // Performance optimization state
+        this.performanceOptimizer = {
+            enabled: true,
+            level: 2, // 1=basic, 2=clustering, 3=advanced
+            lastPixelData: new Map(), // For diff rendering
+            visiblePixelCache: new Map(), // For viewport culling
+            pixelClusters: new Map(), // For clustering optimization
+            renderStats: {
+                frameCount: 0,
+                totalPixelsRendered: 0,
+                clustersRendered: 0,
+                averageFPS: 60,
+                lastFrameTime: performance.now()
+            }
+        };
     }
     
     render() {
+        const startTime = performance.now();
+        
         // Clear with canvas background color
         this.ctx.fillStyle = getComputedStyle(document.documentElement)
             .getPropertyValue('--color-canvas-bg').trim() || '#404040';
@@ -21,11 +39,18 @@ export class RenderEngine {
             this.renderGrid();
         }
         
-        // Render all pixels
-        this.renderPixels();
+        // Render pixels with performance optimization
+        if (this.performanceOptimizer.enabled) {
+            this.renderPixelsOptimized();
+        } else {
+            this.renderPixels();
+        }
         
         // Render active sector boundaries
         this.renderActiveSectorBounds();
+        
+        // Update performance stats
+        this.updatePerformanceStats(startTime);
     }
     
     renderGrid() {
@@ -96,11 +121,104 @@ export class RenderEngine {
     }
     
     renderPixels() {
-        // Render all stored pixels
+        // Legacy method: render all pixels (no optimization)
         for (const [key, color] of this.pixelCanvas.pixels) {
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             this.renderPixel(world.x, world.y, color);
+        }
+    }
+    
+    renderPixelsOptimized() {
+        const level = this.performanceOptimizer.level;
+        const visibleBounds = this.calculateVisiblePixelBounds();
+        const resolutionScale = this.calculateDynamicResolution();
+        
+        if (level >= 2 && resolutionScale === 1) {
+            // Level 2: Pixel clustering for high-density areas
+            this.renderPixelsWithClustering(visibleBounds);
+        } else {
+            // Level 1: Basic optimization
+            this.renderPixelsBasic(visibleBounds, resolutionScale);
+        }
+    }
+    
+    renderPixelsBasic(visibleBounds, resolutionScale) {
+        const currentPixelData = new Map();
+        let pixelsRendered = 0;
+        
+        for (const [key, color] of this.pixelCanvas.pixels) {
+            const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
+            const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
+            
+            // Level 1: Skip pixels outside viewport
+            if (!this.isPixelVisible(world.x, world.y, visibleBounds)) {
+                continue;
+            }
+            
+            // Diff rendering - only render changed pixels
+            if (this.performanceOptimizer.lastPixelData.has(key) && 
+                this.performanceOptimizer.lastPixelData.get(key) === color) {
+                continue;
+            }
+            
+            // Render pixel with dynamic resolution
+            if (resolutionScale === 1) {
+                this.renderPixel(world.x, world.y, color);
+            } else {
+                this.renderPixelLowRes(world.x, world.y, color, resolutionScale);
+            }
+            
+            currentPixelData.set(key, color);
+            pixelsRendered++;
+        }
+        
+        this.performanceOptimizer.lastPixelData = currentPixelData;
+        this.performanceOptimizer.renderStats.totalPixelsRendered = pixelsRendered;
+    }
+    
+    renderPixelsWithClustering(visibleBounds) {
+        // Level 2: Group adjacent same-color pixels into rectangles
+        const visiblePixels = new Map();
+        const changedPixels = new Map();
+        
+        // Collect visible and changed pixels
+        for (const [key, color] of this.pixelCanvas.pixels) {
+            const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
+            const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
+            
+            if (!this.isPixelVisible(world.x, world.y, visibleBounds)) {
+                continue;
+            }
+            
+            visiblePixels.set(key, { world, color });
+            
+            // Track changes for diff rendering
+            if (!this.performanceOptimizer.lastPixelData.has(key) || 
+                this.performanceOptimizer.lastPixelData.get(key) !== color) {
+                changedPixels.set(key, { world, color });
+            }
+        }
+        
+        // Only cluster if we have enough changed pixels to benefit
+        if (changedPixels.size > 100) {
+            const clusters = this.createPixelClusters(changedPixels);
+            this.renderClusters(clusters);
+            this.performanceOptimizer.renderStats.clustersRendered = clusters.length;
+        } else {
+            // Fallback to individual pixel rendering for small changes
+            let pixelsRendered = 0;
+            for (const [key, {world, color}] of changedPixels) {
+                this.renderPixel(world.x, world.y, color);
+                pixelsRendered++;
+            }
+            this.performanceOptimizer.renderStats.totalPixelsRendered = pixelsRendered;
+        }
+        
+        // Update diff tracking
+        this.performanceOptimizer.lastPixelData = new Map();
+        for (const [key, {color}] of visiblePixels) {
+            this.performanceOptimizer.lastPixelData.set(key, color);
         }
     }
     
@@ -266,6 +384,253 @@ export class RenderEngine {
                 this.ctx.fillText(lockedText, centerX, centerY);
             }
         }
+    }
+    
+    // Level 1 Optimization: Viewport culling
+    calculateVisiblePixelBounds() {
+        const margin = 50; // Extra margin for smooth scrolling
+        const minWorldX = Math.floor((-this.pixelCanvas.offsetX - margin) / (CONFIG.PIXEL_SIZE * this.pixelCanvas.scale));
+        const maxWorldX = Math.ceil((this.canvas.width - this.pixelCanvas.offsetX + margin) / (CONFIG.PIXEL_SIZE * this.pixelCanvas.scale));
+        const minWorldY = Math.floor((-this.pixelCanvas.offsetY - margin) / (CONFIG.PIXEL_SIZE * this.pixelCanvas.scale));
+        const maxWorldY = Math.ceil((this.canvas.height - this.pixelCanvas.offsetY + margin) / (CONFIG.PIXEL_SIZE * this.pixelCanvas.scale));
+        
+        return { minWorldX, maxWorldX, minWorldY, maxWorldY };
+    }
+    
+    isPixelVisible(worldX, worldY, bounds) {
+        return worldX >= bounds.minWorldX && worldX <= bounds.maxWorldX &&
+               worldY >= bounds.minWorldY && worldY <= bounds.maxWorldY;
+    }
+    
+    // Level 1 Optimization: Dynamic resolution scaling
+    calculateDynamicResolution() {
+        const scale = this.pixelCanvas.scale;
+        if (scale < 0.5) {
+            return 4; // 4x4 pixels combined
+        } else if (scale < 1.0) {
+            return 2; // 2x2 pixels combined
+        }
+        return 1; // Full resolution
+    }
+    
+    renderPixelLowRes(worldX, worldY, colorIndex, resolutionScale) {
+        // Group pixels and render as larger blocks for performance
+        const blockWorldX = Math.floor(worldX / resolutionScale) * resolutionScale;
+        const blockWorldY = Math.floor(worldY / resolutionScale) * resolutionScale;
+        
+        const screenX = blockWorldX * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetX;
+        const screenY = blockWorldY * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetY;
+        const size = CONFIG.PIXEL_SIZE * this.pixelCanvas.scale * resolutionScale;
+        
+        if (screenX + size >= -10 && screenX <= this.canvas.width + 10 &&
+            screenY + size >= -10 && screenY <= this.canvas.height + 10) {
+            
+            this.ctx.fillStyle = CONFIG.COLORS[colorIndex] || '#000000';
+            this.ctx.fillRect(Math.floor(screenX), Math.floor(screenY), Math.ceil(size), Math.ceil(size));
+        }
+    }
+    
+    // Performance monitoring
+    updatePerformanceStats(startTime) {
+        const frameTime = performance.now() - startTime;
+        this.performanceOptimizer.renderStats.frameCount++;
+        
+        // Calculate FPS every 60 frames
+        if (this.performanceOptimizer.renderStats.frameCount % 60 === 0) {
+            const currentTime = performance.now();
+            const timeDiff = currentTime - this.performanceOptimizer.renderStats.lastFrameTime;
+            this.performanceOptimizer.renderStats.averageFPS = 60000 / timeDiff;
+            this.performanceOptimizer.renderStats.lastFrameTime = currentTime;
+            
+            // Auto-disable optimization if causing issues
+            if (this.performanceOptimizer.renderStats.averageFPS < 10) {
+                console.warn('🐌 Performance very low, consider disabling optimization');
+            }
+        }
+    }
+    
+    // Level 2 Optimization: Pixel clustering
+    createPixelClusters(pixels) {
+        const clusters = [];
+        const processed = new Set();
+        
+        for (const [key, {world, color}] of pixels) {
+            if (processed.has(key)) continue;
+            
+            // Try to create a rectangular cluster starting from this pixel
+            const cluster = this.expandCluster(key, world, color, pixels, processed);
+            if (cluster) {
+                clusters.push(cluster);
+            }
+        }
+        
+        return clusters;
+    }
+    
+    expandCluster(startKey, startWorld, color, allPixels, processed) {
+        // Simple horizontal expansion for same-color pixels
+        let minX = startWorld.x, maxX = startWorld.x;
+        let minY = startWorld.y, maxY = startWorld.y;
+        const clusterPixels = [startKey];
+        
+        // Expand horizontally first
+        for (let x = startWorld.x + 1; x <= startWorld.x + 32; x++) {
+            const checkKey = this.getPixelKeyAt(x, startWorld.y, allPixels);
+            if (!checkKey || processed.has(checkKey) || 
+                allPixels.get(checkKey)?.color !== color) break;
+            
+            clusterPixels.push(checkKey);
+            maxX = x;
+        }
+        
+        for (let x = startWorld.x - 1; x >= startWorld.x - 32; x--) {
+            const checkKey = this.getPixelKeyAt(x, startWorld.y, allPixels);
+            if (!checkKey || processed.has(checkKey) || 
+                allPixels.get(checkKey)?.color !== color) break;
+            
+            clusterPixels.push(checkKey);
+            minX = x;
+        }
+        
+        // Mark all pixels in this cluster as processed
+        clusterPixels.forEach(key => processed.add(key));
+        
+        // Only create cluster if it saves draw calls (3+ pixels)
+        if (clusterPixels.length >= 3) {
+            return {
+                minX, maxX, minY, maxY,
+                color,
+                pixelCount: clusterPixels.length,
+                width: maxX - minX + 1,
+                height: maxY - minY + 1
+            };
+        }
+        
+        return null;
+    }
+    
+    getPixelKeyAt(worldX, worldY, allPixels) {
+        const sector = Utils.worldToLocal(worldX, worldY);
+        const key = Utils.createPixelKey(sector.sectorX, sector.sectorY, sector.localX, sector.localY);
+        return allPixels.has(key) ? key : null;
+    }
+    
+    renderClusters(clusters) {
+        for (const cluster of clusters) {
+            const screenX = cluster.minX * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetX;
+            const screenY = cluster.minY * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetY;
+            const width = cluster.width * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
+            const height = cluster.height * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
+            
+            // Only render if visible
+            if (screenX + width >= -10 && screenX <= this.canvas.width + 10 &&
+                screenY + height >= -10 && screenY <= this.canvas.height + 10) {
+                
+                this.ctx.fillStyle = CONFIG.COLORS[cluster.color] || '#000000';
+                this.ctx.fillRect(Math.floor(screenX), Math.floor(screenY), 
+                                Math.ceil(width), Math.ceil(height));
+            }
+        }
+    }
+    
+    // Public API for performance control
+    toggleOptimization(enabled = null) {
+        if (enabled !== null) {
+            this.performanceOptimizer.enabled = enabled;
+        } else {
+            this.performanceOptimizer.enabled = !this.performanceOptimizer.enabled;
+        }
+        console.log(`🎯 Render optimization: ${this.performanceOptimizer.enabled ? 'ENABLED' : 'DISABLED'}`);
+        return this.performanceOptimizer.enabled;
+    }
+    
+    setOptimizationLevel(level) {
+        if (level >= 1 && level <= 3) {
+            this.performanceOptimizer.level = level;
+            console.log(`🔧 Optimization level set to: ${level} (1=basic, 2=clustering, 3=advanced)`);
+            
+            // Clear caches when switching levels
+            this.performanceOptimizer.lastPixelData.clear();
+            this.performanceOptimizer.pixelClusters.clear();
+            
+            return level;
+        }
+        return this.performanceOptimizer.level;
+    }
+    
+    getPerformanceStats() {
+        return {
+            ...this.performanceOptimizer.renderStats,
+            optimizationEnabled: this.performanceOptimizer.enabled,
+            optimizationLevel: this.performanceOptimizer.level,
+            cachedPixels: this.performanceOptimizer.lastPixelData.size,
+            totalPixelCount: this.pixelCanvas.pixels.size,
+            renderEfficiency: this.calculateRenderEfficiency()
+        };
+    }
+    
+    calculateRenderEfficiency() {
+        const totalPixels = this.pixelCanvas.pixels.size;
+        const renderedPixels = this.performanceOptimizer.renderStats.totalPixelsRendered;
+        const clustersRendered = this.performanceOptimizer.renderStats.clustersRendered;
+        
+        if (totalPixels === 0) return 1;
+        
+        const efficiency = clustersRendered > 0 ? 
+            1 - (renderedPixels + clustersRendered) / totalPixels :
+            1 - renderedPixels / totalPixels;
+            
+        return Math.max(0, Math.min(1, efficiency));
+    }
+    
+    // Debug method for testing different optimization levels
+    benchmark(seconds = 5) {
+        console.log(`🏁 Starting ${seconds}s render benchmark...`);
+        const results = {};
+        
+        const originalLevel = this.performanceOptimizer.level;
+        const levels = [1, 2]; // Test different levels
+        
+        let currentLevelIndex = 0;
+        const testLevel = () => {
+            if (currentLevelIndex >= levels.length) {
+                // Restore original level and show results
+                this.setOptimizationLevel(originalLevel);
+                console.log('📊 Benchmark Results:', results);
+                return;
+            }
+            
+            const level = levels[currentLevelIndex];
+            this.setOptimizationLevel(level);
+            
+            const startTime = performance.now();
+            let frameCount = 0;
+            
+            const testFrame = () => {
+                this.render();
+                frameCount++;
+                
+                if (performance.now() - startTime < seconds * 1000) {
+                    requestAnimationFrame(testFrame);
+                } else {
+                    const avgFPS = frameCount / seconds;
+                    const stats = this.getPerformanceStats();
+                    results[`Level ${level}`] = {
+                        avgFPS: avgFPS.toFixed(1),
+                        efficiency: (stats.renderEfficiency * 100).toFixed(1) + '%',
+                        totalFrames: frameCount
+                    };
+                    
+                    console.log(`✅ Level ${level}: ${avgFPS.toFixed(1)} FPS, ${(stats.renderEfficiency * 100).toFixed(1)}% efficiency`);
+                    currentLevelIndex++;
+                    setTimeout(testLevel, 1000); // Brief pause between tests
+                }
+            };
+            
+            requestAnimationFrame(testFrame);
+        };
+        
+        testLevel();
     }
     
     // Handle remote pixels with batched rendering
