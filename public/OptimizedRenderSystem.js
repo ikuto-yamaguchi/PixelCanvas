@@ -14,15 +14,6 @@ export class OptimizedRenderSystem {
         this.dataLoader = new ViewportDataLoader(supabaseClient);
         this.adaptiveRenderer = new AdaptiveRenderer(canvas, ctx);
         
-        // デバッグ情報
-        console.error('🚀 OptimizedRenderSystem initialized:', {
-            canvas: !!canvas,
-            ctx: !!ctx,
-            supabaseClient: !!supabaseClient,
-            dataLoader: !!this.dataLoader,
-            viewportCalculator: !!this.viewportCalculator,
-            adaptiveRenderer: !!this.adaptiveRenderer
-        });
         
         // レンダリング制御
         this.isRendering = false;
@@ -60,13 +51,6 @@ export class OptimizedRenderSystem {
             );
             const calcTime = performance.now() - calcStartTime;
             
-            console.error(`🔍 Viewport calculated in ${calcTime.toFixed(1)}ms:`, {
-                sectors: `${bounds.sectors.width}x${bounds.sectors.height} (${bounds.sectors.total})`,
-                world: `${bounds.world.width}x${bounds.world.height}`,
-                scale: bounds.scale.current.toFixed(2),
-                mode: this.getScaleMode(bounds.scale)
-            });
-            
             // 2. 画面範囲データを効率的に取得
             const dataStartTime = performance.now();
             const pixelData = await this.dataLoader.loadViewportData(bounds);
@@ -74,7 +58,7 @@ export class OptimizedRenderSystem {
             
             // データ取得エラーチェック
             if (pixelData.error) {
-                console.error('⚠️ Data loading failed, using empty dataset:', pixelData.error);
+                return;
             }
             
             // 3. ズームレベルに応じて最適描画
@@ -92,16 +76,8 @@ export class OptimizedRenderSystem {
             this.updatePerformanceStats(calcTime, dataTime, renderTime);
             
             const totalTime = performance.now() - totalStartTime;
-            console.error(`🎯 Frame rendered in ${totalTime.toFixed(1)}ms:`, {
-                calculation: `${calcTime.toFixed(1)}ms`,
-                dataLoad: `${dataTime.toFixed(1)}ms`, 
-                rendering: `${renderTime.toFixed(1)}ms`,
-                pixelsLoaded: pixelData.totalPixels,
-                renderMode: renderPriority.mode
-            });
             
         } catch (error) {
-            console.error('❌ Optimized render failed:', error);
             
             // フォールバック: 従来の描画方式
             await this.fallbackRender(offsetX, offsetY, scale);
@@ -152,7 +128,6 @@ export class OptimizedRenderSystem {
      * フォールバック描画（従来方式）
      */
     async fallbackRender(offsetX, offsetY, scale) {
-        console.error('⚠️ Using fallback render mode');
         
         // 従来のRenderEngineに委譲する処理をここに実装
         // 現在は簡単なクリアのみ
@@ -272,7 +247,6 @@ export class OptimizedRenderSystem {
      */
     updateSupabaseClient(supabaseClient) {
         this.dataLoader.supabase = supabaseClient;
-        console.error('🔄 Supabase client updated in OptimizedRenderSystem');
     }
     
     /**
