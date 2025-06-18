@@ -807,7 +807,80 @@
                     comprehensiveLog.push('');
                 }
                 
-                // DOM展開も実行
+                // 方法3: vConsoleの実際のログエントリを詳細抽出
+                comprehensiveLog.push('=== vConsole Log Entries Detail ===');
+                
+                // vConsoleの各タブからログを抽出
+                const consoleTabs = ['default', 'console', 'system', 'network'];
+                
+                for (const tabName of consoleTabs) {
+                    const tabPanel = document.querySelector(`#__vconsole .vc-tabpanel[data-tab="${tabName}"]`);
+                    if (tabPanel) {
+                        // ログエントリを探す
+                        const logEntries = tabPanel.querySelectorAll('.vc-item, .vc-log-item, [class*="log"]');
+                        
+                        if (logEntries.length > 0) {
+                            comprehensiveLog.push(`--- ${tabName.toUpperCase()} TAB (${logEntries.length} entries) ---`);
+                            
+                            Array.from(logEntries).slice(-50).forEach((entry, index) => {
+                                // ログエントリの全情報を抽出
+                                const timeStamp = entry.querySelector('.vc-item-time, .timestamp')?.textContent || 'no-time';
+                                const logType = entry.className.includes('error') ? 'ERROR' : 
+                                              entry.className.includes('warn') ? 'WARN' : 
+                                              entry.className.includes('info') ? 'INFO' : 'LOG';
+                                
+                                // ログ内容を複数方法で抽出
+                                let content = '';
+                                
+                                // 1. テキストコンテンツ
+                                const textContent = entry.textContent || entry.innerText || '';
+                                if (textContent && textContent.length > 10) {
+                                    content = textContent.replace(/\s+/g, ' ').trim();
+                                }
+                                
+                                // 2. data属性からの抽出
+                                if (entry.dataset && Object.keys(entry.dataset).length > 0) {
+                                    content += ` [DATA: ${JSON.stringify(entry.dataset)}]`;
+                                }
+                                
+                                // 3. 子要素からの詳細抽出
+                                const childTexts = [];
+                                entry.querySelectorAll('*').forEach(child => {
+                                    const childText = child.textContent || child.innerText;
+                                    if (childText && childText.trim().length > 0 && !childTexts.includes(childText.trim())) {
+                                        childTexts.push(childText.trim());
+                                    }
+                                });
+                                
+                                if (childTexts.length > 0) {
+                                    content += ` [DETAILS: ${childTexts.join(' | ')}]`;
+                                }
+                                
+                                if (content && content.length > 5) {
+                                    comprehensiveLog.push(`[${timeStamp}] [${logType}] ${content}`);
+                                }
+                            });
+                        }
+                    }
+                }
+                
+                // 方法4: vConsoleの仮想スクロール内容を強制的に抽出
+                const virtualScroller = document.querySelector('#__vconsole .vc-scroller');
+                if (virtualScroller) {
+                    comprehensiveLog.push('=== Virtual Scroller Content ===');
+                    
+                    // 仮想スクロールの全コンテンツを強制表示
+                    const scrollerItems = virtualScroller.querySelectorAll('.vc-item, [class*="log"], [class*="item"]');
+                    
+                    Array.from(scrollerItems).slice(-30).forEach((item, index) => {
+                        const itemContent = item.textContent || item.innerText;
+                        if (itemContent && itemContent.trim().length > 0) {
+                            comprehensiveLog.push(`[SCROLL_${index}] ${itemContent.trim()}`);
+                        }
+                    });
+                }
+                
+                // 最終的にDOM全体からも抽出
                 const logList = document.querySelector('#__vconsole .vc-content') || 
                                document.querySelector('#__vconsole .vc-log-list');
                 
