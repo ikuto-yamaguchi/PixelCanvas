@@ -11,6 +11,7 @@ import { PixelStorage } from './PixelStorage.js';
 import { LayerManager } from './LayerManager.js';
 import { LayeredRenderer } from './LayeredRenderer.js';
 import { PixiRenderer } from './PixiRenderer.js';
+import { SimplePixiRenderer } from './SimplePixiRenderer.js';
 
 class PixelCanvas {
     constructor() {
@@ -66,11 +67,22 @@ class PixelCanvas {
                 console.log('🚀 Scheduling PixiJS Performance Renderer initialization...');
                 setTimeout(() => {
                     try {
+                        // Try full PixiJS renderer with plugins first
                         this.pixiRenderer = new PixiRenderer(this);
+                        console.log('✅ Full PixiJS renderer with plugins initialized successfully');
                     } catch (error) {
-                        console.error('❌ PixiJS initialization failed:', error);
-                        console.log('🔄 Falling back to Canvas 2D renderer');
-                        CONFIG.USE_PIXI_RENDERER = false;
+                        console.error('❌ Full PixiJS initialization failed:', error);
+                        console.log('🔄 Trying SimplePixiRenderer fallback...');
+                        
+                        try {
+                            // Fallback to SimplePixiRenderer (plugin-free)
+                            this.pixiRenderer = new SimplePixiRenderer(this);
+                            console.log('✅ SimplePixiRenderer fallback initialized successfully');
+                        } catch (fallbackError) {
+                            console.error('❌ SimplePixiRenderer fallback also failed:', fallbackError);
+                            console.log('🔄 Falling back to Canvas 2D renderer');
+                            CONFIG.USE_PIXI_RENDERER = false;
+                        }
                     }
                 }, 500); // 500ms遅延
             }

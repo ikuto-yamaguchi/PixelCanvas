@@ -14,23 +14,123 @@
     <link rel="dns-prefetch" href="https://lgvjdefkyeuvquzckkvb.supabase.co">
     
     <!-- PixiJS Libraries for Performance Enhancement -->
-    <script src="pixi-fallback.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.0/dist/pixi.min.js" onerror="console.warn('Primary PixiJS CDN failed')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@pixi/tilemap@4.2.0/dist/pixi-tilemap.umd.js" onerror="console.warn('Primary tilemap CDN failed')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pixi-viewport@5.0.0/dist/viewport.min.js" onerror="console.warn('Primary viewport CDN failed')"></script>
+    <!-- Core PixiJS -->
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.0/dist/pixi.min.js"></script>
+    
+    <!-- PixiJS Tilemap Plugin - 互換バージョン (複数CDN試行) -->
+    <script>
+        // pixi-tilemap fallback loading
+        function loadTilemap() {
+            const urls = [
+                'https://cdn.jsdelivr.net/npm/@pixi/tilemap@3.2.2/dist/pixi-tilemap.umd.js',
+                'https://unpkg.com/@pixi/tilemap@3.2.2/dist/pixi-tilemap.umd.js',
+                'https://cdn.jsdelivr.net/npm/pixi-tilemap@2.2.3/dist/pixi-tilemap.umd.js'
+            ];
+            
+            let index = 0;
+            function tryLoad() {
+                if (index >= urls.length) {
+                    console.warn('⚠️ All pixi-tilemap CDN attempts failed');
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = urls[index];
+                script.onload = () => console.log('✅ pixi-tilemap loaded from:', urls[index]);
+                script.onerror = () => {
+                    console.warn('❌ Failed to load pixi-tilemap from:', urls[index]);
+                    index++;
+                    tryLoad();
+                };
+                document.head.appendChild(script);
+            }
+            tryLoad();
+        }
+        
+        // pixi-viewport fallback loading
+        function loadViewport() {
+            const urls = [
+                'https://cdn.jsdelivr.net/npm/pixi-viewport@4.39.0/dist/viewport.min.js',
+                'https://unpkg.com/pixi-viewport@4.39.0/dist/viewport.min.js',
+                'https://cdn.jsdelivr.net/npm/pixi-viewport@3.16.5/dist/viewport.min.js'
+            ];
+            
+            let index = 0;
+            function tryLoad() {
+                if (index >= urls.length) {
+                    console.warn('⚠️ All pixi-viewport CDN attempts failed');
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = urls[index];
+                script.onload = () => console.log('✅ pixi-viewport loaded from:', urls[index]);
+                script.onerror = () => {
+                    console.warn('❌ Failed to load pixi-viewport from:', urls[index]);
+                    index++;
+                    tryLoad();
+                };
+                document.head.appendChild(script);
+            }
+            tryLoad();
+        }
+        
+        // Load plugins after PIXI is ready
+        window.addEventListener('load', () => {
+            if (window.PIXI) {
+                loadTilemap();
+                loadViewport();
+            }
+        });
+    </script>
     
     <!-- PixiJS Loading Check -->
     <script>
-        // PixiJSライブラリの読み込み確認
-        window.addEventListener('load', () => {
+        // PixiJSライブラリの読み込み確認（詳細版）
+        function checkLibraries() {
             console.log('📚 Library check:');
             console.log('- PIXI:', !!window.PIXI ? '✅' : '❌');
-            console.log('- PIXI.tilemap:', !!(window.PIXI && window.PIXI.tilemap) ? '✅' : '❌');
-            console.log('- Viewport:', !!(window.PIXI && window.PIXI.Viewport) || !!window.Viewport ? '✅' : '❌');
+            
+            if (window.PIXI) {
+                console.log('  - PIXI.VERSION:', window.PIXI.VERSION || 'unknown');
+                console.log('  - PIXI.Application:', !!window.PIXI.Application ? '✅' : '❌');
+                console.log('  - PIXI.Graphics:', !!window.PIXI.Graphics ? '✅' : '❌');
+                console.log('  - PIXI.Sprite:', !!window.PIXI.Sprite ? '✅' : '❌');
+            }
+            
+            // Check tilemap with various namespace possibilities
+            const hasTilemap = !!(window.PIXI && (
+                window.PIXI.tilemap || 
+                window.PIXI.Tilemap || 
+                window.PIXI.tilemaps ||
+                window.PIXI.extras?.TilingSprite
+            ));
+            console.log('- PIXI.tilemap:', hasTilemap ? '✅' : '❌');
+            
+            // Check viewport with various namespace possibilities  
+            const hasViewport = !!(
+                (window.PIXI && window.PIXI.Viewport) ||
+                window.Viewport ||
+                (window.PIXI && window.PIXI.extras?.Viewport)
+            );
+            console.log('- Viewport:', hasViewport ? '✅' : '❌');
             
             if (!window.PIXI) {
                 console.warn('⚠️ PixiJS failed to load - check network connection');
             }
+            
+            // Additional debug info
+            if (window.PIXI) {
+                console.log('🔍 PIXI object keys:', Object.keys(window.PIXI).slice(0, 10));
+            }
+        }
+        
+        // Check immediately and also after a delay for plugin loading
+        window.addEventListener('load', () => {
+            checkLibraries();
+            
+            // Re-check after plugins have had time to load
+            setTimeout(checkLibraries, 1000);
         });
     </script>
 </head>
