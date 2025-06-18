@@ -168,8 +168,29 @@ class PixelCanvas {
         
         this.debugPanel.log(`🎯 Click: screen(${x.toFixed(1)}, ${y.toFixed(1)}) → world(${worldX}, ${worldY}) → sector(${local.sectorX}, ${local.sectorY}) local(${local.localX}, ${local.localY})`);
         
-        // Draw the pixel
-        this.pixelStorage.drawPixel(local.sectorX, local.sectorY, local.localX, local.localY, this.currentColor);
+        // Draw the pixel using PixelStorage which handles everything properly
+        const success = this.pixelStorage.drawPixel(local.sectorX, local.sectorY, local.localX, local.localY, this.currentColor);
+        
+        if (success) {
+            // Check for expansion after successful draw
+            this.checkAndTriggerExpansion(local.sectorX, local.sectorY);
+        }
+    }
+    
+    checkAndTriggerExpansion(sectorX, sectorY) {
+        // Check if we need to expand
+        const actualCount = this.pixelStorage.getSectorPixelCount(sectorX, sectorY);
+        const maxPixelsPerSector = CONFIG.GRID_SIZE * CONFIG.GRID_SIZE;
+        const fillPercentage = actualCount / maxPixelsPerSector;
+        
+        if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
+            console.log(`🎯 EXPANSION TRIGGERED: Sector (${sectorX}, ${sectorY}) is ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels)!`);
+            console.log(`🎯 Before expansion - Active sectors:`, Array.from(this.activeSectors));
+            this.sectorManager.expandSectorsLocally(sectorX, sectorY);
+            console.log(`🎯 After expansion - Active sectors:`, Array.from(this.activeSectors));
+        } else {
+            console.log(`📊 Sector (${sectorX}, ${sectorY}): ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels) - threshold not reached`);
+        }
     }
     
     showOutOfBoundsWarning() {
@@ -248,76 +269,6 @@ class PixelCanvas {
         this.offsetY = newOffsetY;
     }
     
-    async handlePixelClick(x, y) {
-        // Check if we have pixels in stock (client-side only)
-        if (this.pixelStorage.pixelStock <= 0) {
-            console.log('No pixels in client stock');
-            return;
-        }
-        
-        // Check if click is within active sectors
-        const worldX = Math.floor((x - this.offsetX) / (CONFIG.PIXEL_SIZE * this.scale));
-        const worldY = Math.floor((y - this.offsetY) / (CONFIG.PIXEL_SIZE * this.scale));
-        
-        if (!this.sectorManager.isWithinActiveSectors(worldX, worldY)) {
-            this.showOutOfBoundsWarning();
-            return;
-        }
-        
-        // Calculate coordinates
-        const sectorX = Math.floor(worldX / CONFIG.GRID_SIZE);
-        const sectorY = Math.floor(worldY / CONFIG.GRID_SIZE);
-        const localX = ((worldX % CONFIG.GRID_SIZE) + CONFIG.GRID_SIZE) % CONFIG.GRID_SIZE;
-        const localY = ((worldY % CONFIG.GRID_SIZE) + CONFIG.GRID_SIZE) % CONFIG.GRID_SIZE;
-        
-        // Draw pixel immediately
-        this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
-        
-        // Consume pixel after successful draw
-        this.pixelStorage.consumeStock();
-        
-        // Update sector count locally and check for expansion
-        const sectorKey = `${sectorX},${sectorY}`;
-        
-        // Count actual pixels in this sector
-        let actualCount = 0;
-        for (const [key, color] of this.pixels) {
-            const [pSectorX, pSectorY] = key.split(',').map(Number);
-            if (pSectorX === sectorX && pSectorY === sectorY) {
-                actualCount++;
-            }
-        }
-        
-        console.log(`🔍 Sector (${sectorX}, ${sectorY}) after drawing: ${actualCount} pixels (including new pixel)`);
-        this.sectorPixelCounts.set(sectorKey, actualCount);
-        
-        // Check if we need to expand
-        const maxPixelsPerSector = CONFIG.GRID_SIZE * CONFIG.GRID_SIZE;
-        const fillPercentage = actualCount / maxPixelsPerSector;
-        
-        if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
-            console.log(`🎯 EXPANSION TRIGGERED: Sector (${sectorX}, ${sectorY}) is ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels)!`);
-            console.log(`🎯 Before expansion - Active sectors:`, Array.from(this.activeSectors));
-            this.sectorManager.expandSectorsLocally(sectorX, sectorY);
-            console.log(`🎯 After expansion - Active sectors:`, Array.from(this.activeSectors));
-        } else {
-            console.log(`📊 Sector (${sectorX}, ${sectorY}): ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels) - threshold not reached`);
-        }
-    }
-    
-    drawPixel(sectorX, sectorY, localX, localY, color) {
-        // Add pixel to storage
-        this.pixelStorage.addPixel(sectorX, sectorY, localX, localY, color);
-        
-        // Send to network
-        const pixel = { s: `${sectorX},${sectorY}`, x: localX, y: localY, c: color };
-        this.networkManager.sendPixel(pixel);
-        
-        // Re-render immediately
-        this.render();
-        
-        console.log(`Drawing pixel at sector (${sectorX}, ${sectorY}) local (${localX}, ${localY}) with color ${color}`);
-    }
     
     showOutOfBoundsWarning() {
         // Visual feedback when clicking outside active sectors
