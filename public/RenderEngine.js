@@ -11,8 +11,8 @@ export class RenderEngine {
         
         // Performance optimization state
         this.performanceOptimizer = {
-            enabled: true,
-            level: 2, // 1=basic, 2=clustering, 3=advanced
+            enabled: false, // EMERGENCY: Disabled due to performance issues
+            level: 1, // Start with basic level only
             lastPixelData: new Map(), // For diff rendering
             visiblePixelCache: new Map(), // For viewport culling
             pixelClusters: new Map(), // For clustering optimization
@@ -121,11 +121,30 @@ export class RenderEngine {
     }
     
     renderPixels() {
-        // Legacy method: render all pixels (no optimization)
+        // EMERGENCY FIX: Aggressive viewport culling for performance
+        const visibleBounds = this.calculateVisiblePixelBounds();
+        let pixelsRendered = 0;
+        const maxPixelsPerFrame = 2000; // Hard limit to prevent lag
+        
         for (const [key, color] of this.pixelCanvas.pixels) {
+            // Stop rendering if we hit the limit
+            if (pixelsRendered >= maxPixelsPerFrame) {
+                break;
+            }
+            
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
-            this.renderPixel(world.x, world.y, color);
+            
+            // Only render pixels that are definitely visible
+            if (this.isPixelVisible(world.x, world.y, visibleBounds)) {
+                this.renderPixel(world.x, world.y, color);
+                pixelsRendered++;
+            }
+        }
+        
+        // Debug info if we hit the limit
+        if (pixelsRendered >= maxPixelsPerFrame) {
+            console.log(`⚠️ Render limit hit: ${pixelsRendered} pixels rendered this frame`);
         }
     }
     
@@ -386,13 +405,15 @@ export class RenderEngine {
         }
     }
     
-    // Level 1 Optimization: Viewport culling
+    // EMERGENCY: Simplified viewport culling for max performance
     calculateVisiblePixelBounds() {
-        const margin = 50; // Extra margin for smooth scrolling
-        const minWorldX = Math.floor((-this.pixelCanvas.offsetX - margin) / (CONFIG.PIXEL_SIZE * this.pixelCanvas.scale));
-        const maxWorldX = Math.ceil((this.canvas.width - this.pixelCanvas.offsetX + margin) / (CONFIG.PIXEL_SIZE * this.pixelCanvas.scale));
-        const minWorldY = Math.floor((-this.pixelCanvas.offsetY - margin) / (CONFIG.PIXEL_SIZE * this.pixelCanvas.scale));
-        const maxWorldY = Math.ceil((this.canvas.height - this.pixelCanvas.offsetY + margin) / (CONFIG.PIXEL_SIZE * this.pixelCanvas.scale));
+        const pixelSize = CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
+        const margin = 10; // Reduced margin for performance
+        
+        const minWorldX = Math.floor((-this.pixelCanvas.offsetX - margin) / pixelSize);
+        const maxWorldX = Math.ceil((this.canvas.width - this.pixelCanvas.offsetX + margin) / pixelSize);
+        const minWorldY = Math.floor((-this.pixelCanvas.offsetY - margin) / pixelSize);
+        const maxWorldY = Math.ceil((this.canvas.height - this.pixelCanvas.offsetY + margin) / pixelSize);
         
         return { minWorldX, maxWorldX, minWorldY, maxWorldY };
     }
