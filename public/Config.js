@@ -12,6 +12,12 @@ export const CONFIG = {
         '#800080', '#008080', '#C0C0C0', '#808080'
     ],
     
+    // Alias for COLORS to ensure consistency across modules
+    get PALETTE() { return this.COLORS; },
+    
+    // Background color
+    BACKGROUND_COLOR: '#404040',
+    
     // Rate limiting
     RATE_LIMIT_MS: 1000,
     MAX_PIXEL_STOCK: 10,

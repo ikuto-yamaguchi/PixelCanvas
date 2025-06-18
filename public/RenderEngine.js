@@ -146,11 +146,16 @@ export class RenderEngine {
     }
     
     renderPixelsLegacy() {
-        // Simplified legacy rendering with basic viewport culling
+        // 🔧 FIXED: Use proper pixelStorage reference
         const visibleBounds = this.calculateSimpleVisibleBounds();
         let pixelsRendered = 0;
         
-        for (const [key, color] of this.pixelCanvas.pixels) {
+        // Access pixels through pixelStorage for consistency
+        const pixels = this.pixelCanvas.pixelStorage ? 
+            this.pixelCanvas.pixelStorage.pixels : 
+            this.pixelCanvas.pixels || new Map();
+        
+        for (const [key, color] of pixels) {
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
@@ -164,25 +169,25 @@ export class RenderEngine {
     }
     
     renderPixelsMinimal() {
-        // EMERGENCY: Extreme performance mode - only render a tiny subset
+        // 🔧 FIXED: More comprehensive minimal rendering
         const bounds = this.calculateSimpleVisibleBounds();
         let pixelsRendered = 0;
         const maxPixels = this.maxPixelsPerFrame;
         
-        // Only render pixels in the exact center of the screen
-        const centerX = Math.floor((bounds.minX + bounds.maxX) / 2);
-        const centerY = Math.floor((bounds.minY + bounds.maxY) / 2);
-        const radius = 10; // Very small area around center
+        // Access pixels through pixelStorage for consistency
+        const pixels = this.pixelCanvas.pixelStorage ? 
+            this.pixelCanvas.pixelStorage.pixels : 
+            this.pixelCanvas.pixels || new Map();
         
-        for (const [key, color] of this.pixelCanvas.pixels) {
+        // Render all visible pixels within bounds (not just center)
+        for (const [key, color] of pixels) {
             if (pixelsRendered >= maxPixels) break;
             
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
-            // Only render pixels very close to screen center
-            if (Math.abs(world.x - centerX) <= radius && 
-                Math.abs(world.y - centerY) <= radius) {
+            // Render if within visible bounds
+            if (this.isPixelInBounds(world.x, world.y, bounds)) {
                 this.renderPixel(world.x, world.y, color);
                 pixelsRendered++;
             }
@@ -196,20 +201,22 @@ export class RenderEngine {
             this.ctx.fillRect(0, 0, this.canvas.width, 30);
             this.ctx.fillStyle = 'white';
             this.ctx.font = '14px monospace';
-            this.ctx.fillText(`⚠️ EMERGENCY MODE: ${pixelsRendered}/${this.pixelCanvas.pixels.size} pixels shown`, 10, 20);
+            this.ctx.fillText(`⚠️ EMERGENCY MODE: ${pixelsRendered}/${pixels.size} pixels shown`, 10, 20);
         }
     }
     
     renderPixel(worldX, worldY, colorIndex) {
-        const screenX = worldX * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetX;
-        const screenY = worldY * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetY;
-        const size = CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
+        // 🔧 FIXED: Correct coordinate transformation
+        const screenX = (worldX * CONFIG.PIXEL_SIZE - this.pixelCanvas.offsetX) * this.pixelCanvas.scale;
+        const screenY = (worldY * CONFIG.PIXEL_SIZE - this.pixelCanvas.offsetY) * this.pixelCanvas.scale;
+        const size = Math.max(0.5, CONFIG.PIXEL_SIZE * this.pixelCanvas.scale);
         
-        // Only render if visible on screen (with small margin)
-        if (screenX + size >= -10 && screenX <= this.canvas.width + 10 &&
-            screenY + size >= -10 && screenY <= this.canvas.height + 10) {
+        // Only render if visible on screen (with generous margin)
+        if (screenX + size >= -size && screenX <= this.canvas.width + size &&
+            screenY + size >= -size && screenY <= this.canvas.height + size) {
             
-            this.ctx.fillStyle = CONFIG.COLORS[colorIndex] || '#000000';
+            // Use PALETTE instead of COLORS for consistency with LayeredRenderer
+            this.ctx.fillStyle = CONFIG.PALETTE[colorIndex] || '#000000';
             this.ctx.fillRect(Math.floor(screenX), Math.floor(screenY), Math.ceil(size), Math.ceil(size));
         }
     }

@@ -56,20 +56,25 @@ class PixelCanvas {
             this.layerManager = new LayerManager(this);
             this.layeredRenderer = new LayeredRenderer(this);
             
+            // Connect LayeredRenderer to LayerManager
+            this.layeredRenderer.layerManager = this.layerManager;
+            
             // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection
             this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, null);
             
-            // Supabaseクライアントを後で設定
+            // Supabaseクライアントを後で設定（Layer SystemとOptimized Rendererの両方に）
             setTimeout(() => {
                 if (this.networkManager.supabaseClient) {
                     this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
-                    console.error('✅ Supabase client connected to OptimizedRenderSystem');
+                    this.layerManager.supabase = this.networkManager.supabaseClient;
+                    console.error('✅ Supabase client connected to both systems');
                 } else {
                     console.error('⚠️ Supabase client not available, retrying...');
                     setTimeout(() => {
                         if (this.networkManager.supabaseClient) {
                             this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
-                            console.error('✅ Supabase client connected to OptimizedRenderSystem (retry)');
+                            this.layerManager.supabase = this.networkManager.supabaseClient;
+                            console.error('✅ Supabase client connected to both systems (retry)');
                         }
                     }, 1000);
                 }
@@ -273,11 +278,17 @@ class PixelCanvas {
     
     // Delegate methods to appropriate modules
     render() {
-        // 🔧 NEW: Use layered rendering system for performance
-        if (this.layeredRenderer && this.layerManager.supabase) {
-            this.layeredRenderer.render();
-        } else {
-            // Fallback to legacy rendering
+        try {
+            // 🔧 FIXED: Always try LayeredRenderer first, it has its own fallback logic
+            if (this.layeredRenderer) {
+                this.layeredRenderer.render();
+            } else {
+                // Fallback to legacy rendering only if LayeredRenderer doesn't exist
+                console.log('⚠️ LayeredRenderer not available, using legacy rendering');
+                this.renderEngine.render();
+            }
+        } catch (error) {
+            console.error('❌ Render failed, using legacy fallback:', error);
             this.renderEngine.render();
         }
     }

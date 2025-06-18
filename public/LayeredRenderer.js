@@ -92,6 +92,8 @@ export class LayeredRenderer {
         const pixelStorage = this.pixelCanvas.pixelStorage;
         let rendered = 0;
         
+        console.log(`🔧 FIXED: Rendering from pixel storage. Scale: ${this.pixelCanvas.scale}, Bounds:`, bounds);
+        
         // 画面内のピクセルを直接描画
         for (let sectorX = bounds.minSectorX; sectorX <= bounds.maxSectorX; sectorX++) {
             for (let sectorY = bounds.minSectorY; sectorY <= bounds.maxSectorY; sectorY++) {
@@ -102,18 +104,20 @@ export class LayeredRenderer {
                             // ワールド座標からスクリーン座標に変換
                             const worldX = sectorX * CONFIG.GRID_SIZE + localX;
                             const worldY = sectorY * CONFIG.GRID_SIZE + localY;
-                            const screenX = (worldX - this.pixelCanvas.offsetX) * this.pixelCanvas.scale;
-                            const screenY = (worldY - this.pixelCanvas.offsetY) * this.pixelCanvas.scale;
                             
-                            // 画面外チェック
-                            if (screenX >= -1 && screenY >= -1 && 
-                                screenX <= this.canvas.width + 1 && 
-                                screenY <= this.canvas.height + 1) {
+                            // 🔧 FIXED: Use proper viewport offset calculation
+                            const screenX = (worldX * CONFIG.PIXEL_SIZE - this.pixelCanvas.offsetX) * this.pixelCanvas.scale;
+                            const screenY = (worldY * CONFIG.PIXEL_SIZE - this.pixelCanvas.offsetY) * this.pixelCanvas.scale;
+                            
+                            // 🔧 FIXED: More generous screen bounds checking to prevent culling
+                            const pixelSize = Math.max(0.5, CONFIG.PIXEL_SIZE * this.pixelCanvas.scale);
+                            if (screenX >= -pixelSize && screenY >= -pixelSize && 
+                                screenX <= this.canvas.width + pixelSize && 
+                                screenY <= this.canvas.height + pixelSize) {
                                 
                                 const pixelColor = CONFIG.PALETTE[color] || '#000000';
                                 this.ctx.fillStyle = pixelColor;
                                 
-                                const pixelSize = Math.max(1, this.pixelCanvas.scale);
                                 this.ctx.fillRect(screenX, screenY, pixelSize, pixelSize);
                                 rendered++;
                             }
@@ -123,7 +127,7 @@ export class LayeredRenderer {
             }
         }
         
-        console.log(`📊 Rendered ${rendered} pixels from storage`);
+        console.log(`📊 Rendered ${rendered} pixels from storage at scale ${this.pixelCanvas.scale}`);
     }
     
     /**
