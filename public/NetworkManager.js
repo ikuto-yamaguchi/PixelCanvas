@@ -303,7 +303,8 @@ export class NetworkManager {
             // Add each pixel to the pixels map and calculate occupied sectors
             const occupiedSectors = new Set();
             console.error(`🚨 EMERGENCY DEBUG: Processing ${allPixels.length} pixels into pixels map...`);
-            console.error(`🚨 EMERGENCY DEBUG: pixelCanvas.pixels exists: ${!!this.pixelCanvas.pixels}`);
+            console.error(`🚨 EMERGENCY DEBUG: pixelStorage exists: ${!!this.pixelCanvas.pixelStorage}`);
+            console.error(`🚨 EMERGENCY DEBUG: pixelStorage.pixels exists: ${!!this.pixelCanvas.pixelStorage.pixels}`);
             
             for (const pixel of allPixels) {
                 // 🚨 EMERGENCY FIX: Use PixelStorage.addPixel instead of direct map access
@@ -320,7 +321,7 @@ export class NetworkManager {
                 occupiedSectors.add(sectorKey);
             }
             
-            console.error(`🚨 EMERGENCY DEBUG: Final pixels map size: ${this.pixelCanvas.pixels.size}`);
+            console.error(`🚨 EMERGENCY DEBUG: Final pixels map size: ${this.pixelCanvas.pixelStorage.pixels.size}`);
             console.error(`🚨 EMERGENCY DEBUG: Occupied sectors: ${occupiedSectors.size}`);
             
             // Initialize active sectors: start with (0,0) and add neighbors of any occupied sectors
@@ -334,6 +335,16 @@ export class NetworkManager {
             localStorage.setItem('pixelcanvas_pixels', JSON.stringify(pixelsObject));
             
             console.error('🚨 EMERGENCY DEBUG: ✅ Pixels loaded and cached locally');
+            
+            // 🚨 EMERGENCY: Force immediate render after loading
+            console.error('🚨 EMERGENCY DEBUG: Triggering immediate render...');
+            this.pixelCanvas.render();
+            
+            // 🚨 EMERGENCY: Verify final state
+            setTimeout(() => {
+                const finalStats = this.pixelCanvas.getStats();
+                console.error('🚨 EMERGENCY DEBUG: Final application state:', finalStats);
+            }, 100);
             
         } catch (error) {
             console.error('Failed to load pixels from Supabase:', error);
