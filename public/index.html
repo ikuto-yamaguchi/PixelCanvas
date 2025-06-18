@@ -56,6 +56,20 @@
         </div>
     </footer>
 
+    <!-- vConsole for mobile debugging -->
+    <script src="vconsole.min.js"></script>
+    <script>
+        // Initialize vConsole for mobile debugging
+        if (window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            new VConsole({
+                theme: 'dark',
+                defaultPlugins: ['system', 'network', 'element', 'storage'],
+                maxLogNumber: 1000
+            });
+            console.log('📱 vConsole initialized for mobile debugging');
+        }
+    </script>
+    
     <script src="idb.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script type="module" src="main.js" defer></script>

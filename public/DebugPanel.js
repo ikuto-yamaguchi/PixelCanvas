@@ -6,16 +6,29 @@ export class DebugPanel {
         this.debugLogs = [];
         this.logsFrozen = false;
         this.isVisible = true; // Start visible to show all errors immediately
+        this.vConsoleDetected = false;
         
-        this.createDebugPanel();
-        this.createButtons();
-        this.setupEventListeners();
+        // Check if vConsole is active
+        this.checkVConsole();
+        
+        if (!this.vConsoleDetected) {
+            this.createDebugPanel();
+            this.createButtons();
+            this.setupEventListeners();
+            // Show panel immediately
+            this.panel.style.display = 'block';
+            console.log('🐛 Debug Panel initialized - logging disabled for performance');
+        } else {
+            console.log('📱 vConsole detected - native DebugPanel disabled to avoid conflicts');
+        }
+        
         // PERFORMANCE: Disable console interception
         // this.interceptConsole();
-        
-        // Show panel immediately
-        this.panel.style.display = 'block';
-        console.log('🐛 Debug Panel initialized - logging disabled for performance');
+    }
+    
+    checkVConsole() {
+        // Check if vConsole is present in the DOM or window
+        this.vConsoleDetected = !!(window.VConsole || document.querySelector('#__vconsole'));
     }
     
     createDebugPanel() {
@@ -120,7 +133,12 @@ export class DebugPanel {
     }
     
     log(message) {
-        // PERFORMANCE: Disable all logging operations
+        // PERFORMANCE: Disable all logging operations when vConsole is active
+        if (this.vConsoleDetected) {
+            return; // Let vConsole handle all logging
+        }
+        
+        // Also return early for performance
         return;
         
         if (this.logsFrozen) return;

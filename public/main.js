@@ -359,6 +359,28 @@ class PixelCanvas {
         console.log('🚀 Performance Stats:', stats);
         return stats;
     }
+    
+    // vConsole testing methods
+    testVConsole() {
+        console.log('📱 vConsole Test: Basic logging');
+        console.warn('⚠️ vConsole Test: Warning message');
+        console.error('❌ vConsole Test: Error message');
+        console.info('ℹ️ vConsole Test: Info message');
+        
+        // Test network logging
+        fetch('/test-api-call').catch(() => {
+            console.log('📱 vConsole Test: Network request logged (expected to fail)');
+        });
+        
+        // Test object logging
+        console.log('📱 vConsole Test: Object logging', {
+            pixelCount: this.pixels.size,
+            renderMode: this.renderEngine.renderMode,
+            performance: this.getPerformanceStats()
+        });
+        
+        return 'vConsole test completed - check vConsole panel for results';
+    }
 }
 
 // Initialize when DOM is ready with error catching

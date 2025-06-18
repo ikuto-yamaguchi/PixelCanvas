@@ -6,6 +6,7 @@ const STATIC_ASSETS = [
     '/style.css',
     '/main.js',
     '/idb.js',
+    '/vconsole.min.js',
     '/manifest.webmanifest'
 ];
 
