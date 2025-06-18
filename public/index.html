@@ -178,6 +178,8 @@
     </footer>
 
     <!-- vConsole for mobile debugging -->
+    <!-- 安定版を使用する場合は以下をコメントアウト -->
+    <!-- <script src="https://unpkg.com/vconsole@3.15.1/dist/vconsole.min.js"></script> -->
     <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
     <script>
         // Initialize vConsole for debugging
@@ -219,6 +221,7 @@
                 });
                 
                 console.log('📱 vConsole ready for debugging!');
+                console.log(`📦 vConsole version: ${vc.version || 'unknown'}`);
                 console.warn('⚠️ Warning test message');
                 console.error('❌ Error test message');
                 
