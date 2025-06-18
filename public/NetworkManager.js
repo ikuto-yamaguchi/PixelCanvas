@@ -374,29 +374,31 @@ export class NetworkManager {
     }
     
     initializeActiveSectors(occupiedSectors) {
+        // Clear existing active sectors
+        this.pixelCanvas.activeSectors.clear();
+        
         // Always start with (0,0) as active
         this.pixelCanvas.activeSectors.add('0,0');
         
-        // Add empty neighbors around occupied sectors
-        let initialActiveCount = 1;
+        // CRITICAL FIX: Add all occupied sectors as active first
+        for (const sectorKey of occupiedSectors) {
+            this.pixelCanvas.activeSectors.add(sectorKey);
+        }
+        
+        // Then add empty neighbors around occupied sectors
         for (const sectorKey of occupiedSectors) {
             const [sectorX, sectorY] = Utils.parseSectorKey(sectorKey);
             
-            // Add empty neighbors around this occupied sector
+            // Add all neighbors (empty or not) around this occupied sector
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
                     const neighborKey = Utils.createSectorKey(sectorX + dx, sectorY + dy);
-                    
-                    // Only add if it's not occupied and not already active
-                    if (!occupiedSectors.has(neighborKey) && !this.pixelCanvas.activeSectors.has(neighborKey)) {
-                        this.pixelCanvas.activeSectors.add(neighborKey);
-                        initialActiveCount++;
-                    }
+                    this.pixelCanvas.activeSectors.add(neighborKey);
                 }
             }
         }
         
-        this.pixelCanvas.debugPanel.log(`🎯 Initialized ${initialActiveCount} active sectors around ${occupiedSectors.size} occupied sectors`);
+        this.pixelCanvas.debugPanel.log(`🎯 Initialized ${this.pixelCanvas.activeSectors.size} active sectors (${occupiedSectors.size} occupied + neighbors)`);
         this.pixelCanvas.debugPanel.log(`📍 Active sectors: ${Array.from(this.pixelCanvas.activeSectors).slice(0, 10).join(', ')}${this.pixelCanvas.activeSectors.size > 10 ? '...' : ''}`);
     }
 }
