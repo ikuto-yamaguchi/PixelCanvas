@@ -48,8 +48,8 @@ export class RenderEngine {
             this.renderPixelsLegacy();
         }
         
-        // Render active sector boundaries
-        this.renderActiveSectorBounds();
+        // 🚨 EMERGENCY: セクター境界線描画を一時無効化（フリーズ防止）
+        // this.renderActiveSectorBounds();
         
         // Update performance stats
         this.updatePerformanceStats(startTime);
@@ -149,6 +149,7 @@ export class RenderEngine {
         // 🔧 FIXED: Use proper pixelStorage reference
         const visibleBounds = this.calculateSimpleVisibleBounds();
         let pixelsRendered = 0;
+        const maxPixels = 1000; // 🚨 EMERGENCY: 描画上限設定
         
         // Access pixels through pixelStorage for consistency
         const pixels = this.pixelCanvas.pixelStorage ? 
@@ -156,6 +157,8 @@ export class RenderEngine {
             this.pixelCanvas.pixels || new Map();
         
         for (const [key, color] of pixels) {
+            if (pixelsRendered >= maxPixels) break; // 🚨 EMERGENCY: 上限チェック
+            
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
@@ -431,14 +434,27 @@ export class RenderEngine {
     }
     
     calculateSimpleVisibleBounds() {
-        const pixelSize = CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
+        // 🚨 EMERGENCY: セーフガード追加でフリーズ防止
+        const scale = Math.max(0.01, Math.min(16, this.pixelCanvas.scale || 1));
+        const offsetX = Math.max(-100000, Math.min(100000, this.pixelCanvas.offsetX || 0));
+        const offsetY = Math.max(-100000, Math.min(100000, this.pixelCanvas.offsetY || 0));
+        const width = Math.max(100, Math.min(5000, this.canvas.width || 800));
+        const height = Math.max(100, Math.min(5000, this.canvas.height || 600));
+        
+        const pixelSize = CONFIG.PIXEL_SIZE * scale;
         const margin = 10;
         
+        const minX = Math.floor((-offsetX - margin) / pixelSize);
+        const maxX = Math.ceil((width - offsetX + margin) / pixelSize);
+        const minY = Math.floor((-offsetY - margin) / pixelSize);
+        const maxY = Math.ceil((height - offsetY + margin) / pixelSize);
+        
+        // 🚨 EMERGENCY: 結果範囲を制限
         return {
-            minX: Math.floor((-this.pixelCanvas.offsetX - margin) / pixelSize),
-            maxX: Math.ceil((this.canvas.width - this.pixelCanvas.offsetX + margin) / pixelSize),
-            minY: Math.floor((-this.pixelCanvas.offsetY - margin) / pixelSize),
-            maxY: Math.ceil((this.canvas.height - this.pixelCanvas.offsetY + margin) / pixelSize)
+            minX: Math.max(-10000, Math.min(10000, minX)),
+            maxX: Math.max(-10000, Math.min(10000, maxX)),
+            minY: Math.max(-10000, Math.min(10000, minY)),
+            maxY: Math.max(-10000, Math.min(10000, maxY))
         };
     }
     

@@ -199,12 +199,16 @@ export class EventHandlers {
                 maxDuration: CONFIG.TAP_DURATION_MS
             });
             
-            // 🔧 ULTRA PERMISSIVE: Allow pixel drawing with minimal restrictions
-            if (tapDuration < 2000) { // Allow up to 2 seconds
-                console.error('📱 CALLING handlePixelClick (ULTRA PERMISSIVE)');
+            // 🔧 FIXED: Prevent pixel drawing during zoom/pan operations
+            if (tapDuration < 1000 && !this.touchState.moved && !this.touchState.wasMultiTouch) {
+                console.error('📱 CALLING handlePixelClick');
                 this.pixelCanvas.handlePixelClick(this.touchState.startX, this.touchState.startY);
             } else {
-                console.error('📱 TAP REJECTED: Too long (>2s)');
+                console.error('📱 TAP REJECTED:', {
+                    tooLong: tapDuration >= 1000,
+                    moved: this.touchState.moved,
+                    wasMultiTouch: this.touchState.wasMultiTouch
+                });
             }
         } else {
             console.error('📱 TAP CONDITIONS NOT MET:', {

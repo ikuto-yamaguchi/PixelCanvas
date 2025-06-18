@@ -68,8 +68,8 @@ export class LayeredRenderer {
                 this.renderGrid(optimalLayer, bounds);
             }
             
-            // セクター情報描画
-            this.renderSectorInfo(bounds);
+            // 🚨 EMERGENCY: セクター境界線描画を一時無効化（フリーズ防止）
+            // this.renderSectorInfo(bounds);
             
             // キャッシュ更新
             this.updateCache(optimalLayer, zoomLevel, bounds);
@@ -91,14 +91,31 @@ export class LayeredRenderer {
     renderFromPixelStorage(bounds) {
         const pixelStorage = this.pixelCanvas.pixelStorage;
         let rendered = 0;
+        const maxPixels = 1000; // 🚨 EMERGENCY: 描画上限設定
         
         console.log(`🔧 FIXED: Rendering from pixel storage. Scale: ${this.pixelCanvas.scale}, Bounds:`, bounds);
+        
+        // 🚨 EMERGENCY: セクター範囲を厳格に制限
+        const startTime = performance.now();
+        const sectorCount = (bounds.maxSectorX - bounds.minSectorX + 1) * (bounds.maxSectorY - bounds.minSectorY + 1);
+        
+        if (sectorCount > 100) {
+            console.warn(`⚠️ Too many sectors (${sectorCount}), using fallback rendering`);
+            this.pixelCanvas.renderEngine.render();
+            return;
+        }
         
         // 画面内のピクセルを直接描画
         for (let sectorX = bounds.minSectorX; sectorX <= bounds.maxSectorX; sectorX++) {
             for (let sectorY = bounds.minSectorY; sectorY <= bounds.maxSectorY; sectorY++) {
-                for (let localX = 0; localX < CONFIG.GRID_SIZE; localX++) {
-                    for (let localY = 0; localY < CONFIG.GRID_SIZE; localY++) {
+                // 🚨 EMERGENCY: 時間制限追加
+                if (performance.now() - startTime > 50) {
+                    console.warn('🚨 Rendering timeout, breaking early');
+                    break;
+                }
+                
+                for (let localX = 0; localX < CONFIG.GRID_SIZE && rendered < maxPixels; localX++) {
+                    for (let localY = 0; localY < CONFIG.GRID_SIZE && rendered < maxPixels; localY++) {
                         const color = pixelStorage.getPixel(sectorX, sectorY, localX, localY);
                         if (color !== undefined) {
                             // ワールド座標からスクリーン座標に変換
@@ -127,7 +144,7 @@ export class LayeredRenderer {
             }
         }
         
-        console.log(`📊 Rendered ${rendered} pixels from storage at scale ${this.pixelCanvas.scale}`);
+        console.log(`📊 Rendered ${rendered} pixels from storage at scale ${this.pixelCanvas.scale} in ${(performance.now() - startTime).toFixed(1)}ms`);
     }
     
     /**
@@ -226,19 +243,31 @@ export class LayeredRenderer {
      * ビューポート範囲計算
      */
     calculateViewportBounds() {
-        const padding = 100; // 画面外余白
+        // 🚨 EMERGENCY: セーフガード追加でフリーズ防止
+        const scale = Math.max(0.01, Math.min(16, this.pixelCanvas.scale || 1));
+        const offsetX = Math.max(-100000, Math.min(100000, this.pixelCanvas.offsetX || 0));
+        const offsetY = Math.max(-100000, Math.min(100000, this.pixelCanvas.offsetY || 0));
+        const width = Math.max(100, Math.min(5000, this.canvas.width || 800));
+        const height = Math.max(100, Math.min(5000, this.canvas.height || 600));
         
-        const minX = Math.floor((this.pixelCanvas.offsetX - padding) / this.pixelCanvas.scale);
-        const maxX = Math.ceil((this.pixelCanvas.offsetX + this.canvas.width + padding) / this.pixelCanvas.scale);
-        const minY = Math.floor((this.pixelCanvas.offsetY - padding) / this.pixelCanvas.scale);
-        const maxY = Math.ceil((this.pixelCanvas.offsetY + this.canvas.height + padding) / this.pixelCanvas.scale);
+        const padding = 100;
+        
+        const minX = Math.floor((offsetX - padding) / scale);
+        const maxX = Math.ceil((offsetX + width + padding) / scale);
+        const minY = Math.floor((offsetY - padding) / scale);
+        const maxY = Math.ceil((offsetY + height + padding) / scale);
+        
+        // 🚨 EMERGENCY: セクター範囲を厳格に制限
+        const minSectorX = Math.max(-50, Math.floor(minX / CONFIG.GRID_SIZE));
+        const maxSectorX = Math.min(50, Math.ceil(maxX / CONFIG.GRID_SIZE));
+        const minSectorY = Math.max(-50, Math.floor(minY / CONFIG.GRID_SIZE));
+        const maxSectorY = Math.min(50, Math.ceil(maxY / CONFIG.GRID_SIZE));
+        
+        console.log(`🔧 BOUNDS: sectors(${minSectorX},${minSectorY})-(${maxSectorX},${maxSectorY}), scale:${scale}`);
         
         return {
             minX, maxX, minY, maxY,
-            minSectorX: Math.floor(minX / CONFIG.GRID_SIZE),
-            maxSectorX: Math.ceil(maxX / CONFIG.GRID_SIZE),
-            minSectorY: Math.floor(minY / CONFIG.GRID_SIZE),
-            maxSectorY: Math.ceil(maxY / CONFIG.GRID_SIZE)
+            minSectorX, maxSectorX, minSectorY, maxSectorY
         };
     }
     
