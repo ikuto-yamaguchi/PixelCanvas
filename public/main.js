@@ -10,6 +10,7 @@ import { NetworkManager } from './NetworkManager.js';
 import { PixelStorage } from './PixelStorage.js';
 import { LayerManager } from './LayerManager.js';
 import { LayeredRenderer } from './LayeredRenderer.js';
+import { PixiRenderer } from './PixiRenderer.js';
 
 class PixelCanvas {
     constructor() {
@@ -58,6 +59,12 @@ class PixelCanvas {
             
             // Connect LayeredRenderer to LayerManager
             this.layeredRenderer.layerManager = this.layerManager;
+            
+            // 🚀 NEW: Initialize PixiJS Renderer (Performance Enhancement)
+            if (CONFIG.USE_PIXI_RENDERER) {
+                console.log('🚀 Initializing PixiJS Performance Renderer...');
+                this.pixiRenderer = new PixiRenderer(this);
+            }
             
             // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection
             this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, null);
@@ -279,11 +286,17 @@ class PixelCanvas {
     // Delegate methods to appropriate modules
     render() {
         try {
-            // 🔧 FIXED: Always try LayeredRenderer first, it has its own fallback logic
+            // 🚀 PixiJS Performance Renderer (最優先)
+            if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
+                this.pixiRenderer.render();
+                return;
+            }
+            
+            // 🔧 LayeredRenderer (フォールバック1)
             if (this.layeredRenderer) {
                 this.layeredRenderer.render();
             } else {
-                // Fallback to legacy rendering only if LayeredRenderer doesn't exist
+                // Legacy rendering (フォールバック2)
                 console.log('⚠️ LayeredRenderer not available, using legacy rendering');
                 this.renderEngine.render();
             }
@@ -425,7 +438,19 @@ class PixelCanvas {
     }
     
     getPerformanceStats() {
-        return this.renderEngine.getPerformanceStats();
+        // 🚀 PixiJS統計情報を優先
+        if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
+            return {
+                ...this.pixiRenderer.getPerformanceStats(),
+                fallbackAvailable: true,
+                legacyStats: this.renderEngine.getPerformanceStats()
+            };
+        }
+        
+        return {
+            ...this.renderEngine.getPerformanceStats(),
+            pixiAvailable: false
+        };
     }
     
     benchmark(seconds) {

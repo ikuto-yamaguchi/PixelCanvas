@@ -51,7 +51,16 @@ export const CONFIG = {
     TOUCH_MOVEMENT_THRESHOLD: 10,
     MOUSE_MOVEMENT_THRESHOLD: 5,
     MULTI_TOUCH_DELAY_MS: 200,
-    TOUCH_RESET_DELAY_MS: 100
+    TOUCH_RESET_DELAY_MS: 100,
+    
+    // PixiJS Performance Enhancement
+    USE_PIXI_RENDERER: true, // PixiJSレンダラーを使用するかフラグ
+    PIXI_MAX_TEXTURES: 500,  // 最大テクスチャ数
+    LOD_THRESHOLDS: [2.0, 0.5, 0.125], // LOD切り替え閾値
+    
+    // LOD設定
+    LOD_LEVELS: 4, // 0,1,2,3
+    LOD_SIZES: [256, 128, 64, 32] // 各LODレベルのサイズ
 };
 
 // Utility functions
@@ -146,6 +155,29 @@ export const Utils = {
             };
             clearTimeout(timeout);
             timeout = setTimeout(later, wait);
+        };
+    },
+    
+    // Throttle function execution
+    throttle(func, delay) {
+        let timeout;
+        let lastExec = 0;
+        
+        return function executedFunction(...args) {
+            const elapsed = Date.now() - lastExec;
+            
+            const execute = () => {
+                lastExec = Date.now();
+                func.apply(this, args);
+            };
+            
+            clearTimeout(timeout);
+            
+            if (elapsed > delay) {
+                execute();
+            } else {
+                timeout = setTimeout(execute, delay - elapsed);
+            }
         };
     }
 };
