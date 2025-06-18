@@ -309,14 +309,84 @@
                 let allLogs = [];
                 
                 logItems.forEach((item, index) => {
-                    const timestamp = new Date().toISOString();
-                    const logType = item.className.includes('vc-item-error') ? 'ERROR' : 
-                                   item.className.includes('vc-item-warn') ? 'WARN' : 
-                                   item.className.includes('vc-item-info') ? 'INFO' : 'LOG';
+                    // ログタイプを複数の方法で判定
+                    let logType = 'LOG';
+                    const className = item.className || '';
+                    const itemText = item.textContent || item.innerText || '';
                     
-                    const content = item.textContent.replace('📋', '').trim();
-                    allLogs.push(`[${index + 1}] [${logType}] ${content}`);
+                    if (className.includes('error') || className.includes('vc-item-error') || 
+                        itemText.includes('❌') || itemText.includes('ERROR')) {
+                        logType = 'ERROR';
+                    } else if (className.includes('warn') || className.includes('vc-item-warn') || 
+                              itemText.includes('⚠️') || itemText.includes('WARN')) {
+                        logType = 'WARN';
+                    } else if (className.includes('info') || className.includes('vc-item-info') || 
+                              itemText.includes('ℹ️') || itemText.includes('INFO')) {
+                        logType = 'INFO';
+                    }
+                    
+                    // テキスト内容を複数の方法で抽出
+                    let content = '';
+                    
+                    // 1. textContentから取得
+                    if (item.textContent) {
+                        content = item.textContent.replace('📋', '').trim();
+                    }
+                    
+                    // 2. 空の場合は子要素を探す
+                    if (!content || content.length < 3) {
+                        const contentElement = item.querySelector('.vc-item-content, .vc-content, .log-content');
+                        if (contentElement) {
+                            content = contentElement.textContent || contentElement.innerText || '';
+                        }
+                    }
+                    
+                    // 3. まだ空の場合は全ての子要素のテキストを結合
+                    if (!content || content.length < 3) {
+                        const allTextNodes = [];
+                        const walker = document.createTreeWalker(
+                            item,
+                            NodeFilter.SHOW_TEXT,
+                            null,
+                            false
+                        );
+                        
+                        let node;
+                        while (node = walker.nextNode()) {
+                            const text = node.textContent.trim();
+                            if (text && text !== '📋') {
+                                allTextNodes.push(text);
+                            }
+                        }
+                        content = allTextNodes.join(' ');
+                    }
+                    
+                    // 4. 最後の手段: innerHTML から抽出
+                    if (!content || content.length < 3) {
+                        content = item.innerHTML.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                    }
+                    
+                    // 空の場合はDOM情報を含める
+                    if (!content || content.length < 3) {
+                        content = `[Empty log item - className: ${className}, tagName: ${item.tagName}]`;
+                    }
+                    
+                    // タイムスタンプを抽出試行
+                    const timeElement = item.querySelector('.vc-item-time, .timestamp, [class*="time"]');
+                    const timestamp = timeElement ? timeElement.textContent : new Date().toLocaleTimeString();
+                    
+                    allLogs.push(`[${index + 1}] [${timestamp}] [${logType}] ${content}`);
                 });
+                
+                // デバッグ情報も含める
+                const debugInfo = [
+                    `Debug Info:`,
+                    `- Log List Selector: ${logSelectors.find(s => document.querySelector(s)) || 'Not found'}`,
+                    `- Log Items Found: ${logItems.length}`,
+                    `- Sample Item HTML: ${logItems[0] ? logItems[0].outerHTML.substring(0, 200) + '...' : 'None'}`,
+                    `- vConsole DOM: ${document.querySelector('#__vconsole') ? 'Found' : 'Not found'}`,
+                    ''
+                ];
                 
                 const logText = [
                     '=== PixelCanvas vConsole Logs ===',
@@ -324,6 +394,7 @@
                     `Total Logs: ${allLogs.length}`,
                     '=' .repeat(40),
                     '',
+                    ...debugInfo,
                     ...allLogs,
                     '',
                     '=== End of Logs ==='
