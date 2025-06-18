@@ -119,6 +119,13 @@ class PixelCanvas {
             await this.loadInitialData();
             
             this.viewportController.centerViewportOnActiveSectors();
+            
+            // 🔍 DEBUG: Add test pixels to verify rendering works
+            console.log('🔍 Adding test pixels for verification...');
+            this.pixelStorage.addPixel(0, 0, 128, 128, 1); // White pixel in center of sector (0,0)
+            this.pixelStorage.addPixel(0, 0, 129, 128, 2); // Red pixel next to it
+            this.pixelStorage.addPixel(0, 0, 128, 129, 3); // Green pixel below
+            console.log('🔍 Test pixels added, total count:', this.pixelStorage.pixels.size);
         } catch (error) {
             console.error('Init error:', error);
         }
@@ -274,18 +281,18 @@ class PixelCanvas {
         try {
             // 🚀 PixiJS Performance Renderer (最優先)
             if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
-                console.log('🎨 Using PixiJS Renderer');
+                console.log('🎨 Using PixiJS Renderer, pixel count:', this.pixelStorage.pixels.size);
                 this.pixiRenderer.render();
                 return;
             }
             
             // 🔧 LayeredRenderer (フォールバック1)
             if (this.layeredRenderer) {
-                console.log('🎨 Using LayeredRenderer, pixel count:', Object.keys(this.pixels || {}).length);
+                console.log('🎨 Using LayeredRenderer, pixel count:', this.pixelStorage.pixels.size);
                 this.layeredRenderer.render();
             } else {
                 // Legacy rendering (フォールバック2)
-                console.log('🎨 Using RenderEngine (legacy), pixel count:', Object.keys(this.pixels || {}).length);
+                console.log('🎨 Using RenderEngine (legacy), pixel count:', this.pixelStorage.pixels.size);
                 this.renderEngine.render();
             }
         } catch (error) {
