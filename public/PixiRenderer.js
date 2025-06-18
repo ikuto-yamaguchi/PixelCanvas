@@ -37,26 +37,52 @@ export class PixiRenderer {
     
     async initialize() {
         try {
+            // 詳細なライブラリチェック
+            console.log('🔍 Checking PixiJS libraries...');
+            console.log('PIXI available:', !!window.PIXI);
+            console.log('PIXI.tilemap available:', !!(window.PIXI && window.PIXI.tilemap));
+            console.log('PIXI.Viewport available:', !!window.PIXI.Viewport);
+            
             if (!window.PIXI) {
                 console.warn('⚠️ PixiJS not loaded, falling back to Canvas renderer');
                 return false;
             }
             
+            if (!window.PIXI.tilemap) {
+                console.warn('⚠️ pixi-tilemap not loaded, falling back to Canvas renderer');
+                return false;
+            }
+            
             console.log('🚀 Initializing PixiJS renderer...');
+            console.log('PixiJS version:', window.PIXI.VERSION || 'unknown');
             
             // PixiJS設定
-            PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.NEAREST; // ピクセルアート用
-            PIXI.settings.ROUND_PIXELS = true;
+            if (window.PIXI.settings) {
+                window.PIXI.settings.SCALE_MODE = window.PIXI.SCALE_MODES.NEAREST; // ピクセルアート用
+                window.PIXI.settings.ROUND_PIXELS = true;
+            }
+            
+            // Container存在チェック
+            if (!this.container) {
+                throw new Error('Canvas container not found');
+            }
+            
+            const containerWidth = this.container.clientWidth || 800;
+            const containerHeight = this.container.clientHeight || 600;
+            
+            console.log(`📐 Container size: ${containerWidth}x${containerHeight}`);
             
             // アプリケーション作成
-            this.app = new PIXI.Application({
-                width: this.container.clientWidth,
-                height: this.container.clientHeight,
+            this.app = new window.PIXI.Application({
+                width: containerWidth,
+                height: containerHeight,
                 backgroundColor: 0x404040,
                 antialias: false,
                 resolution: window.devicePixelRatio || 1,
                 autoDensity: true
             });
+            
+            console.log('✅ PIXI Application created successfully');
             
             // Canvas要素を追加
             this.app.view.id = 'pixiCanvas';
@@ -90,14 +116,24 @@ export class PixiRenderer {
     }
     
     setupViewport() {
-        // pixi-viewport で2Dカメラ作成
-        this.viewport = new PIXI.Viewport({
-            screenWidth: this.container.clientWidth,
-            screenHeight: this.container.clientHeight,
-            worldWidth: 100000,
-            worldHeight: 100000,
-            interaction: this.app.renderer.plugins.interaction
-        });
+        try {
+            console.log('🔧 Setting up Viewport...');
+            
+            // pixi-viewport で2Dカメラ作成
+            const ViewportClass = window.PIXI.Viewport || window.Viewport;
+            if (!ViewportClass) {
+                throw new Error('Viewport class not found - pixi-viewport not loaded properly');
+            }
+            
+            this.viewport = new ViewportClass({
+                screenWidth: this.container.clientWidth || 800,
+                screenHeight: this.container.clientHeight || 600,
+                worldWidth: 100000,
+                worldHeight: 100000,
+                interaction: this.app.renderer.plugins.interaction
+            });
+            
+            console.log('✅ Viewport created successfully');
         
         // カメラ操作設定
         this.viewport
@@ -112,17 +148,31 @@ export class PixiRenderer {
         this.viewport.on('zoomed', () => this.onViewportChange());
         
         this.app.stage.addChild(this.viewport);
+        
+        } catch (error) {
+            console.error('❌ Viewport setup failed:', error);
+            throw error;
+        }
     }
     
     setupTileMap() {
-        if (!window.PIXI.tilemap) {
-            console.error('❌ pixi-tilemap not loaded');
-            return;
+        try {
+            console.log('🔧 Setting up TileMap...');
+            
+            if (!window.PIXI.tilemap) {
+                throw new Error('pixi-tilemap not loaded');
+            }
+            
+            // TileMapレイヤー作成
+            this.tileLayer = new window.PIXI.tilemap.CompositeRectTileLayer();
+            this.viewport.addChild(this.tileLayer);
+            
+            console.log('✅ TileMap created successfully');
+            
+        } catch (error) {
+            console.error('❌ TileMap setup failed:', error);
+            throw error;
         }
-        
-        // TileMapレイヤー作成
-        this.tileLayer = new PIXI.tilemap.CompositeRectTileLayer();
-        this.viewport.addChild(this.tileLayer);
     }
     
     setupResize() {

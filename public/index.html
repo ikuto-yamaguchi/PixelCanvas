@@ -14,9 +14,25 @@
     <link rel="dns-prefetch" href="https://lgvjdefkyeuvquzckkvb.supabase.co">
     
     <!-- PixiJS Libraries for Performance Enhancement -->
-    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.0/dist/pixi.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@pixi/tilemap@4.2.0/dist/pixi-tilemap.umd.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pixi-viewport@5.0.0/dist/viewport.min.js"></script>
+    <script src="pixi-fallback.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.0/dist/pixi.min.js" onerror="console.warn('Primary PixiJS CDN failed')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@pixi/tilemap@4.2.0/dist/pixi-tilemap.umd.js" onerror="console.warn('Primary tilemap CDN failed')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi-viewport@5.0.0/dist/viewport.min.js" onerror="console.warn('Primary viewport CDN failed')"></script>
+    
+    <!-- PixiJS Loading Check -->
+    <script>
+        // PixiJSライブラリの読み込み確認
+        window.addEventListener('load', () => {
+            console.log('📚 Library check:');
+            console.log('- PIXI:', !!window.PIXI ? '✅' : '❌');
+            console.log('- PIXI.tilemap:', !!(window.PIXI && window.PIXI.tilemap) ? '✅' : '❌');
+            console.log('- Viewport:', !!(window.PIXI && window.PIXI.Viewport) || !!window.Viewport ? '✅' : '❌');
+            
+            if (!window.PIXI) {
+                console.warn('⚠️ PixiJS failed to load - check network connection');
+            }
+        });
+    </script>
 </head>
 <body>
     <header class="header">

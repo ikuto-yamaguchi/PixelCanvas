@@ -61,9 +61,18 @@ class PixelCanvas {
             this.layeredRenderer.layerManager = this.layerManager;
             
             // 🚀 NEW: Initialize PixiJS Renderer (Performance Enhancement)
+            // PixiJSの初期化は少し遅らせる（ライブラリ読み込み完了を待つ）
             if (CONFIG.USE_PIXI_RENDERER) {
-                console.log('🚀 Initializing PixiJS Performance Renderer...');
-                this.pixiRenderer = new PixiRenderer(this);
+                console.log('🚀 Scheduling PixiJS Performance Renderer initialization...');
+                setTimeout(() => {
+                    try {
+                        this.pixiRenderer = new PixiRenderer(this);
+                    } catch (error) {
+                        console.error('❌ PixiJS initialization failed:', error);
+                        console.log('🔄 Falling back to Canvas 2D renderer');
+                        CONFIG.USE_PIXI_RENDERER = false;
+                    }
+                }, 500); // 500ms遅延
             }
             
             // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection

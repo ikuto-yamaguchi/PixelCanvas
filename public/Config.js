@@ -54,7 +54,18 @@ export const CONFIG = {
     TOUCH_RESET_DELAY_MS: 100,
     
     // PixiJS Performance Enhancement
-    USE_PIXI_RENDERER: true, // PixiJSレンダラーを使用するかフラグ
+    USE_PIXI_RENDERER: (() => {
+        // URLパラメーターで無効化可能: ?pixi=false
+        const urlParams = new URLSearchParams(window.location.search);
+        const pixiParam = urlParams.get('pixi');
+        if (pixiParam === 'false') return false;
+        
+        // localStorage設定で無効化可能
+        const stored = localStorage.getItem('pixelcanvas_use_pixi');
+        if (stored === 'false') return false;
+        
+        return true; // デフォルトは有効
+    })(), // PixiJSレンダラーを使用するかフラグ
     PIXI_MAX_TEXTURES: 500,  // 最大テクスチャ数
     LOD_THRESHOLDS: [2.0, 0.5, 0.125], // LOD切り替え閾値
     
