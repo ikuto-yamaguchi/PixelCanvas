@@ -258,17 +258,12 @@ export class NetworkManager {
         console.log('🔍 Layer manager available:', !!this.pixelCanvas.layerManager);
         console.log('🔍 Layer manager supabase:', !!this.pixelCanvas.layerManager?.supabase);
         
-        // 🔧 EMERGENCY SWITCH: Use layer system instead of heavy pixel loading
-        if (this.pixelCanvas.layerManager && this.pixelCanvas.layerManager.supabase) {
-            console.log('🔧 Using lightweight layer system for data loading...');
-            return this.loadLayeredData();
-        }
-        
-        console.log('⚠️ Layer system not ready, using minimal legacy load...');
+        // 🚨 FORCE DIRECT LOADING: Skip layer system for now
+        console.log('🔧 Using direct pixel loading for immediate results...');
         
         try {
-            // 🔧 EMERGENCY: Load only first 1000 pixels to prevent freezing
-            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=1000&offset=0`, {
+            // 🔧 EMERGENCY: Load first 5000 pixels for proper display
+            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=5000&offset=0`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
@@ -280,7 +275,7 @@ export class NetworkManager {
             }
             
             const allPixels = await response.json();
-            console.log(`📦 Loaded ${allPixels.length} pixels (limited for performance)`);
+            console.log(`📦 Loaded ${allPixels.length} pixels from database`);
             
             // Add each pixel to the pixels map and calculate occupied sectors
             const occupiedSectors = new Set();
@@ -299,6 +294,9 @@ export class NetworkManager {
                 const sectorKey = Utils.createSectorKey(pixel.sector_x, pixel.sector_y);
                 occupiedSectors.add(sectorKey);
             }
+            
+            console.log(`🔍 Pixels added to storage, total count:`, this.pixelCanvas.pixelStorage.pixels.size);
+            console.log(`🔍 Occupied sectors:`, occupiedSectors.size);
             
             // Initialize active sectors: start with (0,0) and add neighbors of any occupied sectors
             this.initializeActiveSectors(occupiedSectors);
@@ -329,56 +327,46 @@ export class NetworkManager {
      */
     async loadLayeredData() {
         try {
-            console.log('🔧 Loading initial layer data...');
+            console.log('🔧 Loading data via layer system - falling back to direct pixel loading');
             
-            // Get current zoom level to determine which layer to load
-            const zoomLevel = this.pixelCanvas.scale || 0.1;
-            const optimalLayer = this.pixelCanvas.layerManager.getOptimalLayer(zoomLevel);
+            // 🚨 IMMEDIATE FIX: Load actual pixels instead of empty layer data
+            console.log('📊 Loading pixels directly from database...');
             
-            console.log(`📊 Using layer: ${optimalLayer.name} for zoom ${zoomLevel}`);
-            
-            // Calculate viewport bounds
-            const bounds = {
-                minSectorX: -5,
-                maxSectorX: 5,
-                minSectorY: -5,
-                maxSectorY: 5
-            };
-            
-            // Load layer data
-            const layerData = await this.pixelCanvas.layerManager.loadLayerData(optimalLayer, bounds);
-            
-            // If no layer data exists, load some base pixels and create layers
-            if (layerData.length === 0) {
-                console.log('📊 No layer data found, loading base pixels...');
-                
-                // Load a sample of pixels to build initial layers
-                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=100&offset=0`, {
-                    headers: {
-                        'apikey': CONFIG.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
-                    }
-                });
-                
-                if (response.ok) {
-                    const pixels = await response.json();
-                    
-                    // Add to pixel storage
-                    for (const pixel of pixels) {
-                        this.pixelCanvas.pixelStorage.addPixel(
-                            pixel.sector_x,
-                            pixel.sector_y,
-                            pixel.local_x,
-                            pixel.local_y,
-                            pixel.color
-                        );
-                    }
-                    
-                    console.log(`📦 Loaded ${pixels.length} base pixels for layer system`);
+            // Load more pixels for proper initialization  
+            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=5000&offset=0`, {
+                headers: {
+                    'apikey': CONFIG.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
                 }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
+            const pixels = await response.json();
+            console.log(`📦 Loaded ${pixels.length} pixels from database`);
+            
+            // Add all pixels to storage
+            const occupiedSectors = new Set();
+            for (const pixel of pixels) {
+                this.pixelCanvas.pixelStorage.addPixel(
+                    pixel.sector_x,
+                    pixel.sector_y,
+                    pixel.local_x,
+                    pixel.local_y,
+                    pixel.color
+                );
+                
+                const sectorKey = Utils.createSectorKey(pixel.sector_x, pixel.sector_y);
+                occupiedSectors.add(sectorKey);
+            }
+            
+            // Initialize active sectors
+            this.initializeActiveSectors(occupiedSectors);
+            
             console.log('✅ Layer data loading complete');
+            console.log('🔍 Final pixel count in storage:', this.pixelCanvas.pixelStorage.pixels.size);
             
         } catch (error) {
             console.error('❌ Layer data loading failed:', error);
