@@ -194,10 +194,7 @@ export class EventHandlers {
             // 🔧 FIXED: Prevent pixel drawing during zoom/pan operations
             if (tapDuration < 1000 && !this.touchState.moved && !this.touchState.wasMultiTouch) {
                 this.pixelCanvas.handlePixelClick(this.touchState.startX, this.touchState.startY);
-            } else {
             }
-        } else {
-            });
         }
         
         // Record multi-touch gesture end time
