@@ -9,11 +9,12 @@ export class RenderEngine {
         this.remotePixelsBuffer = new Map();
         this.renderTimeout = null;
         
-        // Spatial partitioning system for performance
+        // EMERGENCY: Minimal rendering to prevent freezing
         this.TILE_SIZE = 16; // 16x16 pixel tiles
         this.tileCache = new Map(); // Cached rendered tiles
         this.visibleTiles = new Set(); // Currently visible tiles
-        this.renderMode = 'optimized'; // 'legacy' or 'optimized'
+        this.renderMode = 'minimal'; // 'minimal', 'legacy' or 'optimized'
+        this.maxPixelsPerFrame = 500; // Hard limit to prevent freezing
         
         // Performance monitoring
         this.performanceStats = {
@@ -38,8 +39,10 @@ export class RenderEngine {
             this.renderGrid();
         }
         
-        // Use optimized tile-based rendering
-        if (this.renderMode === 'optimized') {
+        // Emergency minimal rendering to prevent freezing
+        if (this.renderMode === 'minimal') {
+            this.renderPixelsMinimal();
+        } else if (this.renderMode === 'optimized') {
             this.renderPixelsTiled();
         } else {
             this.renderPixelsLegacy();
@@ -160,7 +163,42 @@ export class RenderEngine {
         this.performanceStats.pixelsRendered = pixelsRendered;
     }
     
-    // Legacy methods removed - using clean tile-based or simple rendering
+    renderPixelsMinimal() {
+        // EMERGENCY: Extreme performance mode - only render a tiny subset
+        const bounds = this.calculateSimpleVisibleBounds();
+        let pixelsRendered = 0;
+        const maxPixels = this.maxPixelsPerFrame;
+        
+        // Only render pixels in the exact center of the screen
+        const centerX = Math.floor((bounds.minX + bounds.maxX) / 2);
+        const centerY = Math.floor((bounds.minY + bounds.maxY) / 2);
+        const radius = 10; // Very small area around center
+        
+        for (const [key, color] of this.pixelCanvas.pixels) {
+            if (pixelsRendered >= maxPixels) break;
+            
+            const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
+            const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
+            
+            // Only render pixels very close to screen center
+            if (Math.abs(world.x - centerX) <= radius && 
+                Math.abs(world.y - centerY) <= radius) {
+                this.renderPixel(world.x, world.y, color);
+                pixelsRendered++;
+            }
+        }
+        
+        this.performanceStats.pixelsRendered = pixelsRendered;
+        
+        // Show user that we're in emergency mode
+        if (pixelsRendered >= maxPixels) {
+            this.ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+            this.ctx.fillRect(0, 0, this.canvas.width, 30);
+            this.ctx.fillStyle = 'white';
+            this.ctx.font = '14px monospace';
+            this.ctx.fillText(`⚠️ EMERGENCY MODE: ${pixelsRendered}/${this.pixelCanvas.pixels.size} pixels shown`, 10, 20);
+        }
+    }
     
     renderPixel(worldX, worldY, colorIndex) {
         const screenX = worldX * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetX;
@@ -422,19 +460,31 @@ export class RenderEngine {
         }
     }
     
-    // Clean performance control API
+    // Emergency performance control API
     setRenderMode(mode) {
-        if (mode === 'optimized' || mode === 'legacy') {
+        if (['minimal', 'legacy', 'optimized'].includes(mode)) {
             this.renderMode = mode;
             console.log(`🎯 Render mode: ${mode.toUpperCase()}`);
+            
+            // Adjust max pixels based on mode
+            if (mode === 'minimal') {
+                this.maxPixelsPerFrame = 500;
+            } else if (mode === 'legacy') {
+                this.maxPixelsPerFrame = 2000;
+            } else {
+                this.maxPixelsPerFrame = 5000;
+            }
+            
             return mode;
         }
         return this.renderMode;
     }
     
     toggleRenderMode() {
-        const newMode = this.renderMode === 'optimized' ? 'legacy' : 'optimized';
-        return this.setRenderMode(newMode);
+        const modes = ['minimal', 'legacy', 'optimized'];
+        const currentIndex = modes.indexOf(this.renderMode);
+        const nextIndex = (currentIndex + 1) % modes.length;
+        return this.setRenderMode(modes[nextIndex]);
     }
     
     getPerformanceStats() {
