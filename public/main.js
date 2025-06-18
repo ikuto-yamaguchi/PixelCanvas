@@ -4,6 +4,7 @@ import { DebugPanel } from './DebugPanel.js';
 import { EventHandlers } from './EventHandlers.js';
 import { ViewportController } from './ViewportController.js';
 import { RenderEngine } from './RenderEngine.js';
+import { OptimizedRenderSystem } from './OptimizedRenderSystem.js';
 import { SectorManager } from './SectorManager.js';
 import { NetworkManager } from './NetworkManager.js';
 import { PixelStorage } from './PixelStorage.js';
@@ -44,6 +45,9 @@ class PixelCanvas {
             
             // this.debugPanel.log('📦 Initializing RenderEngine...');
             this.renderEngine = new RenderEngine(this.canvas, this.ctx, this);
+            
+            // 🚀 NEW: Initialize Optimized Render System
+            this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, window.supabase);
             
             // this.debugPanel.log('📦 Initializing SectorManager...');
             this.sectorManager = new SectorManager(this);
@@ -168,8 +172,8 @@ class PixelCanvas {
         
         console.error(`🎯 PIXEL DRAW ATTEMPT: screen(${x.toFixed(1)}, ${y.toFixed(1)}) → world(${worldX}, ${worldY}) → sector(${local.sectorX}, ${local.sectorY}) local(${local.localX}, ${local.localY})`);
         
-        // Draw the pixel using PixelStorage which handles everything properly
-        const success = this.pixelStorage.drawPixel(local.sectorX, local.sectorY, local.localX, local.localY, this.currentColor);
+        // 🚀 Use optimized pixel drawing system
+        const success = await this.drawPixelOptimized(worldX, worldY, this.currentColor);
         
         if (!success) {
             console.error('❌ PIXEL DRAW FAILED:', {local, currentColor: this.currentColor});
@@ -237,7 +241,69 @@ class PixelCanvas {
     
     // Delegate methods to appropriate modules
     render() {
+        // 🚀 Use new optimized render system
+        this.optimizedRenderer.renderThrottled(
+            this.offsetX, 
+            this.offsetY, 
+            this.scale, 
+            this.showGrid
+        );
+    }
+    
+    // Legacy render method for fallback
+    renderLegacy() {
         this.renderEngine.render();
+    }
+    
+    // 🚀 Optimized pixel drawing
+    async drawPixelOptimized(worldX, worldY, color) {
+        try {
+            // ストックチェック
+            if (!this.pixelStorage.hasStock()) {
+                console.error('🚫 NO STOCK AVAILABLE');
+                return false;
+            }
+            
+            // ストック消費
+            if (!this.pixelStorage.consumeStock()) {
+                console.error('🚫 FAILED TO CONSUME STOCK');
+                return false;
+            }
+            
+            // 最適化されたピクセル描画（キャッシュ統合）
+            const coords = await this.optimizedRenderer.drawPixelOptimized(worldX, worldY, color);
+            
+            // PixelStorageにも保存（互換性のため）
+            this.pixelStorage.addPixel(coords.sectorX, coords.sectorY, coords.localX, coords.localY, color);
+            
+            // ネットワーク送信
+            const pixel = { 
+                s: coords.sectorKey, 
+                x: coords.localX, 
+                y: coords.localY, 
+                c: color 
+            };
+            
+            if (navigator.onLine) {
+                this.networkManager.sendPixel(pixel);
+            } else {
+                this.networkManager.queuePixel(pixel);
+            }
+            
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Optimized pixel draw failed:', error);
+            
+            // フォールバック: 従来方式
+            return this.pixelStorage.drawPixel(
+                Utils.worldToLocal(worldX, worldY).sectorX,
+                Utils.worldToLocal(worldX, worldY).sectorY,
+                Utils.worldToLocal(worldX, worldY).localX,
+                Utils.worldToLocal(worldX, worldY).localY,
+                color
+            );
+        }
     }
     
     mobileLog(message) {
