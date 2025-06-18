@@ -23,6 +23,13 @@ export class LayeredRenderer {
      * メインレンダリング関数
      */
     async render() {
+        // LayerManagerが初期化されていない場合はフォールバック
+        if (!this.layerManager || !this.layerManager.supabase) {
+            console.log('⚠️ Layer system not ready, using fallback rendering');
+            this.pixelCanvas.renderEngine.render();
+            return;
+        }
+        
         const startTime = performance.now();
         
         try {
@@ -38,18 +45,23 @@ export class LayeredRenderer {
             
             // キャッシュチェック
             if (!layerChanged && this.isCacheValid(optimalLayer, zoomLevel, bounds)) {
-                console.log('🚀 Using cached render');
-                return;
+                return; // キャッシュヒット
             }
             
             // 画面クリア
             this.clearCanvas();
             
-            // レイヤーデータ読み込み
+            // レイヤーデータ読み込み（軽量）
             const layerData = await this.layerManager.loadLayerData(optimalLayer, bounds);
             
-            // レイヤー別レンダリング実行
-            await this.renderLayer(optimalLayer, layerData, bounds);
+            // レイヤーデータが空の場合は従来レンダリング
+            if (layerData.length === 0) {
+                console.log('📊 No layer data, using pixel storage rendering');
+                this.renderFromPixelStorage(bounds);
+            } else {
+                // レイヤー別レンダリング実行
+                await this.renderLayer(optimalLayer, layerData, bounds);
+            }
             
             // グリッド描画
             if (this.pixelCanvas.showGrid) {
@@ -71,6 +83,47 @@ export class LayeredRenderer {
             // フォールバック: 従来のレンダリング
             this.pixelCanvas.renderEngine.render();
         }
+    }
+    
+    /**
+     * PixelStorageからの直接レンダリング
+     */
+    renderFromPixelStorage(bounds) {
+        const pixelStorage = this.pixelCanvas.pixelStorage;
+        let rendered = 0;
+        
+        // 画面内のピクセルを直接描画
+        for (let sectorX = bounds.minSectorX; sectorX <= bounds.maxSectorX; sectorX++) {
+            for (let sectorY = bounds.minSectorY; sectorY <= bounds.maxSectorY; sectorY++) {
+                for (let localX = 0; localX < CONFIG.GRID_SIZE; localX++) {
+                    for (let localY = 0; localY < CONFIG.GRID_SIZE; localY++) {
+                        const color = pixelStorage.getPixel(sectorX, sectorY, localX, localY);
+                        if (color !== undefined) {
+                            // ワールド座標からスクリーン座標に変換
+                            const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+                            const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+                            const screenX = (worldX - this.pixelCanvas.offsetX) * this.pixelCanvas.scale;
+                            const screenY = (worldY - this.pixelCanvas.offsetY) * this.pixelCanvas.scale;
+                            
+                            // 画面外チェック
+                            if (screenX >= -1 && screenY >= -1 && 
+                                screenX <= this.canvas.width + 1 && 
+                                screenY <= this.canvas.height + 1) {
+                                
+                                const pixelColor = CONFIG.PALETTE[color] || '#000000';
+                                this.ctx.fillStyle = pixelColor;
+                                
+                                const pixelSize = Math.max(1, this.pixelCanvas.scale);
+                                this.ctx.fillRect(screenX, screenY, pixelSize, pixelSize);
+                                rendered++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        console.log(`📊 Rendered ${rendered} pixels from storage`);
     }
     
     /**

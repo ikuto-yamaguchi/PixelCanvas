@@ -257,54 +257,32 @@ export class NetworkManager {
     }
     
     async loadPixelsFromSupabase() {
-        console.error('🚨 EMERGENCY DEBUG: Starting pixel load from Supabase...');
+        // 🔧 EMERGENCY SWITCH: Use layer system instead of heavy pixel loading
+        if (this.pixelCanvas.layerManager && this.pixelCanvas.layerManager.supabase) {
+            console.log('🔧 Using lightweight layer system for data loading...');
+            return this.loadLayeredData();
+        }
+        
+        console.log('⚠️ Layer system not ready, using minimal legacy load...');
         
         try {
-            let allPixels = [];
-            let offset = 0;
-            const limit = 1000; // Supabase default limit
-            let hasMore = true;
+            // 🔧 EMERGENCY: Load only first 1000 pixels to prevent freezing
+            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=1000&offset=0`, {
+                headers: {
+                    'apikey': CONFIG.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                }
+            });
             
-            // Load all pixels with pagination
-            while (hasMore) {
-                console.error(`🚨 EMERGENCY DEBUG: Fetching pixels batch ${Math.floor(offset/limit) + 1}...`);
-                
-                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=${limit}&offset=${offset}`, {
-                    headers: {
-                        'apikey': CONFIG.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
-                    }
-                });
-                
-                console.error(`🚨 EMERGENCY DEBUG: Response status: ${response.status}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const pixels = await response.json();
-                allPixels = allPixels.concat(pixels);
-                
-                console.error(`🚨 EMERGENCY DEBUG: Loaded batch ${Math.floor(offset/limit) + 1}: ${pixels.length} pixels (total: ${allPixels.length})`);
-                
-                // Check if we have more pixels to load
-                hasMore = pixels.length === limit;
-                offset += limit;
-                
-                // Safety check to prevent infinite loop
-                if (offset > 100000) {
-                    console.error('🚨 EMERGENCY DEBUG: Safety limit reached, stopping pagination');
-                    break;
-                }
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            console.error(`🚨 EMERGENCY DEBUG: Loaded ${allPixels.length} total pixels from database`);
+            const allPixels = await response.json();
+            console.log(`📦 Loaded ${allPixels.length} pixels (limited for performance)`);
             
             // Add each pixel to the pixels map and calculate occupied sectors
             const occupiedSectors = new Set();
-            console.error(`🚨 EMERGENCY DEBUG: Processing ${allPixels.length} pixels into pixels map...`);
-            console.error(`🚨 EMERGENCY DEBUG: pixelStorage exists: ${!!this.pixelCanvas.pixelStorage}`);
-            console.error(`🚨 EMERGENCY DEBUG: pixelStorage.pixels exists: ${!!this.pixelCanvas.pixelStorage.pixels}`);
             
             for (const pixel of allPixels) {
                 // 🚨 EMERGENCY FIX: Use PixelStorage.addPixel instead of direct map access
@@ -321,9 +299,6 @@ export class NetworkManager {
                 occupiedSectors.add(sectorKey);
             }
             
-            console.error(`🚨 EMERGENCY DEBUG: Final pixels map size: ${this.pixelCanvas.pixelStorage.pixels.size}`);
-            console.error(`🚨 EMERGENCY DEBUG: Occupied sectors: ${occupiedSectors.size}`);
-            
             // Initialize active sectors: start with (0,0) and add neighbors of any occupied sectors
             this.initializeActiveSectors(occupiedSectors);
             
@@ -334,17 +309,10 @@ export class NetworkManager {
             }
             localStorage.setItem('pixelcanvas_pixels', JSON.stringify(pixelsObject));
             
-            console.error('🚨 EMERGENCY DEBUG: ✅ Pixels loaded and cached locally');
+            console.log('✅ Pixels loaded and cached locally');
             
-            // 🚨 EMERGENCY: Force immediate render after loading
-            console.error('🚨 EMERGENCY DEBUG: Triggering immediate render...');
+            // Force immediate render after loading
             this.pixelCanvas.render();
-            
-            // 🚨 EMERGENCY: Verify final state
-            setTimeout(() => {
-                const finalStats = this.pixelCanvas.getStats();
-                console.error('🚨 EMERGENCY DEBUG: Final application state:', finalStats);
-            }, 100);
             
         } catch (error) {
             console.error('Failed to load pixels from Supabase:', error);
@@ -352,6 +320,70 @@ export class NetworkManager {
             
             // Fallback to localStorage
             this.loadPixelsFromLocalStorage();
+        }
+    }
+    
+    /**
+     * 🔧 NEW: Layer system data loading
+     */
+    async loadLayeredData() {
+        try {
+            console.log('🔧 Loading initial layer data...');
+            
+            // Get current zoom level to determine which layer to load
+            const zoomLevel = this.pixelCanvas.scale || 0.1;
+            const optimalLayer = this.pixelCanvas.layerManager.getOptimalLayer(zoomLevel);
+            
+            console.log(`📊 Using layer: ${optimalLayer.name} for zoom ${zoomLevel}`);
+            
+            // Calculate viewport bounds
+            const bounds = {
+                minSectorX: -5,
+                maxSectorX: 5,
+                minSectorY: -5,
+                maxSectorY: 5
+            };
+            
+            // Load layer data
+            const layerData = await this.pixelCanvas.layerManager.loadLayerData(optimalLayer, bounds);
+            
+            // If no layer data exists, load some base pixels and create layers
+            if (layerData.length === 0) {
+                console.log('📊 No layer data found, loading base pixels...');
+                
+                // Load a sample of pixels to build initial layers
+                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=100&offset=0`, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const pixels = await response.json();
+                    
+                    // Add to pixel storage
+                    for (const pixel of pixels) {
+                        this.pixelCanvas.pixelStorage.addPixel(
+                            pixel.sector_x,
+                            pixel.sector_y,
+                            pixel.local_x,
+                            pixel.local_y,
+                            pixel.color
+                        );
+                    }
+                    
+                    console.log(`📦 Loaded ${pixels.length} base pixels for layer system`);
+                }
+            }
+            
+            console.log('✅ Layer data loading complete');
+            
+        } catch (error) {
+            console.error('❌ Layer data loading failed:', error);
+            
+            // Fallback to minimal legacy loading
+            return this.loadPixelsFromLocalStorage();
         }
     }
     
