@@ -4,6 +4,12 @@ import { CONFIG, Utils } from './Config.js';
 export class ViewportController {
     constructor(pixelCanvas) {
         this.pixelCanvas = pixelCanvas;
+        
+        // PERFORMANCE: Cache viewport calculations
+        this.boundsCache = null;
+        this.lastActiveSectorsHash = null;
+        this.lastCanvasSize = null;
+        this.lastScale = null;
     }
     
     getViewportBounds() {
@@ -12,23 +18,50 @@ export class ViewportController {
             return this.getDefaultViewportBounds();
         }
         
+        // PERFORMANCE: Check if we can use cached bounds
+        const currentActiveSectorsHash = this.hashActiveSectors();
+        const currentCanvasSize = this.getLogicalCanvasSize();
+        const currentScale = this.pixelCanvas.scale;
+        
+        if (this.boundsCache && 
+            this.lastActiveSectorsHash === currentActiveSectorsHash &&
+            this.lastCanvasSize?.width === currentCanvasSize.width &&
+            this.lastCanvasSize?.height === currentCanvasSize.height &&
+            this.lastScale === currentScale) {
+            // Return cached bounds without recalculation
+            return this.boundsCache;
+        }
+        
         // Calculate bounds based on active sectors
         const activeBounds = this.calculateActiveSectorBounds();
         const paddedBounds = this.addPaddingToBounds(activeBounds);
-        const canvasSize = this.getLogicalCanvasSize();
         
         // Calculate viewport constraints
-        const horizontalConstraints = this.calculateHorizontalConstraints(paddedBounds, canvasSize);
-        const verticalConstraints = this.calculateVerticalConstraints(paddedBounds, canvasSize);
+        const horizontalConstraints = this.calculateHorizontalConstraints(paddedBounds, currentCanvasSize);
+        const verticalConstraints = this.calculateVerticalConstraints(paddedBounds, currentCanvasSize);
         
-        this.logViewportBounds(activeBounds, paddedBounds, canvasSize, horizontalConstraints, verticalConstraints);
-        
-        return {
+        // Cache the result
+        this.boundsCache = {
             minOffsetX: horizontalConstraints.minOffsetX,
             maxOffsetX: horizontalConstraints.maxOffsetX,
             minOffsetY: verticalConstraints.minOffsetY,
             maxOffsetY: verticalConstraints.maxOffsetY
         };
+        
+        this.lastActiveSectorsHash = currentActiveSectorsHash;
+        this.lastCanvasSize = { ...currentCanvasSize };
+        this.lastScale = currentScale;
+        
+        // Only log when bounds actually change
+        this.logViewportBounds(activeBounds, paddedBounds, currentCanvasSize, horizontalConstraints, verticalConstraints);
+        
+        return this.boundsCache;
+    }
+    
+    hashActiveSectors() {
+        // Simple hash of active sectors for cache validation
+        const sectors = Array.from(this.pixelCanvas.activeSectors).sort();
+        return sectors.join(',');
     }
     
     getDefaultViewportBounds() {

@@ -203,6 +203,12 @@ export class SectorManager {
         }
         this.lastExpansionCheck = now;
         
+        // PERFORMANCE FIX: Skip if we have too many active sectors already
+        if (this.pixelCanvas.activeSectors.size > 20) {
+            console.log(`⚠️ Too many active sectors (${this.pixelCanvas.activeSectors.size}), skipping expansion check`);
+            return;
+        }
+        
         // Check all loaded sectors for expansion potential
         const maxPixelsPerSector = CONFIG.GRID_SIZE * CONFIG.GRID_SIZE;
         let expansionsTriggered = 0;

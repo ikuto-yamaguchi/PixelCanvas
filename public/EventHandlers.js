@@ -26,6 +26,7 @@ export class EventHandlers {
         // PERFORMANCE FIX: Throttle rendering to prevent excessive calls
         this.lastRenderTime = 0;
         this.renderThrottle = 16; // ~60 FPS limit
+        this.lastTouchMoveTime = 0; // Touch move throttling
         
         // Mouse state
         this.mouseState = {
@@ -67,9 +68,10 @@ export class EventHandlers {
     }
     
     setupTouchHandlers() {
-        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
-        this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e));
-        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+        // Use passive listeners for better performance
+        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
     }
     
     handleTouchStart(e) {
@@ -121,7 +123,17 @@ export class EventHandlers {
     }
     
     handleTouchMove(e) {
-        e.preventDefault();
+        // Only prevent default for specific touch interactions to avoid scroll interference
+        if (e.touches.length > 1 || this.touchState.touches > 1) {
+            e.preventDefault();
+        }
+        
+        // Throttle touch move events for performance
+        const now = performance.now();
+        if (now - this.lastTouchMoveTime < 16) { // ~60fps throttling
+            return;
+        }
+        this.lastTouchMoveTime = now;
         
         if (e.touches.length === 1 && this.touchState.touches === 1 && !this.touchState.wasMultiTouch) {
             this.handleSingleTouchMove(e);
