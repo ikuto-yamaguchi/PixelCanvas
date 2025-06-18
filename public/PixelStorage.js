@@ -268,10 +268,16 @@ export class PixelStorage {
             c: color 
         };
         
-        // Send pixel to network
+        // Send pixel to network with error handling
         if (navigator.onLine) {
-            this.pixelCanvas.networkManager.sendPixel(pixel);
+            try {
+                this.pixelCanvas.networkManager.sendPixel(pixel);
+            } catch (error) {
+                console.error('❌ Network send failed, queuing pixel:', error);
+                this.pixelCanvas.networkManager.queuePixel(pixel);
+            }
         } else {
+            console.log('📴 Offline: Queuing pixel');
             this.pixelCanvas.networkManager.queuePixel(pixel);
         }
         

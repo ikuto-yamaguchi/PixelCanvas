@@ -112,7 +112,12 @@ export class NetworkManager {
             }
             
         } catch (error) {
-            console.error('Failed to send pixel:', error);
+            console.error('❌ Failed to send pixel:', {
+                error: error.message || error,
+                pixelData: pixelData,
+                stack: error.stack,
+                url: `${CONFIG.SUPABASE_URL}/rest/v1/pixels`
+            });
             // this.pixelCanvas.debugPanel.log(`❌ Send failed: ${error.message}`);
             this.queuePixel(pixel);
         }
