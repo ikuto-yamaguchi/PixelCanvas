@@ -149,7 +149,7 @@ export class RenderEngine {
         // 🔧 FIXED: Use proper pixelStorage reference
         const visibleBounds = this.calculateSimpleVisibleBounds();
         let pixelsRendered = 0;
-        const maxPixels = 1000; // 🚨 EMERGENCY: 描画上限設定
+        const maxPixels = 5000; // 🔧 FIXED: 描画上限を緩和
         
         // Access pixels through pixelStorage for consistency
         const pixels = this.pixelCanvas.pixelStorage ? 
@@ -209,9 +209,9 @@ export class RenderEngine {
     }
     
     renderPixel(worldX, worldY, colorIndex) {
-        // 🔧 FIXED: Correct coordinate transformation
-        const screenX = (worldX * CONFIG.PIXEL_SIZE - this.pixelCanvas.offsetX) * this.pixelCanvas.scale;
-        const screenY = (worldY * CONFIG.PIXEL_SIZE - this.pixelCanvas.offsetY) * this.pixelCanvas.scale;
+        // 🔧 FIXED: 正しい座標変換に修正
+        const screenX = worldX * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetX;
+        const screenY = worldY * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetY;
         const size = Math.max(0.5, CONFIG.PIXEL_SIZE * this.pixelCanvas.scale);
         
         // Only render if visible on screen (with generous margin)
@@ -449,12 +449,12 @@ export class RenderEngine {
         const minY = Math.floor((-offsetY - margin) / pixelSize);
         const maxY = Math.ceil((height - offsetY + margin) / pixelSize);
         
-        // 🚨 EMERGENCY: 結果範囲を制限
+        // 🔧 FIXED: 結果範囲制限を緩和
         return {
-            minX: Math.max(-10000, Math.min(10000, minX)),
-            maxX: Math.max(-10000, Math.min(10000, maxX)),
-            minY: Math.max(-10000, Math.min(10000, minY)),
-            maxY: Math.max(-10000, Math.min(10000, maxY))
+            minX: Math.max(-50000, Math.min(50000, minX)),
+            maxX: Math.max(-50000, Math.min(50000, maxX)),
+            minY: Math.max(-50000, Math.min(50000, minY)),
+            maxY: Math.max(-50000, Math.min(50000, maxY))
         };
     }
     

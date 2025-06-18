@@ -68,8 +68,10 @@ export class LayeredRenderer {
                 this.renderGrid(optimalLayer, bounds);
             }
             
-            // 🚨 EMERGENCY: セクター境界線描画を一時無効化（フリーズ防止）
-            // this.renderSectorInfo(bounds);
+            // 🔧 FIXED: セクター境界線を安全に再有効化（デバッグ用）
+            if (this.pixelCanvas.scale > 0.2) { // 小さいズームレベルでは無効
+                this.renderSectorInfo(bounds);
+            }
             
             // キャッシュ更新
             this.updateCache(optimalLayer, zoomLevel, bounds);
@@ -91,15 +93,15 @@ export class LayeredRenderer {
     renderFromPixelStorage(bounds) {
         const pixelStorage = this.pixelCanvas.pixelStorage;
         let rendered = 0;
-        const maxPixels = 1000; // 🚨 EMERGENCY: 描画上限設定
+        const maxPixels = 5000; // 🔧 FIXED: 描画上限を緩和
         
         console.log(`🔧 FIXED: Rendering from pixel storage. Scale: ${this.pixelCanvas.scale}, Bounds:`, bounds);
         
-        // 🚨 EMERGENCY: セクター範囲を厳格に制限
+        // 🔧 FIXED: セクター範囲チェックを緩和
         const startTime = performance.now();
         const sectorCount = (bounds.maxSectorX - bounds.minSectorX + 1) * (bounds.maxSectorY - bounds.minSectorY + 1);
         
-        if (sectorCount > 100) {
+        if (sectorCount > 400) { // 100から400に緩和
             console.warn(`⚠️ Too many sectors (${sectorCount}), using fallback rendering`);
             this.pixelCanvas.renderEngine.render();
             return;
@@ -122,9 +124,9 @@ export class LayeredRenderer {
                             const worldX = sectorX * CONFIG.GRID_SIZE + localX;
                             const worldY = sectorY * CONFIG.GRID_SIZE + localY;
                             
-                            // 🔧 FIXED: Use proper viewport offset calculation
-                            const screenX = (worldX * CONFIG.PIXEL_SIZE - this.pixelCanvas.offsetX) * this.pixelCanvas.scale;
-                            const screenY = (worldY * CONFIG.PIXEL_SIZE - this.pixelCanvas.offsetY) * this.pixelCanvas.scale;
+                            // 🔧 FIXED: 正しい座標変換に修正
+                            const screenX = worldX * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetX;
+                            const screenY = worldY * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetY;
                             
                             // 🔧 FIXED: More generous screen bounds checking to prevent culling
                             const pixelSize = Math.max(0.5, CONFIG.PIXEL_SIZE * this.pixelCanvas.scale);
@@ -257,11 +259,11 @@ export class LayeredRenderer {
         const minY = Math.floor((offsetY - padding) / scale);
         const maxY = Math.ceil((offsetY + height + padding) / scale);
         
-        // 🚨 EMERGENCY: セクター範囲を厳格に制限
-        const minSectorX = Math.max(-50, Math.floor(minX / CONFIG.GRID_SIZE));
-        const maxSectorX = Math.min(50, Math.ceil(maxX / CONFIG.GRID_SIZE));
-        const minSectorY = Math.max(-50, Math.floor(minY / CONFIG.GRID_SIZE));
-        const maxSectorY = Math.min(50, Math.ceil(maxY / CONFIG.GRID_SIZE));
+        // 🔧 FIXED: セクター範囲制限を緩和
+        const minSectorX = Math.max(-200, Math.floor(minX / CONFIG.GRID_SIZE));
+        const maxSectorX = Math.min(200, Math.ceil(maxX / CONFIG.GRID_SIZE));
+        const minSectorY = Math.max(-200, Math.floor(minY / CONFIG.GRID_SIZE));
+        const maxSectorY = Math.min(200, Math.ceil(maxY / CONFIG.GRID_SIZE));
         
         console.log(`🔧 BOUNDS: sectors(${minSectorX},${minSectorY})-(${maxSectorX},${maxSectorY}), scale:${scale}`);
         
