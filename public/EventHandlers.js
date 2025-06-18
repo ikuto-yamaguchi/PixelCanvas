@@ -68,14 +68,14 @@ export class EventHandlers {
     }
     
     setupTouchHandlers() {
-        // Use passive listeners for better performance
-        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        // Use passive listeners for single-touch to prevent scroll interference
+        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: true });
         this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: true });
     }
     
     handleTouchStart(e) {
-        e.preventDefault();
+        // Note: passive:true listener cannot call preventDefault
         
         const now = Date.now();
         const previousTouches = this.touchState.touches;
@@ -179,7 +179,7 @@ export class EventHandlers {
     }
     
     handleTouchEnd(e) {
-        e.preventDefault();
+        // Note: passive:true listener cannot call preventDefault
         
         const now = Date.now();
         
