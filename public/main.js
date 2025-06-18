@@ -22,6 +22,7 @@ class PixelCanvas {
         this.offsetY = 0;
         this.showGrid = true;
         this.activeSectors = new Set(); // Initialize empty, will be populated from database
+        this.sectorPixelCounts = new Map(); // Track pixel count per sector
         this.isExpansionRunning = false;
         this.deviceId = Utils.generateDeviceId();
         
@@ -225,6 +226,141 @@ class PixelCanvas {
     // Delegate methods to appropriate modules
     render() {
         this.renderEngine.render();
+    }
+    
+    mobileLog(message) {
+        // Delegate to debug panel for mobile logging
+        this.debugPanel.log(message);
+    }
+    
+    constrainViewport() {
+        // Apply viewport constraints based on active sectors
+        const bounds = this.viewportController.getViewportBounds();
+        
+        const originalOffsetX = this.offsetX;
+        const originalOffsetY = this.offsetY;
+        
+        // Apply strict constraints
+        const newOffsetX = Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, this.offsetX));
+        const newOffsetY = Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, this.offsetY));
+        
+        // Debug logging for viewport constraints
+        if (Math.abs(newOffsetX - this.offsetX) > 1 || Math.abs(newOffsetY - this.offsetY) > 1) {
+            console.log(`🔒 Viewport constrained: 
+                Original: (${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)})
+                New: (${newOffsetX.toFixed(1)}, ${newOffsetY.toFixed(1)})
+                Bounds: X[${bounds.minOffsetX.toFixed(1)} to ${bounds.maxOffsetX.toFixed(1)}] Y[${bounds.minOffsetY.toFixed(1)} to ${bounds.maxOffsetY.toFixed(1)}]
+                Scale: ${this.scale.toFixed(2)}x`);
+        }
+        
+        this.offsetX = newOffsetX;
+        this.offsetY = newOffsetY;
+    }
+    
+    async handlePixelClick(x, y) {
+        // Check if we have pixels in stock (client-side only)
+        if (this.pixelStorage.pixelStock <= 0) {
+            console.log('No pixels in client stock');
+            return;
+        }
+        
+        // Check if click is within active sectors
+        const worldX = Math.floor((x - this.offsetX) / (CONFIG.PIXEL_SIZE * this.scale));
+        const worldY = Math.floor((y - this.offsetY) / (CONFIG.PIXEL_SIZE * this.scale));
+        
+        if (!this.sectorManager.isWithinActiveSectors(worldX, worldY)) {
+            this.showOutOfBoundsWarning();
+            return;
+        }
+        
+        // Calculate coordinates
+        const sectorX = Math.floor(worldX / CONFIG.GRID_SIZE);
+        const sectorY = Math.floor(worldY / CONFIG.GRID_SIZE);
+        const localX = ((worldX % CONFIG.GRID_SIZE) + CONFIG.GRID_SIZE) % CONFIG.GRID_SIZE;
+        const localY = ((worldY % CONFIG.GRID_SIZE) + CONFIG.GRID_SIZE) % CONFIG.GRID_SIZE;
+        
+        // Draw pixel immediately
+        this.drawPixel(sectorX, sectorY, localX, localY, this.currentColor);
+        
+        // Consume pixel after successful draw
+        this.pixelStorage.consumeStock();
+        
+        // Update sector count locally and check for expansion
+        const sectorKey = `${sectorX},${sectorY}`;
+        
+        // Count actual pixels in this sector
+        let actualCount = 0;
+        for (const [key, color] of this.pixels) {
+            const [pSectorX, pSectorY] = key.split(',').map(Number);
+            if (pSectorX === sectorX && pSectorY === sectorY) {
+                actualCount++;
+            }
+        }
+        
+        console.log(`🔍 Sector (${sectorX}, ${sectorY}) after drawing: ${actualCount} pixels (including new pixel)`);
+        this.sectorPixelCounts.set(sectorKey, actualCount);
+        
+        // Check if we need to expand
+        const maxPixelsPerSector = CONFIG.GRID_SIZE * CONFIG.GRID_SIZE;
+        const fillPercentage = actualCount / maxPixelsPerSector;
+        
+        if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
+            console.log(`🎯 EXPANSION TRIGGERED: Sector (${sectorX}, ${sectorY}) is ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels)!`);
+            console.log(`🎯 Before expansion - Active sectors:`, Array.from(this.activeSectors));
+            this.sectorManager.expandSectorsLocally(sectorX, sectorY);
+            console.log(`🎯 After expansion - Active sectors:`, Array.from(this.activeSectors));
+        } else {
+            console.log(`📊 Sector (${sectorX}, ${sectorY}): ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels) - threshold not reached`);
+        }
+    }
+    
+    drawPixel(sectorX, sectorY, localX, localY, color) {
+        // Add pixel to storage
+        this.pixelStorage.addPixel(sectorX, sectorY, localX, localY, color);
+        
+        // Send to network
+        const pixel = { s: `${sectorX},${sectorY}`, x: localX, y: localY, c: color };
+        this.networkManager.sendPixel(pixel);
+        
+        // Re-render immediately
+        this.render();
+        
+        console.log(`Drawing pixel at sector (${sectorX}, ${sectorY}) local (${localX}, ${localY}) with color ${color}`);
+    }
+    
+    showOutOfBoundsWarning() {
+        // Visual feedback when clicking outside active sectors
+        let warning = document.getElementById('outOfBoundsWarning');
+        if (!warning) {
+            warning = document.createElement('div');
+            warning.id = 'outOfBoundsWarning';
+            warning.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(255, 68, 68, 0.9);
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                text-align: center;
+                z-index: 1000;
+                pointer-events: none;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            `;
+            warning.textContent = '🙅 このエリアには描けません';
+            document.body.appendChild(warning);
+        }
+        
+        warning.style.display = 'block';
+        
+        // Auto-hide after 2 seconds
+        clearTimeout(this.outOfBoundsWarningTimeout);
+        this.outOfBoundsWarningTimeout = setTimeout(() => {
+            warning.style.display = 'none';
+        }, 2000);
     }
     
     constrainViewport() {

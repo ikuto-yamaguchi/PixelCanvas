@@ -119,31 +119,47 @@ export class RenderEngine {
     }
     
     renderActiveSectorBounds() {
-        if (this.pixelCanvas.activeSectors.size === 0) return;
-        
         const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
         
-        // Only render bounds when sectors are reasonably visible
-        if (sectorSize < 20) return;
+        // Only show visual bounds when sectors are large enough to see
+        if (sectorSize < 30) return;
         
-        this.ctx.strokeStyle = '#00ff00';
-        this.ctx.lineWidth = Math.max(1, 2 / this.pixelCanvas.scale);
-        this.ctx.setLineDash([5, 5]);
+        // Calculate visible sector range
+        const startSectorX = Math.floor(-this.pixelCanvas.offsetX / sectorSize);
+        const endSectorX = Math.ceil((this.canvas.width - this.pixelCanvas.offsetX) / sectorSize);
+        const startSectorY = Math.floor(-this.pixelCanvas.offsetY / sectorSize);
+        const endSectorY = Math.ceil((this.canvas.height - this.pixelCanvas.offsetY) / sectorSize);
         
-        this.ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-        this.ctx.font = `${Math.max(12, 16 / this.pixelCanvas.scale)}px Arial`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
+        // Draw each visible sector with appropriate styling
+        console.log(`🎨 RENDER: Drawing sectors in range X[${startSectorX} to ${endSectorX}] Y[${startSectorY} to ${endSectorY}]`);
+        console.log(`🎨 RENDER: Current active sectors: ${Array.from(this.pixelCanvas.activeSectors).join(', ')}`);
         
-        for (const sectorKey of this.pixelCanvas.activeSectors) {
-            const [sectorX, sectorY] = Utils.parseSectorKey(sectorKey);
-            
-            const screenX = sectorX * sectorSize + this.pixelCanvas.offsetX;
-            const screenY = sectorY * sectorSize + this.pixelCanvas.offsetY;
-            
-            // Only render if visible on screen
-            if (this.isSectorVisible(screenX, screenY, sectorSize)) {
-                this.renderSectorBound(screenX, screenY, sectorSize, sectorKey);
+        for (let sectorX = startSectorX; sectorX <= endSectorX; sectorX++) {
+            for (let sectorY = startSectorY; sectorY <= endSectorY; sectorY++) {
+                const sectorKey = `${sectorX},${sectorY}`;
+                const isActive = this.pixelCanvas.activeSectors.has(sectorKey);
+                
+                // Count actual pixels in this sector for debugging
+                let pixelCount = 0;
+                for (const [key, color] of this.pixelCanvas.pixels) {
+                    const [pSectorX, pSectorY] = key.split(',').map(Number);
+                    if (pSectorX === sectorX && pSectorY === sectorY) {
+                        pixelCount++;
+                    }
+                }
+                
+                const shouldBeActive = pixelCount > 0 && (pixelCount / (CONFIG.GRID_SIZE * CONFIG.GRID_SIZE)) >= CONFIG.SECTOR_EXPANSION_THRESHOLD;
+                console.log(`🎨 RENDER: Sector ${sectorKey} - IsActive: ${isActive}, Pixels: ${pixelCount}, ShouldBeActive: ${shouldBeActive}`);
+                
+                // Calculate screen position of sector
+                const screenX = this.pixelCanvas.offsetX + sectorX * sectorSize;
+                const screenY = this.pixelCanvas.offsetY + sectorY * sectorSize;
+                
+                if (isActive) {
+                    this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY);
+                } else {
+                    this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY);
+                }
             }
         }
         
@@ -156,29 +172,102 @@ export class RenderEngine {
                screenY + sectorSize >= 0 && screenY <= this.canvas.height;
     }
     
-    renderSectorBound(screenX, screenY, sectorSize, sectorKey) {
-        // Draw border
+    renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY) {
+        // Active sector: bright green border
+        this.ctx.strokeStyle = '#00ff00';
+        this.ctx.lineWidth = Math.max(1, Math.min(3, 2 / this.pixelCanvas.scale));
+        this.ctx.setLineDash([]);
+        
         this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
         
-        // Fill background
+        // Show sector info when zoomed in enough and text fits
+        if (sectorSize > 80) {
+            // Count actual pixels in this sector for accurate display
+            let actualPixelCount = 0;
+            for (const [key, color] of this.pixelCanvas.pixels) {
+                const [pSectorX, pSectorY] = key.split(',').map(Number);
+                if (pSectorX === sectorX && pSectorY === sectorY) {
+                    actualPixelCount++;
+                }
+            }
+            
+            const coordinateText = `(${sectorX},${sectorY})`;
+            const pixelText = `${actualPixelCount}px`;
+            
+            // Calculate appropriate font size that fits within sector
+            const maxFontSize = Math.floor(sectorSize / 8);
+            const fontSize = Math.max(8, Math.min(16, maxFontSize));
+            
+            this.ctx.fillStyle = '#00ff00';
+            this.ctx.font = `${fontSize}px monospace`;
+            this.ctx.textAlign = 'center';
+            
+            // Check if text fits within sector bounds
+            const coordWidth = this.ctx.measureText(coordinateText).width;
+            const pixelWidth = this.ctx.measureText(pixelText).width;
+            const maxWidth = sectorSize - 8; // 4px padding on each side
+            
+            if (coordWidth <= maxWidth && pixelWidth <= maxWidth && fontSize >= 10) {
+                const centerX = screenX + sectorSize / 2;
+                const centerY = screenY + sectorSize / 2;
+                
+                this.ctx.textBaseline = 'middle';
+                
+                // Check if we can fit both lines comfortably
+                const lineSpacing = fontSize * 1.2;
+                if (sectorSize > lineSpacing * 3) {
+                    // Two lines: coordinate above center, pixel count below center
+                    this.ctx.fillText(coordinateText, centerX, centerY - lineSpacing / 2);
+                    this.ctx.fillText(pixelText, centerX, centerY + lineSpacing / 2);
+                } else {
+                    // Single line: combine or show coordinate only
+                    const combinedText = `${coordinateText} ${pixelText}`;
+                    const combinedWidth = this.ctx.measureText(combinedText).width;
+                    
+                    if (combinedWidth <= maxWidth) {
+                        this.ctx.fillText(combinedText, centerX, centerY);
+                    } else {
+                        // Show coordinate only if combined doesn't fit
+                        this.ctx.fillText(coordinateText, centerX, centerY);
+                    }
+                }
+            }
+        }
+    }
+    
+    renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY) {
+        // Inactive sector: dim overlay
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         this.ctx.fillRect(screenX, screenY, sectorSize, sectorSize);
         
-        // Draw sector label if sector is large enough
-        if (sectorSize >= 60) {
-            this.ctx.fillStyle = '#00ff00';
+        // Red dashed border
+        this.ctx.strokeStyle = '#ff4444';
+        this.ctx.lineWidth = Math.max(0.5, Math.min(2, 1.5 / this.pixelCanvas.scale));
+        this.ctx.setLineDash([8, 4]);
+        this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
+        
+        // "LOCKED" text when zoomed in enough and fits
+        if (sectorSize > 60) {
+            const lockedText = 'LOCKED';
             
-            const activeText = 'ACTIVE';
-            let fontSize = Math.max(10, sectorSize / 12);
-            this.ctx.font = `${fontSize}px Arial`;
+            // Calculate appropriate font size that fits within sector
+            const maxFontSize = Math.floor(sectorSize / 6);
+            const fontSize = Math.max(8, Math.min(14, maxFontSize));
             
-            // Check if text fits
-            const textWidth = this.ctx.measureText(activeText).width;
-            const maxWidth = sectorSize - 8;
+            this.ctx.fillStyle = '#ff4444';
+            this.ctx.font = `${fontSize}px monospace`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            
+            // Check if text fits within sector bounds
+            const textWidth = this.ctx.measureText(lockedText).width;
+            const maxWidth = sectorSize - 8; // 4px padding on each side
             
             if (textWidth <= maxWidth && fontSize >= 8) {
                 const centerX = screenX + sectorSize / 2;
                 const centerY = screenY + sectorSize / 2;
-                this.ctx.fillText(activeText, centerX, centerY);
+                
+                this.ctx.fillText(lockedText, centerX, centerY);
             }
         }
     }
