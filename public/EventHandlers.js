@@ -190,33 +190,13 @@ export class EventHandlers {
         if (this.touchState.touches === 1 && e.touches.length === 0) {
             const tapDuration = now - this.touchState.startTime;
             
-            console.error('📱 SINGLE TOUCH END DETECTED:', {
-                startX: this.touchState.startX, 
-                startY: this.touchState.startY, 
-                tapDuration,
-                moved: this.touchState.moved,
-                wasMultiTouch: this.touchState.wasMultiTouch,
-                maxDuration: CONFIG.TAP_DURATION_MS
-            });
             
             // 🔧 FIXED: Prevent pixel drawing during zoom/pan operations
             if (tapDuration < 1000 && !this.touchState.moved && !this.touchState.wasMultiTouch) {
-                console.error('📱 CALLING handlePixelClick');
                 this.pixelCanvas.handlePixelClick(this.touchState.startX, this.touchState.startY);
             } else {
-                console.error('📱 TAP REJECTED:', {
-                    tooLong: tapDuration >= 1000,
-                    moved: this.touchState.moved,
-                    wasMultiTouch: this.touchState.wasMultiTouch
-                });
             }
         } else {
-            console.error('📱 TAP CONDITIONS NOT MET:', {
-                currentTouches: e.touches.length,
-                storedTouches: this.touchState.touches,
-                moved: this.touchState.moved,
-                wasMultiTouch: this.touchState.wasMultiTouch,
-                reason: this.touchState.touches !== 1 ? 'Not single touch start' : 'Still touching'
             });
         }
         
@@ -235,7 +215,6 @@ export class EventHandlers {
     
     scheduleExpansionCheck() {
         if (this.touchState.moved && !this.pixelCanvas.isExpansionRunning) {
-            // this.pixelCanvas.debugPanel.log('📱 TOUCHEND: Movement detected, scheduling expansion check');
             setTimeout(() => {
                 if (!this.pixelCanvas.isExpansionRunning) {
                     this.pixelCanvas.sectorManager.checkLoadedSectorsForExpansion();

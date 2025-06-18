@@ -37,24 +37,18 @@ class PixelCanvas {
         
         // Initialize debug panel first to catch all errors
         this.debugPanel = DebugPanel.getInstance();
-        // this.debugPanel.log('🚀 PixelCanvas constructor starting...');
         
         try {
             // Initialize modules
-            // this.debugPanel.log('📦 Initializing PixelStorage...');
             this.pixelStorage = new PixelStorage(this);
             
-            // this.debugPanel.log('📦 Initializing ViewportController...');
             this.viewportController = new ViewportController(this);
             
-            // this.debugPanel.log('📦 Initializing RenderEngine...');
             this.renderEngine = new RenderEngine(this.canvas, this.ctx, this);
             
-            // this.debugPanel.log('📦 Initializing NetworkManager...');
             this.networkManager = new NetworkManager(this);
             
-            // 🚀 NEW: Initialize Layer Management System
-            console.error('🔧 Initializing Layer Management System...');
+            // Initialize Layer Management System
             this.layerManager = new LayerManager(this);
             this.layeredRenderer = new LayeredRenderer(this);
             
@@ -95,40 +89,32 @@ class PixelCanvas {
                 if (this.networkManager.supabaseClient) {
                     this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
                     this.layerManager.supabase = this.networkManager.supabaseClient;
-                    console.error('✅ Supabase client connected to both systems');
                 } else {
-                    console.error('⚠️ Supabase client not available, retrying...');
                     setTimeout(() => {
                         if (this.networkManager.supabaseClient) {
                             this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
                             this.layerManager.supabase = this.networkManager.supabaseClient;
-                            console.error('✅ Supabase client connected to both systems (retry)');
                         }
                     }, 1000);
                 }
             }, 100);
             
-            // this.debugPanel.log('📦 Initializing SectorManager...');
             this.sectorManager = new SectorManager(this);
             
-            // this.debugPanel.log('📦 Initializing EventHandlers...');
             this.eventHandlers = new EventHandlers(this.canvas, this);
             
             // Delegate properties for backward compatibility
             this.pixels = this.pixelStorage.pixels;
             this.pixelStock = this.pixelStorage.pixelStock;
             
-            // this.debugPanel.log('✅ All modules initialized successfully');
             this.init();
         } catch (error) {
-            // this.debugPanel.log(`❌ Initialization failed: ${error.message}`);
             console.error('Initialization error:', error);
         }
     }
     
     async init() {
         try {
-            console.error('🚨 EMERGENCY DEBUG: Starting application initialization...');
             this.setupCanvas();
             this.renderEngine.setupColorPalette();
             this.setupOnlineStatusHandling();
@@ -136,13 +122,12 @@ class PixelCanvas {
             await this.sectorManager.initializeSectors();
             this.sectorManager.startPeriodicRefresh();
             
-            // 🚨 EMERGENCY FIX: Await initial data loading
+            // Await initial data loading
             await this.loadInitialData();
             
             this.viewportController.centerViewportOnActiveSectors();
-            console.error('🚨 EMERGENCY DEBUG: ✅ Application initialization complete');
         } catch (error) {
-            console.error('🚨 EMERGENCY DEBUG: ❌ Init error:', error);
+            console.error('Init error:', error);
         }
     }
     
@@ -171,13 +156,11 @@ class PixelCanvas {
     
     setupOnlineStatusHandling() {
         window.addEventListener('online', () => {
-            // this.debugPanel.log('🌐 Back online - flushing queue');
             this.networkManager.updateStatus(true);
             this.networkManager.flushQueue();
         });
         
         window.addEventListener('offline', () => {
-            // this.debugPanel.log('📴 Gone offline');
             this.networkManager.updateStatus(false);
         });
     }
@@ -189,20 +172,16 @@ class PixelCanvas {
     }
     
     async loadInitialData() {
-        console.error('🚨 EMERGENCY DEBUG: Starting loadInitialData()...');
         
         try {
-            // 🚨 EMERGENCY FIX: Await pixel loading to ensure completion
+            // Await pixel loading to ensure completion
             await this.networkManager.loadPixelsFromSupabase();
-            console.error('🚨 EMERGENCY DEBUG: Pixel loading completed, triggering render...');
             this.render();
-            console.error('🚨 EMERGENCY DEBUG: Initial render completed');
             
             // Load sector counts (for reference only, we use real-time counting) 
             this.networkManager.loadSectorCounts();
-            console.error('🚨 EMERGENCY DEBUG: ✅ Initial data loading complete');
         } catch (error) {
-            console.error('🚨 EMERGENCY DEBUG: ❌ Initial data loading failed:', error);
+            console.error('Initial data loading failed:', error);
         }
     }
     
@@ -231,20 +210,13 @@ class PixelCanvas {
         
         // Check if pixel already exists
         if (this.pixelStorage.hasPixel(local.sectorX, local.sectorY, local.localX, local.localY)) {
-            console.error('🚫 Pixel already exists at this location:', {local});
             return;
         }
         
-        console.error(`🎯 PIXEL DRAW ATTEMPT: screen(${x.toFixed(1)}, ${y.toFixed(1)}) → world(${worldX}, ${worldY}) → sector(${local.sectorX}, ${local.sectorY}) local(${local.localX}, ${local.localY})`);
         
-        // 🚀 Use optimized pixel drawing system
+        // Use optimized pixel drawing system
         const success = await this.drawPixelOptimized(worldX, worldY, this.currentColor);
         
-        if (!success) {
-            console.error('❌ PIXEL DRAW FAILED:', {local, currentColor: this.currentColor});
-        } else {
-            console.error('✅ PIXEL DRAW SUCCESS:', {local, currentColor: this.currentColor});
-        }
         
         if (success) {
             // Check for expansion after successful draw

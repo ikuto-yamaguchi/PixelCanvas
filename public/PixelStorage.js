@@ -49,7 +49,6 @@ export class PixelStorage {
             for (const [key, color] of Object.entries(savedPixels)) {
                 this.pixels.set(key, color);
             }
-            // this.pixelCanvas.debugPanel.log(`📱 Loaded ${Object.keys(savedPixels).length} pixels from local storage`);
         } catch (error) {
             console.error('Failed to load pixels from localStorage:', error);
         }
@@ -58,7 +57,6 @@ export class PixelStorage {
     clearAllPixels() {
         this.pixels.clear();
         localStorage.removeItem('pixelcanvas_pixels');
-        // this.pixelCanvas.debugPanel.log('🗑️ All pixels cleared');
     }
     
     getPixelCount() {
@@ -80,10 +78,8 @@ export class PixelStorage {
                 parseInt(savedStock) + recoveredStock
             );
             
-            // this.pixelCanvas.debugPanel.log(`💰 Stock initialized: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK} (recovered ${recoveredStock})`);
         } else {
             this.pixelStock = CONFIG.MAX_PIXEL_STOCK;
-            // this.pixelCanvas.debugPanel.log(`💰 Stock initialized: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK} (new user)`);
         }
         
         this.updateStockDisplay();

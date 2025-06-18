@@ -34,11 +34,9 @@ export class NetworkManager {
                     this.handleRemotePixel(payload.new);
                 })
                 .subscribe((status) => {
-                    // this.pixelCanvas.debugPanel.log(`📡 Real-time: ${status}`);
                 });
         } catch (error) {
             console.error('Failed to setup real-time subscription:', error);
-            // this.pixelCanvas.debugPanel.log(`❌ Real-time setup failed: ${error.message}`);
         }
     }
     
@@ -58,7 +56,6 @@ export class NetworkManager {
     
     async sendPixel(pixel) {
         if (!navigator.onLine) {
-            // this.pixelCanvas.debugPanel.log('📴 Offline: Queueing pixel');
             this.queuePixel(pixel);
             return;
         }
@@ -66,7 +63,6 @@ export class NetworkManager {
         try {
             // Check rate limit before sending
             if (!(await this.checkRateLimit())) {
-                // this.pixelCanvas.debugPanel.log('🚫 Rate limited: Cannot send pixel');
                 return;
             }
             
@@ -96,7 +92,6 @@ export class NetworkManager {
             });
             
             if (response.ok) {
-                // this.pixelCanvas.debugPanel.log(`✅ Pixel sent: (${sectorX},${sectorY},${pixel.x},${pixel.y})`);
                 
                 // Log user action and sync stock
                 this.logUserActionLazy('pixel_draw');
@@ -118,7 +113,6 @@ export class NetworkManager {
                 stack: error.stack,
                 url: `${CONFIG.SUPABASE_URL}/rest/v1/pixels`
             });
-            // this.pixelCanvas.debugPanel.log(`❌ Send failed: ${error.message}`);
             this.queuePixel(pixel);
         }
     }
@@ -150,14 +144,12 @@ export class NetworkManager {
         const queue = await window.idb.get('queue') || [];
         if (queue.length === 0) return;
         
-        // this.pixelCanvas.debugPanel.log(`📤 Flushing ${queue.length} queued pixels...`);
         
         for (const pixel of queue) {
             await this.sendPixel(pixel);
         }
         
         await window.idb.del('queue');
-        // this.pixelCanvas.debugPanel.log('✅ Queue flushed successfully');
     }
     
     async checkRateLimit() {
