@@ -185,8 +185,9 @@ export class EventHandlers {
         
         const now = Date.now();
         
-        // Handle tap for pixel drawing - very permissive for debugging
-        if (e.touches.length === 1) {
+        // Handle tap for pixel drawing
+        // CRITICAL FIX: touchend event has e.touches.length === 0 for single tap
+        if (this.touchState.touches === 1 && e.touches.length === 0) {
             const tapDuration = now - this.touchState.startTime;
             
             console.error('📱 SINGLE TOUCH END DETECTED:', {
@@ -198,12 +199,16 @@ export class EventHandlers {
                 maxDuration: CONFIG.TAP_DURATION_MS
             });
             
-            // EMERGENCY FIX: Very permissive conditions for pixel drawing
-            if (tapDuration < 2000) { // Allow up to 2 seconds
-                console.error('📱 CALLING handlePixelClick (EMERGENCY MODE)');
+            // Permissive conditions for pixel drawing
+            if (!this.touchState.moved && tapDuration < 1000 && !this.touchState.wasMultiTouch) {
+                console.error('📱 CALLING handlePixelClick');
                 this.pixelCanvas.handlePixelClick(this.touchState.startX, this.touchState.startY);
             } else {
-                console.error('📱 TAP REJECTED: Too long (>2s)');
+                console.error('📱 TAP REJECTED:', {
+                    moved: this.touchState.moved,
+                    tooLong: tapDuration >= 1000,
+                    wasMultiTouch: this.touchState.wasMultiTouch
+                });
             }
         } else {
             console.error('📱 TAP CONDITIONS NOT MET:', {
@@ -211,7 +216,7 @@ export class EventHandlers {
                 storedTouches: this.touchState.touches,
                 moved: this.touchState.moved,
                 wasMultiTouch: this.touchState.wasMultiTouch,
-                reason: e.touches.length !== 1 ? 'Not single touch' : 'Movement detected'
+                reason: this.touchState.touches !== 1 ? 'Not single touch start' : 'Still touching'
             });
         }
         

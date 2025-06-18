@@ -236,8 +236,9 @@ export class ViewportDataLoader {
      * セクターバッチ読み込み
      */
     async loadSectorBatch(sectorBatch) {
+        // 正しいPostgREST OR構文: or(cond1,cond2,cond3)
         const sectorConditions = sectorBatch.map(s => 
-            `(sector_x.eq.${s.sectorX},sector_y.eq.${s.sectorY})`
+            `and(sector_x.eq.${s.sectorX},sector_y.eq.${s.sectorY})`
         ).join(',');
         
         const { data, error } = await this.supabase
