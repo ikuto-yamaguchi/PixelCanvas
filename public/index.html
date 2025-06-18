@@ -318,224 +318,173 @@
         // 全ログをコピーする関数
         function copyAllLogs() {
             try {
-                // 複数のセレクターでログリストを検索
-                let logList = null;
-                let logItems = [];
+                console.log('🔍 Starting vConsole log extraction...');
                 
-                const logSelectors = [
-                    '#__vconsole .vc-log-list',
-                    '#__vconsole .vc-content',
-                    '#__vconsole [class*="log"]',
-                    '#__vconsole .vc-panel',
-                    '#__vconsole .vc-tabpanel'
-                ];
-                
-                for (const selector of logSelectors) {
-                    logList = document.querySelector(selector);
-                    if (logList) {
-                        // ログアイテムを検索（仮想スクロール対応）
-                        const itemSelectors = [
-                            '.vc-item:not(.vc-scroller-items)', // 通常のログアイテム（スクローラー除外）
-                            '.vc-log-item', 
-                            '[class*="log-"]:not(.vc-scroller-items)',
-                            '.vc-content > div:not(.vc-scroller-items)', // 直接の子要素
-                            '.vc-scroller-items > div', // 仮想スクロール内のアイテム
-                            '[data-log]', // data属性付きログ
-                            'div[class*="item"]:not(.vc-scroller-items)',
-                            // 最後の手段: スクローラー内の全div（但し更に子要素がある場合のみ）
-                            '.vc-scroller-items div:not(:empty)'
-                        ];
-                        
-                        for (const itemSelector of itemSelectors) {
-                            logItems = logList.querySelectorAll(itemSelector);
-                            // 空でない、かつ意味のあるコンテンツを持つアイテムのみフィルタ
-                            const validItems = Array.from(logItems).filter(item => {
-                                const text = item.textContent || item.innerText || '';
-                                const hasContent = text.trim().length > 0;
-                                const isNotScrollerContainer = !item.classList.contains('vc-scroller-items');
-                                const hasChildren = item.children.length > 0 || hasContent;
-                                return hasContent && isNotScrollerContainer && hasChildren;
-                            });
-                            
-                            if (validItems.length > 0) {
-                                logItems = validItems;
-                                console.log(`✅ Found ${validItems.length} valid log items with selector: ${selector} > ${itemSelector}`);
-                                break;
-                            }
-                        }
-                        if (logItems.length > 0) break;
-                    }
-                }
-                
-                if (!logList || logItems.length === 0) {
-                    // 最後の手段: ブラウザのコンソールログを直接取得
-                    const browserLogs = getBrowserConsoleLogs();
-                    if (browserLogs.length > 0) {
-                        const logText = [
-                            '=== PixelCanvas Browser Console Logs ===',
-                            `Exported: ${new Date().toLocaleString()}`,
-                            `Total Logs: ${browserLogs.length}`,
-                            '=' .repeat(40),
-                            '',
-                            ...browserLogs,
-                            '',
-                            '=== End of Logs ==='
-                        ].join('\n');
-                        copyToClipboard(logText);
-                        alert('✅ ブラウザコンソールログをコピーしました');
-                        return;
-                    }
-                    
-                    // vConsole全体からテキストを抽出
-                    const vconsoleElement = document.querySelector('#__vconsole');
-                    if (vconsoleElement) {
-                        // DOM構造の詳細分析
-                        const structureInfo = analyzeVConsoleStructure(vconsoleElement);
-                        const allText = vconsoleElement.innerText || vconsoleElement.textContent;
-                        if (allText) {
-                            const logText = [
-                                '=== PixelCanvas vConsole Content ===',
-                                `Exported: ${new Date().toLocaleString()}`,
-                                '=' .repeat(40),
-                                '',
-                                'DOM Structure Analysis:',
-                                ...structureInfo,
-                                '',
-                                'Full Content:',
-                                allText,
-                                '',
-                                '=== End of Content ==='
-                            ].join('\n');
-                            copyToClipboard(logText);
-                            alert('✅ vConsoleの全コンテンツをコピーしました');
-                            return;
-                        }
-                    }
-                    alert('❌ ログが見つかりません');
+                // まずvConsoleのコンソールタブをアクティブにする
+                const consoleTab = document.querySelector('#__vconsole .vc-switch[data-tab="default"]') || 
+                                  document.querySelector('#__vconsole .vc-switch[data-tab="console"]');
+                if (consoleTab && !consoleTab.classList.contains('vc-actived')) {
+                    consoleTab.click();
+                    console.log('✅ Console tab activated');
+                    // 少し待ってからログ抽出を続行
+                    setTimeout(() => copyAllLogs(), 200);
                     return;
                 }
                 
-                let allLogs = [];
+                // vConsoleの内部ログデータに直接アクセスを試行
+                let extractedLogs = [];
                 
-                logItems.forEach((item, index) => {
-                    // ログタイプを複数の方法で判定
-                    let logType = 'LOG';
-                    const className = item.className || '';
-                    const itemText = item.textContent || item.innerText || '';
-                    
-                    if (className.includes('error') || className.includes('vc-item-error') || 
-                        itemText.includes('❌') || itemText.includes('ERROR')) {
-                        logType = 'ERROR';
-                    } else if (className.includes('warn') || className.includes('vc-item-warn') || 
-                              itemText.includes('⚠️') || itemText.includes('WARN')) {
-                        logType = 'WARN';
-                    } else if (className.includes('info') || className.includes('vc-item-info') || 
-                              itemText.includes('ℹ️') || itemText.includes('INFO')) {
-                        logType = 'INFO';
-                    }
-                    
-                    // テキスト内容を複数の方法で抽出（展開も含む）
-                    let content = '';
-                    
-                    // 0. まず折りたたまれた要素を全て展開
-                    expandAllLogObjects(item);
-                    
-                    // 1. 拡張されたtextContentから取得
-                    if (item.textContent) {
-                        content = item.textContent.replace('📋', '').trim();
-                    }
-                    
-                    // 2. vConsoleの構造化データを抽出
-                    if (!content || content.length < 10) {
-                        content = extractVConsoleLogContent(item);
-                    }
-                    
-                    // 3. 空の場合は子要素を探す
-                    if (!content || content.length < 10) {
-                        const contentElement = item.querySelector('.vc-item-content, .vc-content, .log-content, .vc-log-content');
-                        if (contentElement) {
-                            expandAllLogObjects(contentElement);
-                            content = contentElement.textContent || contentElement.innerText || '';
+                // 方法1: vConsole APIから直接ログを取得
+                if (window.vConsole && window.vConsole.tool) {
+                    console.log('🔍 Trying vConsole API method...');
+                    try {
+                        const logTool = window.vConsole.tool.default || window.vConsole.tool.console;
+                        if (logTool && logTool.logList) {
+                            console.log(`📋 Found ${logTool.logList.length} logs via API`);
+                            logTool.logList.forEach((log, index) => {
+                                const logData = Array.isArray(log.data) ? log.data.join(' ') : String(log.data);
+                                const timestamp = log.date ? new Date(log.date).toLocaleTimeString() : 'unknown';
+                                extractedLogs.push(`[${index + 1}] [${timestamp}] [${log.type.toUpperCase()}] ${logData}`);
+                            });
                         }
+                    } catch (error) {
+                        console.log('⚠️ vConsole API method failed:', error);
                     }
+                }
+                
+                // 方法2: DOMから詳細抽出（APIが失敗した場合の補完）
+                if (extractedLogs.length === 0) {
+                    console.log('🔍 Trying DOM extraction method...');
+                    const vconsolePanel = document.querySelector('#__vconsole .vc-tabpanel[data-tab="default"]') ||
+                                         document.querySelector('#__vconsole .vc-tabpanel[data-tab="console"]');
                     
-                    // 4. まだ空の場合は全ての子要素のテキストを結合
-                    if (!content || content.length < 10) {
-                        const allTextNodes = [];
-                        const walker = document.createTreeWalker(
-                            item,
-                            NodeFilter.SHOW_TEXT,
-                            null,
-                            false
-                        );
+                    if (vconsolePanel) {
+                        // ログアイテムを探すための包括的セレクター
+                        const possibleLogContainers = [
+                            '.vc-scroller',
+                            '.vc-content', 
+                            '.vc-panel-content',
+                            '.vc-tabpanel-content'
+                        ];
                         
-                        let node;
-                        while (node = walker.nextNode()) {
-                            const text = node.textContent.trim();
-                            if (text && text !== '📋') {
-                                allTextNodes.push(text);
+                        for (const containerSelector of possibleLogContainers) {
+                            const container = vconsolePanel.querySelector(containerSelector);
+                            if (container) {
+                                console.log(`📍 Found container: ${containerSelector}`);
+                                
+                                // 全てのテキストノードを収集
+                                const walker = document.createTreeWalker(
+                                    container,
+                                    NodeFilter.SHOW_ALL,
+                                    {
+                                        acceptNode: function(node) {
+                                            // スクリプトタグや隠し要素は除外
+                                            if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE') {
+                                                return NodeFilter.FILTER_REJECT;
+                                            }
+                                            if (node.style && node.style.display === 'none') {
+                                                return NodeFilter.FILTER_REJECT;
+                                            }
+                                            return NodeFilter.FILTER_ACCEPT;
+                                        }
+                                    }
+                                );
+                                
+                                let allText = '';
+                                let node;
+                                while (node = walker.nextNode()) {
+                                    if (node.nodeType === Node.TEXT_NODE) {
+                                        const text = node.textContent.trim();
+                                        if (text && text.length > 0 && !text.match(/^[\s\n\r\t]*$/)) {
+                                            allText += text + ' ';
+                                        }
+                                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                                        // ログエントリっぽい要素を特定
+                                        if (node.classList && (
+                                            node.classList.contains('vc-item') ||
+                                            node.classList.contains('vc-log') ||
+                                            node.className.includes('log')
+                                        )) {
+                                            const logText = node.textContent || node.innerText;
+                                            if (logText && logText.trim().length > 5) {
+                                                extractedLogs.push(`[DOM] ${logText.trim()}`);
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // まとめてテキスト抽出もバックアップとして保存
+                                if (allText.trim().length > 0) {
+                                    extractedLogs.push(`[FULL_CONTENT] ${allText.trim()}`);
+                                }
+                                
+                                break;
                             }
                         }
-                        content = allTextNodes.join(' ');
                     }
-                    
-                    // 5. 最後の手段: innerHTML から抽出
-                    if (!content || content.length < 10) {
-                        content = item.innerHTML.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-                    }
-                    
-                    // 空の場合はDOM情報を含める
-                    if (!content || content.length < 10) {
-                        content = `[Empty log item - className: ${className}, tagName: ${item.tagName}]`;
-                    }
-                    
-                    // 内容をクリーンアップ
-                    content = cleanLogContent(content);
-                    
-                    // タイムスタンプを抽出試行
-                    const timeElement = item.querySelector('.vc-item-time, .timestamp, [class*="time"]');
-                    const timestamp = timeElement ? timeElement.textContent : new Date().toLocaleTimeString();
-                    
-                    allLogs.push(`[${index + 1}] [${timestamp}] [${logType}] ${content}`);
-                });
+                }
                 
-                // デバッグ情報も含める
+                // 方法3: 最後の手段 - ブラウザコンソールログ履歴を取得
+                if (extractedLogs.length === 0) {
+                    console.log('🔍 Trying browser console history...');
+                    if (window.console._logs) {
+                        extractedLogs = window.console._logs.map((log, index) => 
+                            `[${index + 1}] [BROWSER] ${log}`
+                        );
+                    } else {
+                        // 静的メッセージを追加
+                        extractedLogs.push('[ERROR] Unable to extract logs from vConsole');
+                        extractedLogs.push('[INFO] vConsole DOM structure may have changed');
+                        extractedLogs.push('[DEBUG] Manual inspection of vConsole panel may be required');
+                    }
+                }
+                
+                // 結果の最終処理とコピー実行
+                if (extractedLogs.length === 0) {
+                    extractedLogs.push('[WARNING] No logs could be extracted');
+                    extractedLogs.push('[INFO] This may indicate vConsole is not properly initialized');
+                    extractedLogs.push('[SUGGESTION] Try refreshing the page and running tests to generate logs');
+                }
+                
+                // デバッグ情報を含める
                 const debugInfo = [
                     `Debug Info:`,
-                    `- Log List Selector: ${logSelectors.find(s => document.querySelector(s)) || 'Not found'}`,
-                    `- Log Items Found: ${logItems.length}`,
-                    `- Sample Item HTML: ${logItems[0] ? logItems[0].outerHTML.substring(0, 200) + '...' : 'None'}`,
-                    `- vConsole DOM: ${document.querySelector('#__vconsole') ? 'Found' : 'Not found'}`,
+                    `- vConsole Object: ${window.vConsole ? 'Found' : 'Not found'}`,
+                    `- vConsole Tools: ${window.vConsole?.tool ? Object.keys(window.vConsole.tool).join(', ') : 'None'}`,
+                    `- DOM Element: ${document.querySelector('#__vconsole') ? 'Found' : 'Not found'}`,
+                    `- Extraction Method: ${extractedLogs.length > 0 ? 'Success' : 'Failed'}`,
+                    `- Logs Extracted: ${extractedLogs.length}`,
                     ''
                 ];
                 
                 const logText = [
-                    '=== PixelCanvas vConsole Logs ===',
+                    '=== PixelCanvas vConsole Deep Logs ===',
                     `Exported: ${new Date().toLocaleString()}`,
-                    `Total Logs: ${allLogs.length}`,
+                    `Total Logs: ${extractedLogs.length}`,
                     '=' .repeat(40),
                     '',
                     ...debugInfo,
-                    ...allLogs,
+                    ...extractedLogs,
                     '',
-                    '=== End of Logs ==='
+                    '=== End of Deep Logs ==='
                 ].join('\n');
                 
                 copyToClipboard(logText);
                 
                 // フィードバック表示
-                const button = document.querySelector('.vc-copy-logs-btn');
+                const button = document.querySelector('.vc-copy-logs-btn') || 
+                              document.querySelector('.vc-floating-copy-btn');
                 if (button) {
-                    const originalText = button.innerHTML;
+                    const originalContent = button.innerHTML;
                     button.innerHTML = '✅ Copied!';
                     button.style.background = '#2196F3';
                     setTimeout(() => {
-                        button.innerHTML = originalText;
+                        button.innerHTML = originalContent;
                         button.style.background = '#4CAF50';
                     }, 1500);
                 }
                 
-                console.log(`📋 ${allLogs.length} logs copied to clipboard`);
+                console.log(`📋 Deep log extraction completed: ${extractedLogs.length} entries copied to clipboard`);
                 
             } catch (error) {
                 console.error('❌ Failed to copy logs:', error);
@@ -759,23 +708,155 @@
         
         // 完全展開モードでログコピー
         function copyAllLogsExpanded() {
-            console.log('🔍 Starting deep log extraction...');
+            console.log('🔍 Starting comprehensive deep log extraction...');
             
-            // すべてのログアイテムを展開
-            const logList = document.querySelector('#__vconsole .vc-content') || 
-                           document.querySelector('#__vconsole .vc-log-list');
-            
-            if (logList) {
-                expandAllLogObjects(logList);
+            try {
+                // vConsoleのAPIを通じて完全なログデータを取得
+                let comprehensiveLog = [];
                 
-                // 展開完了を待ってからコピー実行
-                setTimeout(() => {
-                    copyAllLogs();
-                    console.log('✅ Deep extraction completed');
-                }, 500);
-            } else {
-                console.error('❌ Log list not found for expansion');
-                copyAllLogs(); // フォールバック
+                // 方法1: vConsole内部データの完全ダンプ
+                if (window.vConsole) {
+                    console.log('📱 Extracting vConsole internal data...');
+                    
+                    // vConsoleのtoolオブジェクトを深く探索
+                    if (window.vConsole.tool) {
+                        for (const [toolName, tool] of Object.entries(window.vConsole.tool)) {
+                            comprehensiveLog.push(`=== vConsole Tool: ${toolName} ===`);
+                            
+                            if (tool && tool.logList && Array.isArray(tool.logList)) {
+                                comprehensiveLog.push(`Found ${tool.logList.length} logs in ${toolName}`);
+                                
+                                tool.logList.forEach((log, index) => {
+                                    try {
+                                        // 完全なログオブジェクトを文字列化
+                                        const timestamp = log.date ? new Date(log.date).toLocaleString() : 'no-time';
+                                        const logType = log.type || 'unknown';
+                                        
+                                        // データを詳細に展開
+                                        let logContent = '';
+                                        if (Array.isArray(log.data)) {
+                                            logContent = log.data.map(item => {
+                                                if (typeof item === 'object') {
+                                                    try {
+                                                        return JSON.stringify(item, null, 2);
+                                                    } catch {
+                                                        return String(item);
+                                                    }
+                                                }
+                                                return String(item);
+                                            }).join(' | ');
+                                        } else {
+                                            logContent = String(log.data);
+                                        }
+                                        
+                                        comprehensiveLog.push(`[${index + 1}] [${timestamp}] [${logType.toUpperCase()}] ${logContent}`);
+                                        
+                                        // オブジェクトの完全なJSONダンプも含める
+                                        if (log.data && typeof log.data === 'object') {
+                                            try {
+                                                const fullObject = JSON.stringify(log.data, null, 2);
+                                                if (fullObject.length > 20) {
+                                                    comprehensiveLog.push(`    └─ FULL_OBJECT: ${fullObject}`);
+                                                }
+                                            } catch (error) {
+                                                comprehensiveLog.push(`    └─ OBJECT_ERROR: ${error.message}`);
+                                            }
+                                        }
+                                        
+                                    } catch (error) {
+                                        comprehensiveLog.push(`[ERROR_PROCESSING_LOG_${index}] ${error.message}`);
+                                    }
+                                });
+                            } else {
+                                comprehensiveLog.push(`No logList found in ${toolName}`);
+                            }
+                            comprehensiveLog.push(''); // 空行
+                        }
+                    }
+                    
+                    // vConsoleの設定情報も含める
+                    comprehensiveLog.push('=== vConsole Configuration ===');
+                    try {
+                        const vcConfig = {
+                            version: window.vConsole.version,
+                            isInited: window.vConsole.isInited,
+                            option: window.vConsole.option
+                        };
+                        comprehensiveLog.push(JSON.stringify(vcConfig, null, 2));
+                    } catch (error) {
+                        comprehensiveLog.push(`Config extraction failed: ${error.message}`);
+                    }
+                    comprehensiveLog.push('');
+                }
+                
+                // 方法2: ブラウザコンソールの履歴も取得（拡張）
+                comprehensiveLog.push('=== Browser Console History ===');
+                if (console.log._original) {
+                    comprehensiveLog.push('Console has been intercepted - original methods available');
+                }
+                
+                // PixelCanvasアプリの状態も含める
+                if (window.pixelCanvas) {
+                    comprehensiveLog.push('=== PixelCanvas Application State ===');
+                    try {
+                        const appStats = window.pixelCanvas.getStats();
+                        comprehensiveLog.push(JSON.stringify(appStats, null, 2));
+                    } catch (error) {
+                        comprehensiveLog.push(`App state extraction failed: ${error.message}`);
+                    }
+                    comprehensiveLog.push('');
+                }
+                
+                // DOM展開も実行
+                const logList = document.querySelector('#__vconsole .vc-content') || 
+                               document.querySelector('#__vconsole .vc-log-list');
+                
+                if (logList) {
+                    expandAllLogObjects(logList);
+                    
+                    // DOM要素からも抽出
+                    comprehensiveLog.push('=== DOM Element Content ===');
+                    const allText = logList.textContent || logList.innerText;
+                    if (allText && allText.trim().length > 0) {
+                        comprehensiveLog.push(allText.trim());
+                    }
+                    comprehensiveLog.push('');
+                }
+                
+                // 最終結果の組み立て
+                const finalLogText = [
+                    '=== PixelCanvas COMPREHENSIVE Deep Log Extraction ===',
+                    `Exported: ${new Date().toLocaleString()}`,
+                    `Extraction Type: Complete Deep Analysis`,
+                    `Total Entries: ${comprehensiveLog.length}`,
+                    '=' .repeat(60),
+                    '',
+                    ...comprehensiveLog,
+                    '',
+                    '=== End of Comprehensive Deep Logs ==='
+                ].join('\n');
+                
+                copyToClipboard(finalLogText);
+                
+                // フィードバック
+                const button = document.querySelector('.vc-copy-logs-expanded-btn') || 
+                              document.querySelector('.vc-floating-expand-btn');
+                if (button) {
+                    const originalContent = button.innerHTML;
+                    button.innerHTML = '✅ Deep Copied!';
+                    button.style.background = '#4CAF50';
+                    setTimeout(() => {
+                        button.innerHTML = originalContent;
+                        button.style.background = '#FF9800';
+                    }, 2000);
+                }
+                
+                console.log(`✅ Comprehensive deep extraction completed: ${comprehensiveLog.length} entries`);
+                
+            } catch (error) {
+                console.error('❌ Deep extraction failed:', error);
+                // フォールバック to normal extraction
+                copyAllLogs();
             }
         }
         
