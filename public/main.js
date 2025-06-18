@@ -88,17 +88,21 @@ class PixelCanvas {
     
     async init() {
         try {
-            // Disable all init logging for performance
+            console.error('🚨 EMERGENCY DEBUG: Starting application initialization...');
             this.setupCanvas();
             this.renderEngine.setupColorPalette();
             this.setupOnlineStatusHandling();
             this.registerServiceWorker();
             await this.sectorManager.initializeSectors();
             this.sectorManager.startPeriodicRefresh();
-            this.loadInitialData();
+            
+            // 🚨 EMERGENCY FIX: Await initial data loading
+            await this.loadInitialData();
+            
             this.viewportController.centerViewportOnActiveSectors();
+            console.error('🚨 EMERGENCY DEBUG: ✅ Application initialization complete');
         } catch (error) {
-            console.error('Init error:', error);
+            console.error('🚨 EMERGENCY DEBUG: ❌ Init error:', error);
         }
     }
     
@@ -144,17 +148,22 @@ class PixelCanvas {
         }
     }
     
-    loadInitialData() {
-        // this.debugPanel.log('🚀 Initializing PixelCanvas...');
+    async loadInitialData() {
+        console.error('🚨 EMERGENCY DEBUG: Starting loadInitialData()...');
         
-        // Load pixels and sector data
-        this.networkManager.loadPixelsFromSupabase().then(() => {
+        try {
+            // 🚨 EMERGENCY FIX: Await pixel loading to ensure completion
+            await this.networkManager.loadPixelsFromSupabase();
+            console.error('🚨 EMERGENCY DEBUG: Pixel loading completed, triggering render...');
             this.render();
-            // this.debugPanel.log('✅ Initialization complete');
-        });
-        
-        // Load sector counts (for reference only, we use real-time counting)
-        this.networkManager.loadSectorCounts();
+            console.error('🚨 EMERGENCY DEBUG: Initial render completed');
+            
+            // Load sector counts (for reference only, we use real-time counting) 
+            this.networkManager.loadSectorCounts();
+            console.error('🚨 EMERGENCY DEBUG: ✅ Initial data loading complete');
+        } catch (error) {
+            console.error('🚨 EMERGENCY DEBUG: ❌ Initial data loading failed:', error);
+        }
     }
     
     // Pixel interaction
