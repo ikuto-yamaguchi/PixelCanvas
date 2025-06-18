@@ -183,28 +183,35 @@ export class EventHandlers {
         
         const now = Date.now();
         
-        // Handle tap for pixel drawing
-        if (this.touchState.touches === 1 && !this.touchState.moved && !this.touchState.wasMultiTouch) {
+        // Handle tap for pixel drawing - check for quick single touch
+        if (e.touches.length === 1) {
             const tapDuration = now - this.touchState.startTime;
             
-            console.error('📱 TOUCH TAP DETECTED:', {
+            console.error('📱 SINGLE TOUCH END DETECTED:', {
                 startX: this.touchState.startX, 
                 startY: this.touchState.startY, 
-                tapDuration, 
+                tapDuration,
+                moved: this.touchState.moved,
+                wasMultiTouch: this.touchState.wasMultiTouch,
                 maxDuration: CONFIG.TAP_DURATION_MS
             });
             
-            if (tapDuration < CONFIG.TAP_DURATION_MS) {
+            // More permissive: allow quick taps even if slightly moved
+            if (tapDuration < CONFIG.TAP_DURATION_MS && !this.touchState.wasMultiTouch) {
                 console.error('📱 CALLING handlePixelClick');
                 this.pixelCanvas.handlePixelClick(this.touchState.startX, this.touchState.startY);
             } else {
-                console.error('📱 TAP TOO LONG, IGNORED');
+                console.error('📱 TAP REJECTED:', {
+                    reason: tapDuration >= CONFIG.TAP_DURATION_MS ? 'Too long' : 'Was multitouch'
+                });
             }
         } else {
             console.error('📱 TAP CONDITIONS NOT MET:', {
-                touches: this.touchState.touches,
+                currentTouches: e.touches.length,
+                storedTouches: this.touchState.touches,
                 moved: this.touchState.moved,
-                wasMultiTouch: this.touchState.wasMultiTouch
+                wasMultiTouch: this.touchState.wasMultiTouch,
+                reason: e.touches.length !== 1 ? 'Not single touch' : 'Movement detected'
             });
         }
         
