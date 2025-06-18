@@ -75,6 +75,11 @@
                         console.log('📱 vConsole ready for debugging!');
                         console.warn('⚠️ Warning test message');
                         console.error('❌ Error test message');
+                        
+                        // ログコピー機能追加
+                        setTimeout(() => {
+                            addLogCopyFeature();
+                        }, 500);
                     }
                 });
                 
@@ -88,6 +93,203 @@
         } catch (error) {
             console.error('❌ Failed to initialize vConsole:', error);
         }
+        
+        // ログコピー機能の追加
+        function addLogCopyFeature() {
+            try {
+                // vConsoleのコンソールタブを探す
+                const consoleTab = document.querySelector('#__vconsole .vc-tab[data-tab="default"]');
+                if (!consoleTab) {
+                    console.warn('vConsole console tab not found, retrying...');
+                    setTimeout(addLogCopyFeature, 1000);
+                    return;
+                }
+                
+                // コピーボタンをタブヘッダーに追加
+                const tabBox = consoleTab.closest('.vc-tabbox');
+                if (tabBox && !tabBox.querySelector('.vc-copy-logs-btn')) {
+                    const copyButton = document.createElement('button');
+                    copyButton.className = 'vc-copy-logs-btn';
+                    copyButton.innerHTML = '📋 Copy All Logs';
+                    copyButton.style.cssText = `
+                        position: absolute;
+                        top: 5px;
+                        right: 10px;
+                        background: #4CAF50;
+                        color: white;
+                        border: none;
+                        padding: 5px 10px;
+                        border-radius: 3px;
+                        font-size: 12px;
+                        cursor: pointer;
+                        z-index: 9999;
+                    `;
+                    
+                    copyButton.addEventListener('click', () => {
+                        copyAllLogs();
+                    });
+                    
+                    // タブヘッダーに追加
+                    const tabHeader = tabBox.querySelector('.vc-tabbar');
+                    if (tabHeader) {
+                        tabHeader.style.position = 'relative';
+                        tabHeader.appendChild(copyButton);
+                        console.log('✅ Log copy button added to vConsole');
+                    }
+                }
+                
+                // 各ログエントリにもコピーボタンを追加する関数
+                function addCopyButtonsToLogs() {
+                    const logList = document.querySelector('#__vconsole .vc-log-list');
+                    if (logList) {
+                        // ログリストの変更を監視
+                        const observer = new MutationObserver(() => {
+                            const logItems = logList.querySelectorAll('.vc-item:not(.vc-copy-added)');
+                            logItems.forEach(item => {
+                                if (!item.querySelector('.vc-copy-single-btn')) {
+                                    const copyBtn = document.createElement('span');
+                                    copyBtn.className = 'vc-copy-single-btn';
+                                    copyBtn.innerHTML = '📋';
+                                    copyBtn.style.cssText = `
+                                        display: inline-block;
+                                        margin-left: 8px;
+                                        cursor: pointer;
+                                        opacity: 0.6;
+                                        font-size: 12px;
+                                    `;
+                                    copyBtn.title = 'Copy this log';
+                                    
+                                    copyBtn.addEventListener('click', (e) => {
+                                        e.stopPropagation();
+                                        const logContent = item.textContent.replace('📋', '').trim();
+                                        copyToClipboard(logContent);
+                                        showCopyFeedback(copyBtn);
+                                    });
+                                    
+                                    const logContent = item.querySelector('.vc-item-content');
+                                    if (logContent) {
+                                        logContent.appendChild(copyBtn);
+                                    }
+                                    item.classList.add('vc-copy-added');
+                                }
+                            });
+                        });
+                        observer.observe(logList, { childList: true, subtree: true });
+                    }
+                }
+                
+                // 少し遅延してログボタンも追加
+                setTimeout(addCopyButtonsToLogs, 500);
+                
+            } catch (error) {
+                console.error('❌ Failed to add log copy feature:', error);
+            }
+        }
+        
+        // 全ログをコピーする関数
+        function copyAllLogs() {
+            try {
+                const logList = document.querySelector('#__vconsole .vc-log-list');
+                if (!logList) {
+                    alert('❌ ログが見つかりません');
+                    return;
+                }
+                
+                const logItems = logList.querySelectorAll('.vc-item');
+                let allLogs = [];
+                
+                logItems.forEach((item, index) => {
+                    const timestamp = new Date().toISOString();
+                    const logType = item.className.includes('vc-item-error') ? 'ERROR' : 
+                                   item.className.includes('vc-item-warn') ? 'WARN' : 
+                                   item.className.includes('vc-item-info') ? 'INFO' : 'LOG';
+                    
+                    const content = item.textContent.replace('📋', '').trim();
+                    allLogs.push(`[${index + 1}] [${logType}] ${content}`);
+                });
+                
+                const logText = [
+                    '=== PixelCanvas vConsole Logs ===',
+                    `Exported: ${new Date().toLocaleString()}`,
+                    `Total Logs: ${allLogs.length}`,
+                    '=' .repeat(40),
+                    '',
+                    ...allLogs,
+                    '',
+                    '=== End of Logs ==='
+                ].join('\n');
+                
+                copyToClipboard(logText);
+                
+                // フィードバック表示
+                const button = document.querySelector('.vc-copy-logs-btn');
+                if (button) {
+                    const originalText = button.innerHTML;
+                    button.innerHTML = '✅ Copied!';
+                    button.style.background = '#2196F3';
+                    setTimeout(() => {
+                        button.innerHTML = originalText;
+                        button.style.background = '#4CAF50';
+                    }, 1500);
+                }
+                
+                console.log(`📋 ${allLogs.length} logs copied to clipboard`);
+                
+            } catch (error) {
+                console.error('❌ Failed to copy logs:', error);
+                alert('❌ ログのコピーに失敗しました');
+            }
+        }
+        
+        // クリップボードにコピーする関数
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                // 現代的なブラウザ
+                navigator.clipboard.writeText(text).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopyTextToClipboard(text);
+                });
+            } else {
+                // フォールバック
+                fallbackCopyTextToClipboard(text);
+            }
+        }
+        
+        // フォールバック関数
+        function fallbackCopyTextToClipboard(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                console.log('📋 Copied using fallback method');
+            } catch (err) {
+                console.error('❌ Fallback copy failed:', err);
+            }
+            
+            document.body.removeChild(textArea);
+        }
+        
+        // コピーフィードバック表示
+        function showCopyFeedback(element) {
+            const original = element.innerHTML;
+            element.innerHTML = '✅';
+            element.style.color = '#4CAF50';
+            setTimeout(() => {
+                element.innerHTML = original;
+                element.style.color = '';
+            }, 1000);
+        }
+        
+        // グローバル関数として公開
+        window.copyAllVConsoleLogs = copyAllLogs;
+        
     </script>
     
     <script src="idb.js"></script>
