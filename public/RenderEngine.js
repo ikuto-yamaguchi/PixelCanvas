@@ -181,44 +181,6 @@ export class RenderEngine {
                 this.ctx.fillText(activeText, centerX, centerY);
             }
         }
-        
-        // Check if this sector should show LOCKED status
-        const isActiveSector = this.pixelCanvas.activeSectors.has(sectorKey);
-        const pixelCount = this.pixelCanvas.sectorManager?.getRealTimePixelCount(sectorKey) || 0;
-        
-        if (!isActiveSector && pixelCount > 0 && sectorSize >= 40) {
-            // This sector has pixels and is not active = LOCKED
-            this.ctx.fillStyle = '#ff4444';
-            
-            const lockedText = `LOCKED (${pixelCount}px)`;
-            let fontSize = Math.max(8, sectorSize / 20);
-            this.ctx.font = `bold ${fontSize}px Arial`;
-            
-            const textWidth = this.ctx.measureText(lockedText).width;
-            const maxWidth = sectorSize - 8;
-            
-            if (textWidth <= maxWidth && fontSize >= 8) {
-                const centerX = screenX + sectorSize / 2;
-                const centerY = screenY + sectorSize / 2 + 15;
-                this.ctx.fillText(lockedText, centerX, centerY);
-            }
-        } else if (isActiveSector && pixelCount === 0) {
-            // This sector is active and empty = AVAILABLE
-            this.ctx.fillStyle = '#44ff44';
-            
-            const availableText = 'AVAILABLE';
-            let fontSize = Math.max(8, sectorSize / 18);
-            this.ctx.font = `${fontSize}px Arial`;
-            
-            const textWidth = this.ctx.measureText(availableText).width;
-            const maxWidth = sectorSize - 8;
-            
-            if (textWidth <= maxWidth && fontSize >= 8) {
-                const centerX = screenX + sectorSize / 2;
-                const centerY = screenY + sectorSize / 2 + 15;
-                this.ctx.fillText(availableText, centerX, centerY);
-            }
-        }
     }
     
     // Handle remote pixels with batched rendering
