@@ -137,7 +137,7 @@ export class LODGenerator {
                                 data: downsampledEncoded,
                                 width: Math.floor(data.width / data.factor),
                                 height: Math.floor(data.height / data.factor),
-                                avgColor: this.calculateAverageColor(downsampled)
+                                avgColor: calculateAverageColor(downsampled)
                             });
                             break;
                     }
@@ -431,6 +431,95 @@ export class LODGenerator {
             await this.generateAllLODsForSector(sectorX, sectorY);
             break; // とりあえず全レベル再生成（最適化は後で）
         }
+    }
+    
+    // テスト用: シンプルなLOD生成デモ
+    async testLODGeneration() {
+        console.log('🧪 Testing LOD generation with sample data...');
+        
+        // サンプルピクセルデータを作成（チェッカーボードパターン）
+        const testPixelArray = new Uint8Array(256 * 256);
+        for (let y = 0; y < 256; y++) {
+            for (let x = 0; x < 256; x++) {
+                const index = y * 256 + x;
+                // チェッカーボードパターン（色1と色2を交互）
+                testPixelArray[index] = ((x + y) % 2 === 0) ? 1 : 2;
+            }
+        }
+        
+        console.log('📦 Created test pattern: 256x256 checkerboard');
+        
+        // テスト用セクター(999, 999)でLOD生成
+        const testSectorX = 999;
+        const testSectorY = 999;
+        
+        try {
+            // Level 0 (256x256)
+            console.log('🔧 Generating Level 0 (256x256)...');
+            await this.generateLODLevel(testSectorX, testSectorY, 0, testPixelArray, 256, 256);
+            
+            // Level 1 (128x128)
+            console.log('🔧 Generating Level 1 (128x128)...');
+            await this.downsampleAndSave(testSectorX, testSectorY, 1, testPixelArray, 256, 256, 2);
+            
+            // Level 2 (64x64)
+            console.log('🔧 Generating Level 2 (64x64)...');
+            await this.downsampleAndSave(testSectorX, testSectorY, 2, testPixelArray, 256, 256, 4);
+            
+            // Level 3 (32x32)
+            console.log('🔧 Generating Level 3 (32x32)...');
+            await this.downsampleAndSave(testSectorX, testSectorY, 3, testPixelArray, 256, 256, 8);
+            
+            console.log('✅ LOD test generation completed successfully!');
+            
+            // 結果を確認
+            await this.verifyLODTest(testSectorX, testSectorY);
+            
+        } catch (error) {
+            console.error('❌ LOD test generation failed:', error);
+        }
+    }
+    
+    async verifyLODTest(sectorX, sectorY) {
+        console.log('🔍 Verifying LOD test results...');
+        
+        try {
+            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/sector_lod?sector_x=eq.${sectorX}&sector_y=eq.${sectorY}`, {
+                headers: {
+                    'apikey': CONFIG.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                }
+            });
+            
+            if (response.ok) {
+                const lodRecords = await response.json();
+                console.log(`📊 Found ${lodRecords.length} LOD records for test sector:`);
+                
+                lodRecords.forEach(record => {
+                    const compressionRatio = record.rle_data ? 
+                        ((record.width * record.height - record.rle_data.length) / (record.width * record.height) * 100).toFixed(1) : 
+                        'N/A';
+                    
+                    console.log(`  Level ${record.lod_level}: ${record.width}x${record.height}, ${record.pixel_count} pixels, ~${compressionRatio}% compression`);
+                });
+                
+                return lodRecords;
+            } else {
+                console.error('❌ Failed to verify LOD records:', response.status);
+            }
+        } catch (error) {
+            console.error('❌ Verification failed:', error);
+        }
+    }
+    
+    // パフォーマンス統計を取得
+    getStats() {
+        return {
+            workerInitialized: !!this.rleWorker,
+            pendingOperations: this.pendingOperations?.size || 0,
+            generationQueue: this.generationQueue.length,
+            isGenerating: this.isGenerating
+        };
     }
     
     destroy() {

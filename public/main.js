@@ -569,6 +569,51 @@ class PixelCanvas {
         
         return `LOD test completed for sector (${sectorX}, ${sectorY})`;
     }
+    
+    // 🧪 簡単なLODテスト（サンプルデータ使用）
+    async runLODDemo() {
+        console.log('🚀 Starting LOD generation demo...');
+        
+        // SimplePixiRendererでもテスト可能
+        let lodGenerator;
+        if (this.pixiRenderer && this.pixiRenderer.lodGenerator) {
+            lodGenerator = this.pixiRenderer.lodGenerator;
+        } else if (this.pixiRenderer && this.pixiRenderer.constructor.name === 'SimplePixiRenderer') {
+            // SimplePixiRenderer用に新しいLODGeneratorを作成
+            const { LODGenerator } = await import('./LODGenerator.js');
+            lodGenerator = new LODGenerator(this);
+        } else {
+            // フォールバック: 直接LODGeneratorを作成
+            const { LODGenerator } = await import('./LODGenerator.js');
+            lodGenerator = new LODGenerator(this);
+        }
+        
+        if (!lodGenerator) {
+            return 'Failed to initialize LOD generator';
+        }
+        
+        try {
+            await lodGenerator.testLODGeneration();
+            return 'LOD demo completed successfully! Check console for details.';
+        } catch (error) {
+            console.error('❌ LOD demo failed:', error);
+            return `LOD demo failed: ${error.message}`;
+        }
+    }
+    
+    // LOD統計情報を取得
+    getLODGeneratorStats() {
+        let lodGenerator;
+        if (this.pixiRenderer?.lodGenerator) {
+            lodGenerator = this.pixiRenderer.lodGenerator;
+        }
+        
+        if (!lodGenerator) {
+            return 'LOD generator not available';
+        }
+        
+        return lodGenerator.getStats();
+    }
 }
 
 // Initialize when DOM is ready with error catching
