@@ -31,16 +31,14 @@ export class NetworkManager {
                     schema: 'public',
                     table: 'pixels'
                 }, (payload) => {
-                    console.log('📡 Real-time pixel received:', payload);
                     this.handleRemotePixel(payload.new);
                 })
                 .subscribe((status) => {
-                    console.log('📡 Real-time subscription status:', status);
-                    this.pixelCanvas.debugPanel.log(`📡 Real-time: ${status}`);
+                    // this.pixelCanvas.debugPanel.log(`📡 Real-time: ${status}`);
                 });
         } catch (error) {
             console.error('Failed to setup real-time subscription:', error);
-            this.pixelCanvas.debugPanel.log(`❌ Real-time setup failed: ${error.message}`);
+            // this.pixelCanvas.debugPanel.log(`❌ Real-time setup failed: ${error.message}`);
         }
     }
     
@@ -54,13 +52,11 @@ export class NetworkManager {
         
         // Add to render engine for batched rendering
         this.pixelCanvas.renderEngine.addRemotePixel(pixelData);
-        
-        console.log(`📡 Received remote pixel: ${key} = color ${pixelData.color}`);
     }
     
     async sendPixel(pixel) {
         if (!navigator.onLine) {
-            this.pixelCanvas.debugPanel.log('📴 Offline: Queueing pixel');
+            // this.pixelCanvas.debugPanel.log('📴 Offline: Queueing pixel');
             this.queuePixel(pixel);
             return;
         }
@@ -68,7 +64,7 @@ export class NetworkManager {
         try {
             // Check rate limit before sending
             if (!(await this.checkRateLimit())) {
-                this.pixelCanvas.debugPanel.log('🚫 Rate limited: Cannot send pixel');
+                // this.pixelCanvas.debugPanel.log('🚫 Rate limited: Cannot send pixel');
                 return;
             }
             
@@ -98,8 +94,7 @@ export class NetworkManager {
             });
             
             if (response.ok) {
-                console.log(`✅ Pixel sent successfully: ${pixel.s}(${pixel.x},${pixel.y}) = ${pixel.c}`);
-                this.pixelCanvas.debugPanel.log(`✅ Pixel sent: (${sectorX},${sectorY},${pixel.x},${pixel.y})`);
+                // this.pixelCanvas.debugPanel.log(`✅ Pixel sent: (${sectorX},${sectorY},${pixel.x},${pixel.y})`);
                 
                 // Log user action and sync stock
                 this.logUserActionLazy('pixel_draw');
@@ -116,7 +111,7 @@ export class NetworkManager {
             
         } catch (error) {
             console.error('Failed to send pixel:', error);
-            this.pixelCanvas.debugPanel.log(`❌ Send failed: ${error.message}`);
+            // this.pixelCanvas.debugPanel.log(`❌ Send failed: ${error.message}`);
             this.queuePixel(pixel);
         }
     }
@@ -129,7 +124,6 @@ export class NetworkManager {
                 const existingQueue = await window.idb.get('queue') || [];
                 existingQueue.push(pixel);
                 await window.idb.set('queue', existingQueue);
-                console.log('💾 Pixel queued for later sending');
             } catch (error) {
                 console.error('Failed to queue pixel:', error);
             }
@@ -149,14 +143,14 @@ export class NetworkManager {
         const queue = await window.idb.get('queue') || [];
         if (queue.length === 0) return;
         
-        this.pixelCanvas.debugPanel.log(`📤 Flushing ${queue.length} queued pixels...`);
+        // this.pixelCanvas.debugPanel.log(`📤 Flushing ${queue.length} queued pixels...`);
         
         for (const pixel of queue) {
             await this.sendPixel(pixel);
         }
         
         await window.idb.del('queue');
-        this.pixelCanvas.debugPanel.log('✅ Queue flushed successfully');
+        // this.pixelCanvas.debugPanel.log('✅ Queue flushed successfully');
     }
     
     async checkRateLimit() {

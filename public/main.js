@@ -77,7 +77,6 @@ class PixelCanvas {
             this.sectorManager.startPeriodicRefresh();
             this.loadInitialData();
             this.viewportController.centerViewportOnActiveSectors();
-            console.log('✅ PixelCanvas initialization complete!');
         } catch (error) {
             console.error('Init error:', error);
         }
@@ -108,13 +107,13 @@ class PixelCanvas {
     
     setupOnlineStatusHandling() {
         window.addEventListener('online', () => {
-            this.debugPanel.log('🌐 Back online - flushing queue');
+            // this.debugPanel.log('🌐 Back online - flushing queue');
             this.networkManager.updateStatus(true);
             this.networkManager.flushQueue();
         });
         
         window.addEventListener('offline', () => {
-            this.debugPanel.log('📴 Gone offline');
+            // this.debugPanel.log('📴 Gone offline');
             this.networkManager.updateStatus(false);
         });
     }
@@ -126,12 +125,12 @@ class PixelCanvas {
     }
     
     loadInitialData() {
-        this.debugPanel.log('🚀 Initializing PixelCanvas...');
+        // this.debugPanel.log('🚀 Initializing PixelCanvas...');
         
         // Load pixels and sector data
         this.networkManager.loadPixelsFromSupabase().then(() => {
             this.render();
-            this.debugPanel.log('✅ Initialization complete');
+            // this.debugPanel.log('✅ Initialization complete');
         });
         
         // Load sector counts (for reference only, we use real-time counting)
@@ -150,7 +149,7 @@ class PixelCanvas {
         // Check if within bounds
         if (local.localX < 0 || local.localX >= CONFIG.GRID_SIZE || 
             local.localY < 0 || local.localY >= CONFIG.GRID_SIZE) {
-            this.debugPanel.log('🚫 Click outside valid bounds');
+            // this.debugPanel.log('🚫 Click outside valid bounds');
             return;
         }
         
@@ -162,11 +161,11 @@ class PixelCanvas {
         
         // Check if pixel already exists
         if (this.pixelStorage.hasPixel(local.sectorX, local.sectorY, local.localX, local.localY)) {
-            this.debugPanel.log('🚫 Pixel already exists at this location');
+            // this.debugPanel.log('🚫 Pixel already exists at this location');
             return;
         }
         
-        this.debugPanel.log(`🎯 Click: screen(${x.toFixed(1)}, ${y.toFixed(1)}) → world(${worldX}, ${worldY}) → sector(${local.sectorX}, ${local.sectorY}) local(${local.localX}, ${local.localY})`);
+        // this.debugPanel.log(`🎯 Click: screen(${x.toFixed(1)}, ${y.toFixed(1)}) → world(${worldX}, ${worldY}) → sector(${local.sectorX}, ${local.sectorY}) local(${local.localX}, ${local.localY})`);
         
         // Draw the pixel using PixelStorage which handles everything properly
         const success = this.pixelStorage.drawPixel(local.sectorX, local.sectorY, local.localX, local.localY, this.currentColor);
@@ -184,12 +183,7 @@ class PixelCanvas {
         const fillPercentage = actualCount / maxPixelsPerSector;
         
         if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
-            console.log(`🎯 EXPANSION TRIGGERED: Sector (${sectorX}, ${sectorY}) is ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels)!`);
-            console.log(`🎯 Before expansion - Active sectors:`, Array.from(this.activeSectors));
             this.sectorManager.expandSectorsLocally(sectorX, sectorY);
-            console.log(`🎯 After expansion - Active sectors:`, Array.from(this.activeSectors));
-        } else {
-            console.log(`📊 Sector (${sectorX}, ${sectorY}): ${(fillPercentage * 100).toFixed(3)}% full (${actualCount} pixels) - threshold not reached`);
         }
     }
     
@@ -256,14 +250,6 @@ class PixelCanvas {
         const newOffsetX = Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, this.offsetX));
         const newOffsetY = Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, this.offsetY));
         
-        // Debug logging for viewport constraints
-        if (Math.abs(newOffsetX - this.offsetX) > 1 || Math.abs(newOffsetY - this.offsetY) > 1) {
-            console.log(`🔒 Viewport constrained: 
-                Original: (${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)})
-                New: (${newOffsetX.toFixed(1)}, ${newOffsetY.toFixed(1)})
-                Bounds: X[${bounds.minOffsetX.toFixed(1)} to ${bounds.maxOffsetX.toFixed(1)}] Y[${bounds.minOffsetY.toFixed(1)} to ${bounds.maxOffsetY.toFixed(1)}]
-                Scale: ${this.scale.toFixed(2)}x`);
-        }
         
         this.offsetX = newOffsetX;
         this.offsetY = newOffsetY;
@@ -351,21 +337,17 @@ class PixelCanvas {
     // Debug methods
     logState() {
         const stats = this.getStats();
-        this.debugPanel.log(`📊 App State: ${JSON.stringify(stats, null, 2)}`);
+        // this.debugPanel.log(`📊 App State: ${JSON.stringify(stats, null, 2)}`);
     }
     
     logPerformance() {
         const stats = this.getPerformanceStats();
-        console.log('🚀 Performance Stats:', stats);
         return stats;
     }
     
-    // vConsole testing methods
+    // vConsole testing methods  
     testVConsole() {
-        console.log('📱 vConsole Test: Basic logging');
-        console.warn('⚠️ vConsole Test: Warning message');
         console.error('❌ vConsole Test: Error message');
-        console.info('ℹ️ vConsole Test: Info message');
         
         // Test error throwing
         try {
@@ -379,18 +361,6 @@ class PixelCanvas {
             console.error('📱 vConsole Test: Network request failed as expected:', error);
         });
         
-        // Test object logging
-        console.log('📱 vConsole Test: Object logging', {
-            pixelCount: this.pixels.size,
-            renderMode: this.renderEngine.renderMode,
-            performance: this.getPerformanceStats(),
-            userAgent: navigator.userAgent,
-            windowSize: { width: window.innerWidth, height: window.innerHeight }
-        });
-        
-        // Test stack trace
-        console.trace('📱 vConsole Test: Stack trace');
-        
         // Test promise rejection
         Promise.reject('Test promise rejection for vConsole').catch(error => {
             console.error('📱 vConsole Test: Promise rejection caught:', error);
@@ -403,9 +373,7 @@ class PixelCanvas {
 // Initialize when DOM is ready with error catching
 function initializePixelCanvas() {
     try {
-        console.log('🌍 Initializing PixelCanvas application...');
         window.pixelCanvas = new PixelCanvas();
-        console.log('✅ PixelCanvas application started successfully');
     } catch (error) {
         console.error('❌ Failed to initialize PixelCanvas:', error);
         document.body.innerHTML = `

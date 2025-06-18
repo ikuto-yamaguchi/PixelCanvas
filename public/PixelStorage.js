@@ -21,8 +21,6 @@ export class PixelStorage {
         
         // Also store in localStorage for persistence
         this.savePixelToLocalStorage(pixelKey, color);
-        
-        console.log(`💾 Pixel added: ${pixelKey} = color ${color}`);
     }
     
     getPixel(sectorX, sectorY, localX, localY) {
@@ -252,8 +250,6 @@ export class PixelStorage {
         
         // Calculate world coordinates for rendering
         const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
-        
-        console.log(`Drawing pixel at (${world.x}, ${world.y}) with color ${color} (${CONFIG.COLORS[color]})`);
         
         // Force a complete re-render to ensure pixel is drawn
         this.pixelCanvas.render();

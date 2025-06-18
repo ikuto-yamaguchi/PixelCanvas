@@ -17,9 +17,9 @@ export class DebugPanel {
             this.setupEventListeners();
             // Show panel immediately
             this.panel.style.display = 'block';
-            console.log('🐛 Debug Panel initialized - logging disabled for performance');
+            // Debug Panel initialized - logging disabled for performance
         } else {
-            console.log('📱 vConsole detected - native DebugPanel disabled to avoid conflicts');
+            // vConsole detected - native DebugPanel disabled to avoid conflicts
         }
         
         // PERFORMANCE: Disable console interception

@@ -160,14 +160,7 @@ export class ViewportController {
     }
     
     logViewportBounds(activeBounds, paddedBounds, canvasSize, horizontalConstraints, verticalConstraints) {
-        console.log(`🔍 Viewport bounds calculated:
-            Active sectors: X[${activeBounds.minSectorX} to ${activeBounds.maxSectorX}] Y[${activeBounds.minSectorY} to ${activeBounds.maxSectorY}]
-            World bounds: X[${activeBounds.left} to ${activeBounds.right}] Y[${activeBounds.top} to ${activeBounds.bottom}]
-            Padded bounds: X[${paddedBounds.left} to ${paddedBounds.right}] Y[${paddedBounds.top} to ${paddedBounds.bottom}]
-            Canvas (logical): ${canvasSize.width}x${canvasSize.height}, Scale: ${this.pixelCanvas.scale.toFixed(2)}x
-            Canvas (physical): ${this.pixelCanvas.canvas.width}x${this.pixelCanvas.canvas.height}, DPR: ${window.devicePixelRatio || 1}
-            World size scaled: ${horizontalConstraints.worldWidthScaled.toFixed(1)}x${verticalConstraints.worldHeightScaled.toFixed(1)}
-            Offset bounds: X[${horizontalConstraints.minOffsetX.toFixed(1)} to ${horizontalConstraints.maxOffsetX.toFixed(1)}] Y[${verticalConstraints.minOffsetY.toFixed(1)} to ${verticalConstraints.maxOffsetY.toFixed(1)}]`);
+        // Viewport bounds logging removed for performance
     }
     
     constrainViewport() {
@@ -181,18 +174,10 @@ export class ViewportController {
         this.pixelCanvas.offsetX = Utils.clamp(this.pixelCanvas.offsetX, bounds.minOffsetX, bounds.maxOffsetX);
         this.pixelCanvas.offsetY = Utils.clamp(this.pixelCanvas.offsetY, bounds.minOffsetY, bounds.maxOffsetY);
         
-        // Log constraint application if significant change
-        const deltaX = Math.abs(this.pixelCanvas.offsetX - originalOffsetX);
-        const deltaY = Math.abs(this.pixelCanvas.offsetY - originalOffsetY);
-        
-        if (deltaX > 1 || deltaY > 1) {
-            console.log(`📏 Viewport constrained: (${originalOffsetX.toFixed(1)}, ${originalOffsetY.toFixed(1)}) → (${this.pixelCanvas.offsetX.toFixed(1)}, ${this.pixelCanvas.offsetY.toFixed(1)})`);
-        }
     }
     
     centerViewportOnActiveSectors() {
         if (this.pixelCanvas.activeSectors.size === 0) {
-            console.log('📍 No active sectors to center on');
             return;
         }
         
@@ -214,8 +199,6 @@ export class ViewportController {
         // Apply constraints
         this.constrainViewport();
         
-        console.log(`📍 Centered viewport on active sectors: world center (${centerWorldX.toFixed(1)}, ${centerWorldY.toFixed(1)}) → screen center (${screenCenterX}, ${screenCenterY})`);
-        console.log(`📍 Final offset: (${this.pixelCanvas.offsetX.toFixed(1)}, ${this.pixelCanvas.offsetY.toFixed(1)}), scale: ${this.pixelCanvas.scale.toFixed(2)}x`);
     }
     
     showBoundaryWarning() {

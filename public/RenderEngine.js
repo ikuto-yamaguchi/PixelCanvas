@@ -453,10 +453,7 @@ export class RenderEngine {
             this.performanceStats.averageFPS = 60000 / timeDiff;
             this.performanceStats.lastFrameTime = currentTime;
             
-            // Log performance info periodically
-            if (this.performanceStats.frameCount % 300 === 0) { // Every 5 seconds at 60fps
-                console.log(`🎯 Performance: ${this.performanceStats.averageFPS.toFixed(1)} FPS, ${this.performanceStats.tilesRendered} tiles, Mode: ${this.renderMode}`);
-            }
+            // Performance stats tracking (logging removed for performance)
         }
     }
     
@@ -464,7 +461,6 @@ export class RenderEngine {
     setRenderMode(mode) {
         if (['minimal', 'legacy', 'optimized'].includes(mode)) {
             this.renderMode = mode;
-            console.log(`🎯 Render mode: ${mode.toUpperCase()}`);
             
             // Adjust max pixels based on mode
             if (mode === 'minimal') {
@@ -515,7 +511,6 @@ export class RenderEngine {
     
     // Simple benchmark
     benchmark(seconds = 3) {
-        console.log(`🏁 Starting ${seconds}s performance benchmark...`);
         
         const originalMode = this.renderMode;
         const modes = ['legacy', 'optimized'];
@@ -525,7 +520,6 @@ export class RenderEngine {
         const testMode = () => {
             if (modeIndex >= modes.length) {
                 this.setRenderMode(originalMode);
-                console.log('📊 Benchmark Results:', results);
                 return;
             }
             
@@ -545,7 +539,6 @@ export class RenderEngine {
                     const avgFPS = frameCount / seconds;
                     results[mode] = `${avgFPS.toFixed(1)} FPS`;
                     
-                    console.log(`✅ ${mode}: ${avgFPS.toFixed(1)} FPS`);
                     modeIndex++;
                     setTimeout(testMode, 500);
                 }
@@ -580,13 +573,11 @@ export class RenderEngine {
             }, CONFIG.RENDER_BATCH_MS);
         }
         
-        console.log(`📡 Received remote pixel: ${key} = color ${pixelData.color}`);
     }
     
     renderRemotePixels() {
         if (this.remotePixelsBuffer.size === 0) return;
         
-        console.log(`🎨 Rendering ${this.remotePixelsBuffer.size} remote pixels`);
         
         // Render each buffered remote pixel
         for (const [key, color] of this.remotePixelsBuffer) {
@@ -598,7 +589,6 @@ export class RenderEngine {
         // Clear the buffer
         this.remotePixelsBuffer.clear();
         
-        console.log('✅ Remote pixels rendered and buffer cleared');
     }
     
     // Setup color palette UI
@@ -628,7 +618,6 @@ export class RenderEngine {
                 colorButton.classList.add('active');
                 this.pixelCanvas.currentColor = index;
                 
-                console.log(`🎨 Selected color ${index}: ${color}`);
             });
             
             colorPalette.appendChild(colorButton);

@@ -207,7 +207,7 @@ export class EventHandlers {
     
     scheduleExpansionCheck() {
         if (this.touchState.moved && !this.pixelCanvas.isExpansionRunning) {
-            this.pixelCanvas.debugPanel.log('📱 TOUCHEND: Movement detected, scheduling expansion check');
+            // this.pixelCanvas.debugPanel.log('📱 TOUCHEND: Movement detected, scheduling expansion check');
             setTimeout(() => {
                 if (!this.pixelCanvas.isExpansionRunning) {
                     this.pixelCanvas.sectorManager.checkLoadedSectorsForExpansion();
@@ -282,10 +282,8 @@ export class EventHandlers {
         
         // Handle click vs drag
         if (Math.abs(dx) < CONFIG.MOUSE_MOVEMENT_THRESHOLD && Math.abs(dy) < CONFIG.MOUSE_MOVEMENT_THRESHOLD) {
-            console.log('🖱️ MOUSEUP: Small movement, treating as click');
             this.pixelCanvas.handlePixelClick(this.mouseState.startX, this.mouseState.startY);
         } else if (!this.pixelCanvas.isExpansionRunning) {
-            console.log(`🖱️ MOUSEUP: Large movement detected (${dx}, ${dy}), scheduling expansion check`);
             setTimeout(() => {
                 if (!this.pixelCanvas.isExpansionRunning) {
                     this.pixelCanvas.sectorManager.checkLoadedSectorsForExpansion();

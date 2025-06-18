@@ -145,7 +145,6 @@ export class SectorManager {
             [1, -1],  [1, 0],  [1, 1]
         ];
         
-        console.log(`🚀 Expanding around sector (${sectorX}, ${sectorY})`);
         
         for (const [dx, dy] of adjacentOffsets) {
             const newSectorX = sectorX + dx;
@@ -156,7 +155,6 @@ export class SectorManager {
             if (!this.sectorsCache.has(sectorKey)) {
                 await this.createSectorInDatabase(newSectorX, newSectorY, true);
                 this.pixelCanvas.activeSectors.add(sectorKey);
-                console.log(`✅ Created new sector (${newSectorX}, ${newSectorY})`);
             }
         }
         
@@ -180,8 +178,6 @@ export class SectorManager {
             });
             
             if (response.ok) {
-                console.log(`📊 Updated sector (${sectorX}, ${sectorY}) count to ${pixelCount}`);
-                
                 // Update local cache
                 const sectorKey = Utils.createSectorKey(sectorX, sectorY);
                 const cachedSector = this.sectorsCache.get(sectorKey) || { pixelCount: 0, isActive: false };
@@ -205,7 +201,6 @@ export class SectorManager {
         
         // PERFORMANCE FIX: Skip if we have too many active sectors already
         if (this.pixelCanvas.activeSectors.size > 20) {
-            console.log(`⚠️ Too many active sectors (${this.pixelCanvas.activeSectors.size}), skipping expansion check`);
             return;
         }
         
@@ -219,25 +214,16 @@ export class SectorManager {
             if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
                 const [sectorX, sectorY] = sectorKey.split(',').map(Number);
                 
-                // PERFORMANCE FIX: Limit log frequency
-                if (expansionsTriggered === 0) { // Only log first expansion
-                    console.log(`🎯 Sector (${sectorX}, ${sectorY}) ready for expansion: ${(fillPercentage * 100).toFixed(1)}% full`);
-                }
                 
                 await this.expandSectorsLocally(sectorX, sectorY);
                 expansionsTriggered++;
                 
                 // PERFORMANCE FIX: Limit expansions per check
                 if (expansionsTriggered >= 3) {
-                    console.log(`⚠️ Limited expansion check to 3 sectors for performance`);
                     break;
                 }
             }
         }
         
-        // Summary log instead of per-sector spam
-        if (expansionsTriggered > 1) {
-            console.log(`✅ Expansion check complete: ${expansionsTriggered} sectors processed`);
-        }
     }
 }
