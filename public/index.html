@@ -149,9 +149,10 @@
                 
                 // コピーボタンをvConsole内に追加
                 if (!document.querySelector('.vc-copy-logs-btn')) {
+                    // 通常のコピーボタン
                     const copyButton = document.createElement('button');
                     copyButton.className = 'vc-copy-logs-btn';
-                    copyButton.innerHTML = '📋 Copy All Logs';
+                    copyButton.innerHTML = '📋 Copy Logs';
                     copyButton.style.cssText = `
                         position: fixed;
                         top: 60px;
@@ -171,10 +172,34 @@
                         copyAllLogs();
                     });
                     
+                    // 展開コピーボタン
+                    const expandCopyButton = document.createElement('button');
+                    expandCopyButton.className = 'vc-copy-logs-expanded-btn';
+                    expandCopyButton.innerHTML = '🔍 Deep Copy';
+                    expandCopyButton.style.cssText = `
+                        position: fixed;
+                        top: 100px;
+                        right: 15px;
+                        background: #FF9800;
+                        color: white;
+                        border: none;
+                        padding: 8px 12px;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        cursor: pointer;
+                        z-index: 99999;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                    `;
+                    
+                    expandCopyButton.addEventListener('click', () => {
+                        copyAllLogsExpanded();
+                    });
+                    
                     // vConsole要素またはbodyに追加
                     const vconsoleRoot = document.querySelector('#__vconsole') || document.body;
                     vconsoleRoot.appendChild(copyButton);
-                    console.log('✅ Log copy button added to vConsole');
+                    vconsoleRoot.appendChild(expandCopyButton);
+                    console.log('✅ Log copy buttons added to vConsole (normal + deep)');
                 }
                 
                 // 各ログエントリにもコピーボタンを追加する関数
@@ -229,13 +254,14 @@
         function addFloatingCopyButton() {
             if (document.querySelector('.vc-floating-copy-btn')) return;
             
+            // 通常のコピーボタン
             const floatingButton = document.createElement('button');
             floatingButton.className = 'vc-floating-copy-btn';
             floatingButton.innerHTML = '📋';
             floatingButton.title = 'Copy all vConsole logs';
             floatingButton.style.cssText = `
                 position: fixed;
-                bottom: 80px;
+                bottom: 140px;
                 right: 20px;
                 width: 50px;
                 height: 50px;
@@ -256,8 +282,37 @@
                 copyAllLogs();
             });
             
+            // 展開コピーボタン
+            const floatingExpandButton = document.createElement('button');
+            floatingExpandButton.className = 'vc-floating-expand-btn';
+            floatingExpandButton.innerHTML = '🔍';
+            floatingExpandButton.title = 'Deep copy all vConsole logs (expanded)';
+            floatingExpandButton.style.cssText = `
+                position: fixed;
+                bottom: 80px;
+                right: 20px;
+                width: 50px;
+                height: 50px;
+                background: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                font-size: 20px;
+                cursor: pointer;
+                z-index: 99999;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            floatingExpandButton.addEventListener('click', () => {
+                copyAllLogsExpanded();
+            });
+            
             document.body.appendChild(floatingButton);
-            console.log('✅ Floating copy button added as fallback');
+            document.body.appendChild(floatingExpandButton);
+            console.log('✅ Floating copy buttons added as fallback (normal + deep)');
         }
         
         // 全ログをコピーする関数
@@ -379,24 +434,33 @@
                         logType = 'INFO';
                     }
                     
-                    // テキスト内容を複数の方法で抽出
+                    // テキスト内容を複数の方法で抽出（展開も含む）
                     let content = '';
                     
-                    // 1. textContentから取得
+                    // 0. まず折りたたまれた要素を全て展開
+                    expandAllLogObjects(item);
+                    
+                    // 1. 拡張されたtextContentから取得
                     if (item.textContent) {
                         content = item.textContent.replace('📋', '').trim();
                     }
                     
-                    // 2. 空の場合は子要素を探す
-                    if (!content || content.length < 3) {
-                        const contentElement = item.querySelector('.vc-item-content, .vc-content, .log-content');
+                    // 2. vConsoleの構造化データを抽出
+                    if (!content || content.length < 10) {
+                        content = extractVConsoleLogContent(item);
+                    }
+                    
+                    // 3. 空の場合は子要素を探す
+                    if (!content || content.length < 10) {
+                        const contentElement = item.querySelector('.vc-item-content, .vc-content, .log-content, .vc-log-content');
                         if (contentElement) {
+                            expandAllLogObjects(contentElement);
                             content = contentElement.textContent || contentElement.innerText || '';
                         }
                     }
                     
-                    // 3. まだ空の場合は全ての子要素のテキストを結合
-                    if (!content || content.length < 3) {
+                    // 4. まだ空の場合は全ての子要素のテキストを結合
+                    if (!content || content.length < 10) {
                         const allTextNodes = [];
                         const walker = document.createTreeWalker(
                             item,
@@ -415,15 +479,18 @@
                         content = allTextNodes.join(' ');
                     }
                     
-                    // 4. 最後の手段: innerHTML から抽出
-                    if (!content || content.length < 3) {
+                    // 5. 最後の手段: innerHTML から抽出
+                    if (!content || content.length < 10) {
                         content = item.innerHTML.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
                     }
                     
                     // 空の場合はDOM情報を含める
-                    if (!content || content.length < 3) {
+                    if (!content || content.length < 10) {
                         content = `[Empty log item - className: ${className}, tagName: ${item.tagName}]`;
                     }
+                    
+                    // 内容をクリーンアップ
+                    content = cleanLogContent(content);
                     
                     // タイムスタンプを抽出試行
                     const timeElement = item.querySelector('.vc-item-time, .timestamp, [class*="time"]');
@@ -581,8 +648,140 @@
             return analysis;
         }
         
+        // vConsoleログオブジェクトを展開する関数
+        function expandAllLogObjects(element) {
+            try {
+                // 折りたたまれたオブジェクトを探して展開
+                const collapsedObjects = element.querySelectorAll('.vc-log-tree.vc-is-tree[data-keypath]');
+                collapsedObjects.forEach(obj => {
+                    // クリックイベントをシミュレートして展開
+                    if (obj.style.display !== 'none') {
+                        const toggleElement = obj.querySelector('.vc-log-tree-title');
+                        if (toggleElement) {
+                            toggleElement.click();
+                        }
+                    }
+                });
+                
+                // 少し待ってからさらに深い階層をチェック
+                setTimeout(() => {
+                    const newCollapsedObjects = element.querySelectorAll('.vc-log-tree.vc-is-tree[data-keypath]');
+                    newCollapsedObjects.forEach(obj => {
+                        if (obj.style.display !== 'none') {
+                            const toggleElement = obj.querySelector('.vc-log-tree-title');
+                            if (toggleElement && !obj.classList.contains('expanded')) {
+                                toggleElement.click();
+                                obj.classList.add('expanded');
+                            }
+                        }
+                    });
+                }, 100);
+                
+            } catch (error) {
+                console.error('Failed to expand log objects:', error);
+            }
+        }
+        
+        // vConsole専用のログ内容抽出
+        function extractVConsoleLogContent(item) {
+            try {
+                let content = '';
+                
+                // vConsoleの構造を理解して抽出
+                const logContent = item.querySelector('.vc-log-content');
+                if (logContent) {
+                    // 文字列部分を取得
+                    const stringElements = logContent.querySelectorAll('.vc-log-val-string, .vc-log-val');
+                    stringElements.forEach(el => {
+                        content += el.textContent + ' ';
+                    });
+                    
+                    // オブジェクト部分を取得
+                    const objectElements = logContent.querySelectorAll('.vc-log-tree');
+                    objectElements.forEach(obj => {
+                        content += extractObjectContent(obj) + ' ';
+                    });
+                }
+                
+                return content.trim();
+            } catch (error) {
+                console.error('Failed to extract vConsole log content:', error);
+                return '';
+            }
+        }
+        
+        // オブジェクト内容を再帰的に抽出
+        function extractObjectContent(objElement) {
+            try {
+                let content = '';
+                
+                // オブジェクトのタイトル（型情報）
+                const title = objElement.querySelector('.vc-log-tree-title');
+                if (title) {
+                    content += title.textContent + ' ';
+                }
+                
+                // オブジェクトのプロパティ
+                const properties = objElement.querySelectorAll('.vc-log-tree-item');
+                properties.forEach(prop => {
+                    const key = prop.querySelector('.vc-log-tree-key');
+                    const value = prop.querySelector('.vc-log-tree-val');
+                    
+                    if (key && value) {
+                        content += `${key.textContent}: ${value.textContent} `;
+                    } else if (value) {
+                        content += `${value.textContent} `;
+                    }
+                    
+                    // ネストしたオブジェクトも処理
+                    const nestedObjects = prop.querySelectorAll('.vc-log-tree');
+                    nestedObjects.forEach(nested => {
+                        content += extractObjectContent(nested) + ' ';
+                    });
+                });
+                
+                return content;
+            } catch (error) {
+                console.error('Failed to extract object content:', error);
+                return objElement.textContent || '';
+            }
+        }
+        
+        // ログ内容をクリーンアップ
+        function cleanLogContent(content) {
+            return content
+                .replace(/\s+/g, ' ')  // 複数スペースを単一に
+                .replace(/\n+/g, ' ')  // 改行をスペースに
+                .replace(/\t+/g, ' ')  // タブをスペースに
+                .replace(/📋/g, '')    // コピーアイコンを除去
+                .trim();
+        }
+        
+        // 完全展開モードでログコピー
+        function copyAllLogsExpanded() {
+            console.log('🔍 Starting deep log extraction...');
+            
+            // すべてのログアイテムを展開
+            const logList = document.querySelector('#__vconsole .vc-content') || 
+                           document.querySelector('#__vconsole .vc-log-list');
+            
+            if (logList) {
+                expandAllLogObjects(logList);
+                
+                // 展開完了を待ってからコピー実行
+                setTimeout(() => {
+                    copyAllLogs();
+                    console.log('✅ Deep extraction completed');
+                }, 500);
+            } else {
+                console.error('❌ Log list not found for expansion');
+                copyAllLogs(); // フォールバック
+            }
+        }
+        
         // グローバル関数として公開
         window.copyAllVConsoleLogs = copyAllLogs;
+        window.copyAllVConsoleLogsExpanded = copyAllLogsExpanded; // 新機能
         window.analyzeVConsoleDOM = () => {
             const vconsole = document.querySelector('#__vconsole');
             if (vconsole) {
