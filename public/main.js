@@ -274,16 +274,18 @@ class PixelCanvas {
         try {
             // 🚀 PixiJS Performance Renderer (最優先)
             if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
+                console.log('🎨 Using PixiJS Renderer');
                 this.pixiRenderer.render();
                 return;
             }
             
             // 🔧 LayeredRenderer (フォールバック1)
             if (this.layeredRenderer) {
+                console.log('🎨 Using LayeredRenderer, pixel count:', Object.keys(this.pixels || {}).length);
                 this.layeredRenderer.render();
             } else {
                 // Legacy rendering (フォールバック2)
-                console.log('⚠️ LayeredRenderer not available, using legacy rendering');
+                console.log('🎨 Using RenderEngine (legacy), pixel count:', Object.keys(this.pixels || {}).length);
                 this.renderEngine.render();
             }
         } catch (error) {

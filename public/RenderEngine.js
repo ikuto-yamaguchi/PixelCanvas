@@ -34,6 +34,13 @@ export class RenderEngine {
             .getPropertyValue('--color-canvas-bg').trim() || '#404040';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
+        // 🔍 DEBUG: Draw a test circle in center to verify canvas is working
+        this.ctx.fillStyle = '#ff0000';
+        this.ctx.beginPath();
+        this.ctx.arc(this.canvas.width / 2, this.canvas.height / 2, 20, 0, 2 * Math.PI);
+        this.ctx.fill();
+        console.log('🔍 Test circle drawn at center:', this.canvas.width / 2, this.canvas.height / 2);
+        
         // Render grid if enabled
         if (this.pixelCanvas.showGrid) {
             this.renderGrid();
@@ -181,6 +188,9 @@ export class RenderEngine {
         const pixels = this.pixelCanvas.pixelStorage ? 
             this.pixelCanvas.pixelStorage.pixels : 
             this.pixelCanvas.pixels || new Map();
+            
+        console.log('🔍 RenderPixelsMinimal - Total pixels available:', pixels.size);
+        console.log('🔍 Visible bounds:', bounds);
         
         // Render all visible pixels within bounds (not just center)
         for (const [key, color] of pixels) {

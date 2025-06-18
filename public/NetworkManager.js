@@ -254,6 +254,10 @@ export class NetworkManager {
     }
     
     async loadPixelsFromSupabase() {
+        console.log('🔍 Loading pixels from Supabase...');
+        console.log('🔍 Layer manager available:', !!this.pixelCanvas.layerManager);
+        console.log('🔍 Layer manager supabase:', !!this.pixelCanvas.layerManager?.supabase);
+        
         // 🔧 EMERGENCY SWITCH: Use layer system instead of heavy pixel loading
         if (this.pixelCanvas.layerManager && this.pixelCanvas.layerManager.supabase) {
             console.log('🔧 Using lightweight layer system for data loading...');
