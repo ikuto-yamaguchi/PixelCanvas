@@ -119,6 +119,9 @@ export class RenderEngine {
     }
     
     renderActiveSectorBounds() {
+        // Don't show sector boundaries when grid is hidden
+        if (!this.pixelCanvas.showGrid) return;
+        
         const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
         
         // Only show visual bounds when sectors are large enough to see
