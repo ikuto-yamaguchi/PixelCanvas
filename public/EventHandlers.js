@@ -91,7 +91,9 @@ export class EventHandlers {
         
         this.touchState.moved = false;
         
+        // EMERGENCY FIX: Reset wasMultiTouch for single touch
         if (e.touches.length === 1) {
+            this.touchState.wasMultiTouch = false;
             this.handleSingleTouchStart(e, previousTouches);
         } else if (e.touches.length === 2) {
             this.handleMultiTouchStart(e);
@@ -183,7 +185,7 @@ export class EventHandlers {
         
         const now = Date.now();
         
-        // Handle tap for pixel drawing - check for quick single touch
+        // Handle tap for pixel drawing - very permissive for debugging
         if (e.touches.length === 1) {
             const tapDuration = now - this.touchState.startTime;
             
@@ -196,14 +198,12 @@ export class EventHandlers {
                 maxDuration: CONFIG.TAP_DURATION_MS
             });
             
-            // More permissive: allow quick taps even if slightly moved
-            if (tapDuration < CONFIG.TAP_DURATION_MS && !this.touchState.wasMultiTouch) {
-                console.error('📱 CALLING handlePixelClick');
+            // EMERGENCY FIX: Very permissive conditions for pixel drawing
+            if (tapDuration < 2000) { // Allow up to 2 seconds
+                console.error('📱 CALLING handlePixelClick (EMERGENCY MODE)');
                 this.pixelCanvas.handlePixelClick(this.touchState.startX, this.touchState.startY);
             } else {
-                console.error('📱 TAP REJECTED:', {
-                    reason: tapDuration >= CONFIG.TAP_DURATION_MS ? 'Too long' : 'Was multitouch'
-                });
+                console.error('📱 TAP REJECTED: Too long (>2s)');
             }
         } else {
             console.error('📱 TAP CONDITIONS NOT MET:', {
