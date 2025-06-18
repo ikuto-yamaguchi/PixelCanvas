@@ -97,45 +97,84 @@
         // ログコピー機能の追加
         function addLogCopyFeature() {
             try {
-                // vConsoleのコンソールタブを探す
-                const consoleTab = document.querySelector('#__vconsole .vc-tab[data-tab="default"]');
-                if (!consoleTab) {
-                    console.warn('vConsole console tab not found, retrying...');
-                    setTimeout(addLogCopyFeature, 1000);
-                    return;
+                // vConsoleのDOM構造を複数パターンで検索
+                let consoleTab = null;
+                let retryCount = 0;
+                const maxRetries = 10;
+                
+                // 複数のセレクターパターンを試す
+                const selectors = [
+                    '#__vconsole .vc-tab[data-tab="default"]',
+                    '#__vconsole .vc-tab[data-tab="console"]', 
+                    '#__vconsole [data-tab="default"]',
+                    '#__vconsole [data-tab="console"]',
+                    '#__vconsole .vc-tabbar',
+                    '#__vconsole .vc-switch',
+                    '#__vconsole'
+                ];
+                
+                for (const selector of selectors) {
+                    consoleTab = document.querySelector(selector);
+                    if (consoleTab) {
+                        console.log(`✅ Found vConsole element with selector: ${selector}`);
+                        break;
+                    }
                 }
                 
-                // コピーボタンをタブヘッダーに追加
-                const tabBox = consoleTab.closest('.vc-tabbox');
-                if (tabBox && !tabBox.querySelector('.vc-copy-logs-btn')) {
+                if (!consoleTab) {
+                    // DOM構造をログ出力してデバッグ
+                    const vconsoleElement = document.querySelector('#__vconsole');
+                    if (vconsoleElement) {
+                        console.log('🔍 vConsole DOM structure:', vconsoleElement.innerHTML.substring(0, 500));
+                        const allTabs = vconsoleElement.querySelectorAll('[class*="tab"], [data-tab]');
+                        console.log('🔍 Available tabs:', Array.from(allTabs).map(tab => ({
+                            className: tab.className,
+                            dataset: tab.dataset,
+                            tagName: tab.tagName
+                        })));
+                    }
+                    
+                    retryCount++;
+                    if (retryCount < maxRetries) {
+                        console.warn(`vConsole element not found, retrying... (${retryCount}/${maxRetries})`);
+                        setTimeout(addLogCopyFeature, 1000);
+                        return;
+                    } else {
+                        console.error('❌ Failed to find vConsole after max retries');
+                        // 最後の手段: vConsole全体にボタンを追加
+                        addFloatingCopyButton();
+                        return;
+                    }
+                }
+                
+                // コピーボタンをvConsole内に追加
+                if (!document.querySelector('.vc-copy-logs-btn')) {
                     const copyButton = document.createElement('button');
                     copyButton.className = 'vc-copy-logs-btn';
                     copyButton.innerHTML = '📋 Copy All Logs';
                     copyButton.style.cssText = `
-                        position: absolute;
-                        top: 5px;
-                        right: 10px;
+                        position: fixed;
+                        top: 60px;
+                        right: 15px;
                         background: #4CAF50;
                         color: white;
                         border: none;
-                        padding: 5px 10px;
-                        border-radius: 3px;
+                        padding: 8px 12px;
+                        border-radius: 4px;
                         font-size: 12px;
                         cursor: pointer;
-                        z-index: 9999;
+                        z-index: 99999;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
                     `;
                     
                     copyButton.addEventListener('click', () => {
                         copyAllLogs();
                     });
                     
-                    // タブヘッダーに追加
-                    const tabHeader = tabBox.querySelector('.vc-tabbar');
-                    if (tabHeader) {
-                        tabHeader.style.position = 'relative';
-                        tabHeader.appendChild(copyButton);
-                        console.log('✅ Log copy button added to vConsole');
-                    }
+                    // vConsole要素またはbodyに追加
+                    const vconsoleRoot = document.querySelector('#__vconsole') || document.body;
+                    vconsoleRoot.appendChild(copyButton);
+                    console.log('✅ Log copy button added to vConsole');
                 }
                 
                 // 各ログエントリにもコピーボタンを追加する関数
@@ -186,16 +225,87 @@
             }
         }
         
+        // フローティングコピーボタンを追加（フォールバック）
+        function addFloatingCopyButton() {
+            if (document.querySelector('.vc-floating-copy-btn')) return;
+            
+            const floatingButton = document.createElement('button');
+            floatingButton.className = 'vc-floating-copy-btn';
+            floatingButton.innerHTML = '📋';
+            floatingButton.title = 'Copy all vConsole logs';
+            floatingButton.style.cssText = `
+                position: fixed;
+                bottom: 80px;
+                right: 20px;
+                width: 50px;
+                height: 50px;
+                background: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                font-size: 20px;
+                cursor: pointer;
+                z-index: 99999;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            floatingButton.addEventListener('click', () => {
+                copyAllLogs();
+            });
+            
+            document.body.appendChild(floatingButton);
+            console.log('✅ Floating copy button added as fallback');
+        }
+        
         // 全ログをコピーする関数
         function copyAllLogs() {
             try {
-                const logList = document.querySelector('#__vconsole .vc-log-list');
-                if (!logList) {
+                // 複数のセレクターでログリストを検索
+                let logList = null;
+                let logItems = [];
+                
+                const logSelectors = [
+                    '#__vconsole .vc-log-list',
+                    '#__vconsole .vc-content',
+                    '#__vconsole [class*="log"]',
+                    '#__vconsole .vc-panel',
+                    '#__vconsole .vc-tabpanel'
+                ];
+                
+                for (const selector of logSelectors) {
+                    logList = document.querySelector(selector);
+                    if (logList) {
+                        // ログアイテムを検索
+                        const itemSelectors = ['.vc-item', '.vc-log-item', '[class*="item"]', 'div', 'p'];
+                        for (const itemSelector of itemSelectors) {
+                            logItems = logList.querySelectorAll(itemSelector);
+                            if (logItems.length > 0) {
+                                console.log(`✅ Found ${logItems.length} log items with selector: ${selector} > ${itemSelector}`);
+                                break;
+                            }
+                        }
+                        if (logItems.length > 0) break;
+                    }
+                }
+                
+                if (!logList || logItems.length === 0) {
+                    // vConsole全体からテキストを抽出
+                    const vconsoleElement = document.querySelector('#__vconsole');
+                    if (vconsoleElement) {
+                        const allText = vconsoleElement.innerText || vconsoleElement.textContent;
+                        if (allText) {
+                            copyToClipboard(`=== PixelCanvas vConsole Content ===\n${allText}`);
+                            alert('✅ vConsoleの全コンテンツをコピーしました');
+                            return;
+                        }
+                    }
                     alert('❌ ログが見つかりません');
                     return;
                 }
                 
-                const logItems = logList.querySelectorAll('.vc-item');
                 let allLogs = [];
                 
                 logItems.forEach((item, index) => {
