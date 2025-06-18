@@ -164,8 +164,7 @@ export class SectorManager {
                     'Prefer': 'return=minimal'
                 },
                 body: JSON.stringify({
-                    pixel_count: pixelCount,
-                    is_active: true  // セクターにピクセルがあっても描画可能を維持
+                    pixel_count: pixelCount
                 })
             });
             
