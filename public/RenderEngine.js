@@ -130,11 +130,20 @@ export class RenderEngine {
         const startSectorY = Math.floor(-this.pixelCanvas.offsetY / sectorSize);
         const endSectorY = Math.ceil((this.canvas.height - this.pixelCanvas.offsetY) / sectorSize);
         
-        // Draw each visible sector using database state
+        // Draw each visible sector using hybrid DB + client state
         for (let sectorX = startSectorX; sectorX <= endSectorX; sectorX++) {
             for (let sectorY = startSectorY; sectorY <= endSectorY; sectorY++) {
                 const sectorKey = `${sectorX},${sectorY}`;
                 const sectorState = this.pixelCanvas.sectorManager.getSectorState(sectorKey);
+                
+                // Count actual pixels in this sector (for accurate display)
+                let actualPixelCount = 0;
+                for (const [key, color] of this.pixelCanvas.pixels) {
+                    const [pSectorX, pSectorY] = key.split(',').map(Number);
+                    if (pSectorX === sectorX && pSectorY === sectorY) {
+                        actualPixelCount++;
+                    }
+                }
                 
                 // Calculate screen position of sector
                 const screenX = this.pixelCanvas.offsetX + sectorX * sectorSize;
@@ -142,10 +151,17 @@ export class RenderEngine {
                 
                 // Only render if visible on screen
                 if (this.isSectorVisible(screenX, screenY, sectorSize)) {
-                    if (sectorState.isActive) {
-                        this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, sectorState.pixelCount);
-                    } else if (sectorState.pixelCount > 0) {
-                        this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, sectorState.pixelCount);
+                    // Hybrid logic: use DB state when available, fallback to client state
+                    const isActiveFromDB = sectorState.isActive;
+                    const isActiveFromClient = this.pixelCanvas.activeSectors.has(sectorKey);
+                    const isActive = isActiveFromDB || isActiveFromClient;
+                    
+                    if (isActive && actualPixelCount === 0) {
+                        // Active and empty sector
+                        this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
+                    } else if (actualPixelCount > 0) {
+                        // Sector has pixels - show as LOCKED
+                        this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
                     }
                 }
             }

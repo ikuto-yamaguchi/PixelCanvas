@@ -51,7 +51,7 @@ export class PixelStorage {
             for (const [key, color] of Object.entries(savedPixels)) {
                 this.pixels.set(key, color);
             }
-            this.pixelCanvas.debugPanel.log(`📱 Loaded ${Object.keys(savedPixels).length} pixels from local storage`);
+            // this.pixelCanvas.debugPanel.log(`📱 Loaded ${Object.keys(savedPixels).length} pixels from local storage`);
         } catch (error) {
             console.error('Failed to load pixels from localStorage:', error);
         }
@@ -60,7 +60,7 @@ export class PixelStorage {
     clearAllPixels() {
         this.pixels.clear();
         localStorage.removeItem('pixelcanvas_pixels');
-        this.pixelCanvas.debugPanel.log('🗑️ All pixels cleared');
+        // this.pixelCanvas.debugPanel.log('🗑️ All pixels cleared');
     }
     
     getPixelCount() {
@@ -82,10 +82,10 @@ export class PixelStorage {
                 parseInt(savedStock) + recoveredStock
             );
             
-            this.pixelCanvas.debugPanel.log(`💰 Stock initialized: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK} (recovered ${recoveredStock})`);
+            // this.pixelCanvas.debugPanel.log(`💰 Stock initialized: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK} (recovered ${recoveredStock})`);
         } else {
             this.pixelStock = CONFIG.MAX_PIXEL_STOCK;
-            this.pixelCanvas.debugPanel.log(`💰 Stock initialized: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK} (new user)`);
+            // this.pixelCanvas.debugPanel.log(`💰 Stock initialized: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK} (new user)`);
         }
         
         this.updateStockDisplay();
@@ -124,7 +124,7 @@ export class PixelStorage {
                 this.updateStockDisplay();
                 this.saveStockState();
                 
-                this.pixelCanvas.debugPanel.log(`💰 Stock recovered: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK}`);
+                // this.pixelCanvas.debugPanel.log(`💰 Stock recovered: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK}`);
             }
         }, CONFIG.STOCK_RECOVER_MS);
     }
@@ -140,9 +140,14 @@ export class PixelStorage {
         const cooldownIndicator = document.getElementById('cooldownIndicator');
         if (cooldownIndicator) {
             if (this.pixelStock < CONFIG.MAX_PIXEL_STOCK) {
-                const timeToNext = CONFIG.STOCK_RECOVER_MS;
-                cooldownIndicator.textContent = `Next pixel in ${Math.ceil(timeToNext / 1000)}s`;
-                cooldownIndicator.style.display = 'block';
+                // Calculate actual time remaining until next recovery
+                const lastUpdate = parseInt(localStorage.getItem('pixelcanvas_stock_time') || '0');
+                const timeSinceLastUpdate = Date.now() - lastUpdate;
+                const timeToNext = Math.max(0, CONFIG.STOCK_RECOVER_MS - timeSinceLastUpdate);
+                const secondsToNext = Math.ceil(timeToNext / 1000);
+                
+                cooldownIndicator.textContent = `Next: ${secondsToNext}s`;
+                cooldownIndicator.style.display = 'inline-block';
             } else {
                 cooldownIndicator.style.display = 'none';
             }
