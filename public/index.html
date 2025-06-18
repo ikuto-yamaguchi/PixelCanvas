@@ -278,12 +278,33 @@
                 for (const selector of logSelectors) {
                     logList = document.querySelector(selector);
                     if (logList) {
-                        // ログアイテムを検索
-                        const itemSelectors = ['.vc-item', '.vc-log-item', '[class*="item"]', 'div', 'p'];
+                        // ログアイテムを検索（仮想スクロール対応）
+                        const itemSelectors = [
+                            '.vc-item:not(.vc-scroller-items)', // 通常のログアイテム（スクローラー除外）
+                            '.vc-log-item', 
+                            '[class*="log-"]:not(.vc-scroller-items)',
+                            '.vc-content > div:not(.vc-scroller-items)', // 直接の子要素
+                            '.vc-scroller-items > div', // 仮想スクロール内のアイテム
+                            '[data-log]', // data属性付きログ
+                            'div[class*="item"]:not(.vc-scroller-items)',
+                            // 最後の手段: スクローラー内の全div（但し更に子要素がある場合のみ）
+                            '.vc-scroller-items div:not(:empty)'
+                        ];
+                        
                         for (const itemSelector of itemSelectors) {
                             logItems = logList.querySelectorAll(itemSelector);
-                            if (logItems.length > 0) {
-                                console.log(`✅ Found ${logItems.length} log items with selector: ${selector} > ${itemSelector}`);
+                            // 空でない、かつ意味のあるコンテンツを持つアイテムのみフィルタ
+                            const validItems = Array.from(logItems).filter(item => {
+                                const text = item.textContent || item.innerText || '';
+                                const hasContent = text.trim().length > 0;
+                                const isNotScrollerContainer = !item.classList.contains('vc-scroller-items');
+                                const hasChildren = item.children.length > 0 || hasContent;
+                                return hasContent && isNotScrollerContainer && hasChildren;
+                            });
+                            
+                            if (validItems.length > 0) {
+                                logItems = validItems;
+                                console.log(`✅ Found ${validItems.length} valid log items with selector: ${selector} > ${itemSelector}`);
                                 break;
                             }
                         }
@@ -292,12 +313,45 @@
                 }
                 
                 if (!logList || logItems.length === 0) {
+                    // 最後の手段: ブラウザのコンソールログを直接取得
+                    const browserLogs = getBrowserConsoleLogs();
+                    if (browserLogs.length > 0) {
+                        const logText = [
+                            '=== PixelCanvas Browser Console Logs ===',
+                            `Exported: ${new Date().toLocaleString()}`,
+                            `Total Logs: ${browserLogs.length}`,
+                            '=' .repeat(40),
+                            '',
+                            ...browserLogs,
+                            '',
+                            '=== End of Logs ==='
+                        ].join('\n');
+                        copyToClipboard(logText);
+                        alert('✅ ブラウザコンソールログをコピーしました');
+                        return;
+                    }
+                    
                     // vConsole全体からテキストを抽出
                     const vconsoleElement = document.querySelector('#__vconsole');
                     if (vconsoleElement) {
+                        // DOM構造の詳細分析
+                        const structureInfo = analyzeVConsoleStructure(vconsoleElement);
                         const allText = vconsoleElement.innerText || vconsoleElement.textContent;
                         if (allText) {
-                            copyToClipboard(`=== PixelCanvas vConsole Content ===\n${allText}`);
+                            const logText = [
+                                '=== PixelCanvas vConsole Content ===',
+                                `Exported: ${new Date().toLocaleString()}`,
+                                '=' .repeat(40),
+                                '',
+                                'DOM Structure Analysis:',
+                                ...structureInfo,
+                                '',
+                                'Full Content:',
+                                allText,
+                                '',
+                                '=== End of Content ==='
+                            ].join('\n');
+                            copyToClipboard(logText);
                             alert('✅ vConsoleの全コンテンツをコピーしました');
                             return;
                         }
@@ -468,8 +522,75 @@
             }, 1000);
         }
         
+        // ブラウザコンソールログを取得（限定的）
+        function getBrowserConsoleLogs() {
+            // ブラウザの実際のコンソールログは取得できないため、
+            // アプリケーション内で記録されたログを返す
+            const logs = [];
+            
+            // 既に出力されたconsole.logを追跡している場合
+            if (window.pixelCanvas && window.pixelCanvas.logHistory) {
+                return window.pixelCanvas.logHistory;
+            }
+            
+            // vConsoleのAPIを使ってログを取得
+            if (window.vConsole && window.vConsole.tool && window.vConsole.tool.default) {
+                try {
+                    const logTool = window.vConsole.tool.default;
+                    if (logTool.logList) {
+                        logTool.logList.forEach((log, index) => {
+                            logs.push(`[${index + 1}] [${log.type.toUpperCase()}] ${log.data.join(' ')}`);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Failed to get vConsole logs:', error);
+                }
+            }
+            
+            return logs;
+        }
+        
+        // vConsole DOM構造を分析
+        function analyzeVConsoleStructure(element) {
+            const analysis = [];
+            
+            // 主要な子要素を分析
+            const children = Array.from(element.children);
+            analysis.push(`Total child elements: ${children.length}`);
+            
+            children.forEach((child, index) => {
+                analysis.push(`Child ${index + 1}: ${child.tagName}.${child.className} (${child.children.length} children)`);
+                
+                // 特定のクラスを持つ要素をチェック
+                if (child.classList.contains('vc-content') || child.classList.contains('vc-tabpanel')) {
+                    const grandchildren = Array.from(child.children);
+                    grandchildren.forEach((grandchild, gIndex) => {
+                        analysis.push(`  └─ ${grandchild.tagName}.${grandchild.className} (text: "${grandchild.textContent?.substring(0, 50) || 'empty'}")`);
+                    });
+                }
+            });
+            
+            // ログに関連する要素を検索
+            const logElements = element.querySelectorAll('[class*="log"], [class*="item"], [class*="scroller"]');
+            analysis.push(`Log-related elements found: ${logElements.length}`);
+            
+            Array.from(logElements).slice(0, 5).forEach((el, index) => {
+                analysis.push(`Log element ${index + 1}: ${el.tagName}.${el.className}`);
+            });
+            
+            return analysis;
+        }
+        
         // グローバル関数として公開
         window.copyAllVConsoleLogs = copyAllLogs;
+        window.analyzeVConsoleDOM = () => {
+            const vconsole = document.querySelector('#__vconsole');
+            if (vconsole) {
+                console.log('vConsole DOM Analysis:', analyzeVConsoleStructure(vconsole));
+            } else {
+                console.log('vConsole not found');
+            }
+        };
         
     </script>
     
