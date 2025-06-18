@@ -165,7 +165,7 @@ export class PixelStorage {
             stockBar.id = 'stockBar';
             stockBar.style.cssText = `
                 position: fixed;
-                bottom: 20px;
+                bottom: 110px;
                 left: 50%;
                 transform: translateX(-50%);
                 width: 200px;
@@ -174,6 +174,7 @@ export class PixelStorage {
                 border-radius: 4px;
                 overflow: hidden;
                 border: 1px solid rgba(255, 255, 255, 0.3);
+                z-index: 1000;
             `;
             
             const stockFill = document.createElement('div');

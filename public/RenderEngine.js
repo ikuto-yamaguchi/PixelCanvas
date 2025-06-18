@@ -122,7 +122,7 @@ export class RenderEngine {
         const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
         
         // Only show visual bounds when sectors are large enough to see
-        if (sectorSize < 30) return;
+        if (sectorSize < 20) return;
         
         // Calculate visible sector range
         const startSectorX = Math.floor(-this.pixelCanvas.offsetX / sectorSize);
@@ -156,12 +156,15 @@ export class RenderEngine {
                     const isActiveFromClient = this.pixelCanvas.activeSectors.has(sectorKey);
                     const isActive = isActiveFromDB || isActiveFromClient;
                     
-                    if (isActive && actualPixelCount === 0) {
-                        // Active and empty sector
-                        this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
-                    } else if (actualPixelCount > 0) {
-                        // Sector has pixels - show as LOCKED
+                    if (actualPixelCount > 0) {
+                        // Sector has pixels - show as LOCKED (highest priority)
                         this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
+                    } else if (isActive) {
+                        // Active and empty sector - show as drawable
+                        this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
+                    } else if (sectorState.pixelCount > 0 || this.pixelCanvas.sectorPixelCounts.get(sectorKey) > 0) {
+                        // Database shows pixels but not visible locally - show as LOCKED anyway
+                        this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, sectorState.pixelCount || 0);
                     }
                 }
             }
@@ -185,7 +188,7 @@ export class RenderEngine {
         this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
         
         // Show sector info when zoomed in enough and text fits
-        if (sectorSize > 80) {
+        if (sectorSize > 60) {
             
             const coordinateText = `(${sectorX},${sectorY})`;
             const pixelText = `${pixelCount}px`;
@@ -243,7 +246,7 @@ export class RenderEngine {
         this.ctx.strokeRect(screenX, screenY, sectorSize, sectorSize);
         
         // "LOCKED" text when zoomed in enough and fits
-        if (sectorSize > 60) {
+        if (sectorSize > 40) {
             const lockedText = 'LOCKED';
             
             // Calculate appropriate font size that fits within sector
