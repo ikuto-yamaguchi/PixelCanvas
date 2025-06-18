@@ -107,6 +107,11 @@ export class PixiRenderer {
             // 初回LOD生成を開始（非同期）
             this.startInitialLODGeneration();
             
+            // Realtime機能を設定（少し遅らせて）
+            setTimeout(() => {
+                this.setupRealtimeSubscription();
+            }, 1000);
+            
             return true;
             
         } catch (error) {
@@ -146,6 +151,9 @@ export class PixiRenderer {
         // イベントリスナー
         this.viewport.on('moved', () => this.onViewportChange());
         this.viewport.on('zoomed', () => this.onViewportChange());
+        
+        // LOD切り替えのためのスケール監視
+        this.viewport.on('zoomed-end', () => this.checkLODLevel());
         
         this.app.stage.addChild(this.viewport);
         
@@ -206,12 +214,31 @@ export class PixiRenderer {
     }
     
     calculateLOD(scale) {
+        // スケールに基づいてLODレベルを決定
+        // 高いスケール（ズームイン）= 低いLODレベル（高解像度）
+        // 低いスケール（ズームアウト）= 高いLODレベル（低解像度）
         for (let i = 0; i < this.lodThresholds.length; i++) {
             if (scale >= this.lodThresholds[i]) {
                 return i;
             }
         }
-        return this.lodThresholds.length; // 最低LOD
+        return this.lodThresholds.length; // 最低LOD (最も粗い解像度)
+    }
+    
+    checkLODLevel() {
+        if (!this.viewport) return;
+        
+        const currentScale = this.viewport.scale.x;
+        const newLOD = this.calculateLOD(currentScale);
+        
+        // ヒステリシス（頻繁な切り替えを防ぐ）
+        if (Math.abs(newLOD - this.currentLOD) >= 1) {
+            console.log(`🔄 LOD Level changed: ${this.currentLOD} → ${newLOD} (scale: ${currentScale.toFixed(3)})`);
+            this.currentLOD = newLOD;
+            
+            // LODが変わった場合、表示を更新
+            this.loadVisibleSectors();
+        }
     }
     
     throttledLoadSectors = Utils.throttle(() => {
@@ -476,6 +503,148 @@ export class PixiRenderer {
         this.loadVisibleSectors();
     }
     
+    // 🚀 Supabase Realtime統合
+    setupRealtimeSubscription() {
+        if (!this.pixelCanvas.networkManager.supabaseClient) {
+            console.warn('⚠️ Supabase client not available for realtime');
+            return;
+        }
+        
+        const supabase = this.pixelCanvas.networkManager.supabaseClient;
+        
+        // ピクセル更新のリアルタイム監視
+        this.pixelSubscription = supabase
+            .channel('pixel-updates')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'pixels'
+                },
+                (payload) => this.handlePixelRealtimeUpdate(payload)
+            )
+            .subscribe();
+            
+        // LOD更新のリアルタイム監視
+        this.lodSubscription = supabase
+            .channel('lod-updates')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'sector_lod'
+                },
+                (payload) => this.handleLODRealtimeUpdate(payload)
+            )
+            .subscribe();
+            
+        console.log('✅ Realtime subscriptions established');
+    }
+    
+    handlePixelRealtimeUpdate(payload) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        
+        switch (eventType) {
+            case 'INSERT':
+                this.handlePixelInsert(newRecord);
+                break;
+            case 'UPDATE':
+                this.handlePixelUpdate(newRecord, oldRecord);
+                break;
+            case 'DELETE':
+                this.handlePixelDelete(oldRecord);
+                break;
+        }
+    }
+    
+    async handlePixelInsert(pixel) {
+        const { sector_x, sector_y, local_x, local_y, color } = pixel;
+        
+        console.log(`🔄 Realtime pixel insert: (${sector_x}, ${sector_y}) at (${local_x}, ${local_y}) color ${color}`);
+        
+        // ローカルピクセルストレージを更新
+        this.pixelCanvas.pixelStorage.setPixel(sector_x, sector_y, local_x, local_y, color);
+        
+        // 影響を受けるLODレベルを更新
+        if (this.lodGenerator) {
+            await this.lodGenerator.updateLODForPixelChange(sector_x, sector_y, local_x, local_y, color);
+        }
+        
+        // 現在表示されているセクターなら即座に更新
+        const sectorKey = `${sector_x},${sector_y}`;
+        if (this.isVisibleSector(sector_x, sector_y)) {
+            await this.refreshSectorTexture(sector_x, sector_y);
+        }
+    }
+    
+    async handlePixelUpdate(newPixel, oldPixel) {
+        // ピクセル更新はINSERTと同じ処理
+        await this.handlePixelInsert(newPixel);
+    }
+    
+    async handlePixelDelete(pixel) {
+        const { sector_x, sector_y, local_x, local_y } = pixel;
+        
+        console.log(`🔄 Realtime pixel delete: (${sector_x}, ${sector_y}) at (${local_x}, ${local_y})`);
+        
+        // ローカルピクセルストレージから削除
+        this.pixelCanvas.pixelStorage.deletePixel(sector_x, sector_y, local_x, local_y);
+        
+        // LODを更新
+        if (this.lodGenerator) {
+            await this.lodGenerator.updateLODForPixelChange(sector_x, sector_y, local_x, local_y, 0);
+        }
+        
+        // 表示更新
+        if (this.isVisibleSector(sector_x, sector_y)) {
+            await this.refreshSectorTexture(sector_x, sector_y);
+        }
+    }
+    
+    handleLODRealtimeUpdate(payload) {
+        const { eventType, new: newRecord } = payload;
+        
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const { sector_x, sector_y, lod_level } = newRecord;
+            const cacheKey = `${sector_x},${sector_y}:${lod_level}`;
+            
+            console.log(`🔄 Realtime LOD update: (${sector_x}, ${sector_y}) level ${lod_level}`);
+            
+            // テクスチャキャッシュをクリア（次回アクセス時に再生成）
+            this.textureCache.delete(cacheKey);
+            
+            // 現在のLODレベルと一致し、表示範囲内なら即座に再ロード
+            if (lod_level === this.currentLOD && this.isVisibleSector(sector_x, sector_y)) {
+                this.loadSectorLOD(sector_x, sector_y, lod_level);
+            }
+        }
+    }
+    
+    isVisibleSector(sectorX, sectorY) {
+        const bounds = this.calculateVisibleBounds();
+        return sectorX >= bounds.minSectorX && 
+               sectorX <= bounds.maxSectorX && 
+               sectorY >= bounds.minSectorY && 
+               sectorY <= bounds.maxSectorY;
+    }
+    
+    async refreshSectorTexture(sectorX, sectorY) {
+        // 全LODレベルのテクスチャキャッシュをクリア
+        for (let level = 0; level <= 3; level++) {
+            const cacheKey = `${sectorX},${sectorY}:${level}`;
+            const texture = this.textureCache.get(cacheKey);
+            if (texture) {
+                texture.destroy(true);
+                this.textureCache.delete(cacheKey);
+            }
+        }
+        
+        // 現在のLODレベルで再ロード
+        await this.loadSectorLOD(sectorX, sectorY, this.currentLOD);
+    }
+    
     // LOD生成関連メソッド
     async startInitialLODGeneration() {
         if (this.lodGenerationPromise) return;
@@ -591,6 +760,14 @@ export class PixiRenderer {
         this.textureCache.clear();
         this.lodCache.clear();
         this.loadingQueue.clear();
+        
+        // Realtime subscriptionをクリーンアップ
+        if (this.pixelSubscription) {
+            this.pixelSubscription.unsubscribe();
+        }
+        if (this.lodSubscription) {
+            this.lodSubscription.unsubscribe();
+        }
         
         if (this.lodGenerator) {
             this.lodGenerator.destroy();

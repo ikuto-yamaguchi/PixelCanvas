@@ -66,12 +66,46 @@ export const CONFIG = {
         
         return true; // デフォルトは有効
     })(), // PixiJSレンダラーを使用するかフラグ
+    
+    // レンダラー自動選択（フォールバック）
+    RENDERER_MODE: (() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('renderer');
+        const stored = localStorage.getItem('pixelcanvas_renderer_mode');
+        
+        // URLパラメーター優先: ?renderer=pixi|simple|canvas
+        if (mode) return mode;
+        if (stored) return stored;
+        
+        return 'auto'; // 自動選択
+    })(),
+    
+    // LOD自動生成フラグ
+    AUTO_GENERATE_LOD: (() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const lodParam = urlParams.get('lod');
+        if (lodParam === 'false') return false;
+        
+        const stored = localStorage.getItem('pixelcanvas_auto_lod');
+        if (stored === 'false') return false;
+        
+        return true; // デフォルトで有効
+    })(),
+    
     PIXI_MAX_TEXTURES: 500,  // 最大テクスチャ数
     LOD_THRESHOLDS: [2.0, 0.5, 0.125], // LOD切り替え閾値
     
     // LOD設定
     LOD_LEVELS: 4, // 0,1,2,3
-    LOD_SIZES: [256, 128, 64, 32] // 各LODレベルのサイズ
+    LOD_SIZES: [256, 128, 64, 32], // 各LODレベルのサイズ
+    
+    // パフォーマンス最適化設定
+    TEXTURE_CACHE_SIZE: 500,        // 最大テクスチャキャッシュ数
+    PRELOAD_RADIUS: 1,              // 先読みセクター半径
+    BATCH_SIZE: 10,                 // バッチ処理サイズ
+    MEMORY_CLEANUP_INTERVAL: 30000, // メモリクリーンアップ間隔(ms)
+    LOD_GENERATION_DELAY: 100,      // LOD生成間の遅延(ms)
+    VIEWPORT_UPDATE_THROTTLE: 100   // ビューポート更新の制限(ms)
 };
 
 // Utility functions
@@ -190,5 +224,67 @@ export const Utils = {
                 timeout = setTimeout(execute, delay - elapsed);
             }
         };
+    },
+    
+    // レンダラー管理ユーティリティ
+    setRendererMode(mode) {
+        localStorage.setItem('pixelcanvas_renderer_mode', mode);
+        location.reload(); // 設定変更後は再読み込み
+    },
+    
+    getRendererMode() {
+        return CONFIG.RENDERER_MODE;
+    },
+    
+    togglePixiRenderer() {
+        const current = CONFIG.USE_PIXI_RENDERER;
+        localStorage.setItem('pixelcanvas_use_pixi', current ? 'false' : 'true');
+        location.reload();
+    },
+    
+    // デバイス性能検出
+    detectDeviceCapability() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        const hasWebGL = !!gl;
+        
+        const memoryInfo = gl?.getExtension('WEBGL_debug_renderer_info');
+        const renderer = memoryInfo ? gl.getParameter(memoryInfo.UNMASKED_RENDERER_WEBGL) : 'Unknown';
+        
+        const deviceMemory = navigator.deviceMemory || 4; // デフォルト4GB
+        const hardwareConcurrency = navigator.hardwareConcurrency || 4;
+        
+        return {
+            hasWebGL,
+            renderer,
+            deviceMemory,
+            hardwareConcurrency,
+            userAgent: navigator.userAgent,
+            // パフォーマンス推定（簡易版）
+            estimatedPerformance: hasWebGL && deviceMemory >= 4 ? 'high' : 'medium'
+        };
+    },
+    
+    // 自動レンダラー選択
+    selectOptimalRenderer() {
+        const capability = this.detectDeviceCapability();
+        
+        // 強制設定がある場合は尊重
+        if (CONFIG.RENDERER_MODE !== 'auto') {
+            return CONFIG.RENDERER_MODE;
+        }
+        
+        // WebGLが使えない場合はCanvas2D
+        if (!capability.hasWebGL) {
+            return 'canvas';
+        }
+        
+        // 低性能デバイスではSimplePixi
+        if (capability.estimatedPerformance === 'medium') {
+            return 'simple';
+        }
+        
+        // 高性能デバイスではフルPixi
+        return 'pixi';
     }
 };
