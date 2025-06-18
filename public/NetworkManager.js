@@ -67,7 +67,12 @@ export class NetworkManager {
         
         try {
             // Check rate limit before sending
-            if (!(await this.checkRateLimit())) {
+            console.log(`⏱️ Checking rate limit...`);
+            const rateLimitOk = await this.checkRateLimit();
+            console.log(`⏱️ Rate limit check result: ${rateLimitOk}`);
+            
+            if (!rateLimitOk) {
+                console.error('🚫 Rate limited: Cannot send pixel');
                 this.pixelCanvas.debugPanel.log('🚫 Rate limited: Cannot send pixel');
                 return;
             }
@@ -88,6 +93,7 @@ export class NetworkManager {
             };
             
             // Send to Supabase
+            console.log(`📡 Sending to Supabase: ${CONFIG.SUPABASE_URL}/rest/v1/pixels`);
             const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels`, {
                 method: 'POST',
                 headers: {
@@ -98,6 +104,8 @@ export class NetworkManager {
                 },
                 body: JSON.stringify(pixelData)
             });
+            
+            console.log(`📡 Supabase response status: ${response.status}`);
             
             if (response.ok) {
                 console.log(`✅ Pixel sent successfully: ${pixel.s}(${pixel.x},${pixel.y}) = ${pixel.c}`);
@@ -113,7 +121,9 @@ export class NetworkManager {
                 const pixelCount = this.pixelCanvas.pixelStorage.getSectorPixelCount(sectorX, sectorY);
                 this.pixelCanvas.sectorManager.updateSectorCountInDatabase(sectorX, sectorY, pixelCount);
             } else {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error(`❌ Supabase error: ${response.status} - ${errorText}`);
+                throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
             }
             
         } catch (error) {

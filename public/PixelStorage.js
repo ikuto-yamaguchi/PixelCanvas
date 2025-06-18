@@ -242,9 +242,13 @@ export class PixelStorage {
         };
         
         // Send pixel to network
+        console.log(`🌐 Network status: ${navigator.onLine ? 'ONLINE' : 'OFFLINE'}`);
+        console.log(`📤 Sending pixel to network:`, pixel);
+        
         if (navigator.onLine) {
             this.pixelCanvas.networkManager.sendPixel(pixel);
         } else {
+            console.warn('⚠️ Offline - queueing pixel for later');
             this.pixelCanvas.networkManager.queuePixel(pixel);
         }
         
