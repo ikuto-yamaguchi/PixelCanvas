@@ -234,16 +234,22 @@ export class PixelStorage {
     
     // Utility methods for pixel operations
     drawPixel(sectorX, sectorY, localX, localY, color) {
+        console.error('🎨 DRAW PIXEL START:', {sectorX, sectorY, localX, localY, color, currentStock: this.pixelStock});
+        
         // Check if we have stock
         if (!this.hasStock()) {
+            console.error('🚫 NO STOCK AVAILABLE FOR DRAWING:', {currentStock: this.pixelStock});
             this.pixelCanvas.debugPanel.log('🚫 No stock available for drawing');
             return false;
         }
         
         // Consume stock
         if (!this.consumeStock()) {
+            console.error('🚫 FAILED TO CONSUME STOCK:', {currentStock: this.pixelStock});
             return false;
         }
+        
+        console.error('✅ STOCK CONSUMED, PROCEEDING WITH PIXEL DRAW:', {newStock: this.pixelStock});
         
         // Add pixel to storage
         this.addPixel(sectorX, sectorY, localX, localY, color);

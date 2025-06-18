@@ -149,26 +149,33 @@ class PixelCanvas {
         // Check if within bounds
         if (local.localX < 0 || local.localX >= CONFIG.GRID_SIZE || 
             local.localY < 0 || local.localY >= CONFIG.GRID_SIZE) {
-            // this.debugPanel.log('🚫 Click outside valid bounds');
+            console.error('🚫 Click outside valid bounds:', {x, y, worldX, worldY, local});
             return;
         }
         
         // Check if within active sectors
         if (!this.sectorManager.isWithinActiveSectors(worldX, worldY)) {
+            console.error('🚫 Click outside active sectors:', {worldX, worldY, activeSectors: Array.from(this.activeSectors)});
             this.showOutOfBoundsWarning();
             return;
         }
         
         // Check if pixel already exists
         if (this.pixelStorage.hasPixel(local.sectorX, local.sectorY, local.localX, local.localY)) {
-            // this.debugPanel.log('🚫 Pixel already exists at this location');
+            console.error('🚫 Pixel already exists at this location:', {local});
             return;
         }
         
-        // this.debugPanel.log(`🎯 Click: screen(${x.toFixed(1)}, ${y.toFixed(1)}) → world(${worldX}, ${worldY}) → sector(${local.sectorX}, ${local.sectorY}) local(${local.localX}, ${local.localY})`);
+        console.error(`🎯 PIXEL DRAW ATTEMPT: screen(${x.toFixed(1)}, ${y.toFixed(1)}) → world(${worldX}, ${worldY}) → sector(${local.sectorX}, ${local.sectorY}) local(${local.localX}, ${local.localY})`);
         
         // Draw the pixel using PixelStorage which handles everything properly
         const success = this.pixelStorage.drawPixel(local.sectorX, local.sectorY, local.localX, local.localY, this.currentColor);
+        
+        if (!success) {
+            console.error('❌ PIXEL DRAW FAILED:', {local, currentColor: this.currentColor});
+        } else {
+            console.error('✅ PIXEL DRAW SUCCESS:', {local, currentColor: this.currentColor});
+        }
         
         if (success) {
             // Check for expansion after successful draw

@@ -187,9 +187,25 @@ export class EventHandlers {
         if (this.touchState.touches === 1 && !this.touchState.moved && !this.touchState.wasMultiTouch) {
             const tapDuration = now - this.touchState.startTime;
             
+            console.error('📱 TOUCH TAP DETECTED:', {
+                startX: this.touchState.startX, 
+                startY: this.touchState.startY, 
+                tapDuration, 
+                maxDuration: CONFIG.TAP_DURATION_MS
+            });
+            
             if (tapDuration < CONFIG.TAP_DURATION_MS) {
+                console.error('📱 CALLING handlePixelClick');
                 this.pixelCanvas.handlePixelClick(this.touchState.startX, this.touchState.startY);
+            } else {
+                console.error('📱 TAP TOO LONG, IGNORED');
             }
+        } else {
+            console.error('📱 TAP CONDITIONS NOT MET:', {
+                touches: this.touchState.touches,
+                moved: this.touchState.moved,
+                wasMultiTouch: this.touchState.wasMultiTouch
+            });
         }
         
         // Record multi-touch gesture end time
