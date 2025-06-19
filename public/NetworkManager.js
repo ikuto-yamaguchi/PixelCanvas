@@ -263,7 +263,8 @@ export class NetworkManager {
             const mainResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.0&sector_y=eq.0`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                    'Range': '0-99999' // Request up to 100k rows to get all pixels in sector
                 }
             });
             

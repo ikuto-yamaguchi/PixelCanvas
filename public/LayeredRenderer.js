@@ -68,10 +68,8 @@ export class LayeredRenderer {
                 this.renderGrid(optimalLayer, bounds);
             }
             
-            // 🔧 FIXED: セクター境界線を安全に再有効化（デバッグ用）
-            if (this.pixelCanvas.scale > 0.2) { // 小さいズームレベルでは無効
-                this.renderSectorInfo(bounds);
-            }
+            // 🔧 FIXED: セクター境界線を常に表示（アクティブ/非アクティブの視覚化）
+            this.renderSectorInfo(bounds);
             
             // キャッシュ更新
             this.updateCache(optimalLayer, zoomLevel, bounds);
@@ -326,10 +324,8 @@ export class LayeredRenderer {
      * セクター情報描画 - Fixed coordinate transformation
      */
     renderSectorInfo(bounds) {
-        // セクター境界線描画
-        this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+        // セクター境界線描画 - アクティブ/非アクティブで色分け
         this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
         
         for (let sectorX = bounds.minSectorX; sectorX <= bounds.maxSectorX; sectorX++) {
             for (let sectorY = bounds.minSectorY; sectorY <= bounds.maxSectorY; sectorY++) {
@@ -344,25 +340,66 @@ export class LayeredRenderer {
                 // Only draw if visible on screen
                 if (screenX < this.canvas.width + size && screenX + size > 0 &&
                     screenY < this.canvas.height + size && screenY + size > 0) {
-                    this.ctx.rect(screenX, screenY, size, size);
+                    
+                    // Check if sector is active
+                    const sectorKey = `${sectorX},${sectorY}`;
+                    const sectorState = this.pixelCanvas.sectorManager.getSectorState(sectorX, sectorY);
+                    const isActiveFromDB = sectorState.isActive;
+                    const isActiveFromClient = this.pixelCanvas.activeSectors.has(sectorKey);
+                    const isActive = isActiveFromDB || isActiveFromClient;
+                    const pixelCount = this.pixelCanvas.pixelStorage.getSectorPixelCount(sectorX, sectorY);
+                    
+                    // Draw sector boundary with appropriate color
+                    if (isActive) {
+                        // Active sector - green border
+                        this.ctx.strokeStyle = 'rgba(76, 175, 80, 0.8)';
+                        this.ctx.fillStyle = 'rgba(76, 175, 80, 0.1)';
+                    } else {
+                        // Inactive sector - red border with dark overlay
+                        this.ctx.strokeStyle = 'rgba(244, 67, 54, 0.8)';
+                        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    }
+                    
+                    // Draw filled rectangle for inactive sectors
+                    if (!isActive) {
+                        this.ctx.fillRect(screenX, screenY, size, size);
+                    }
+                    
+                    // Draw border
+                    this.ctx.strokeRect(screenX, screenY, size, size);
                     
                     // Add sector label if sector is large enough
                     if (size > 40) {
-                        const pixelCount = this.pixelCanvas.pixelStorage.getSectorPixelCount(sectorX, sectorY);
-                        if (pixelCount > 0) {
-                            this.ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
-                            this.ctx.font = `${Math.min(12, size / 8)}px monospace`;
-                            this.ctx.textAlign = 'center';
-                            this.ctx.textBaseline = 'middle';
-                            this.ctx.fillText(`(${sectorX},${sectorY})\\n${pixelCount}px`, 
-                                             screenX + size / 2, screenY + size / 2);
+                        this.ctx.save();
+                        this.ctx.font = `${Math.min(12, size / 8)}px monospace`;
+                        this.ctx.textAlign = 'center';
+                        this.ctx.textBaseline = 'middle';
+                        
+                        if (isActive) {
+                            this.ctx.fillStyle = 'rgba(76, 175, 80, 0.9)';
+                        } else {
+                            this.ctx.fillStyle = 'rgba(244, 67, 54, 0.9)';
                         }
+                        
+                        const text = `(${sectorX},${sectorY})`;
+                        this.ctx.fillText(text, screenX + size / 2, screenY + size / 2 - 10);
+                        
+                        if (pixelCount > 0) {
+                            this.ctx.fillText(`${pixelCount}px`, screenX + size / 2, screenY + size / 2 + 10);
+                        }
+                        
+                        // Show lock status for inactive sectors
+                        if (!isActive && size > 60) {
+                            this.ctx.font = `${Math.min(16, size / 6)}px monospace`;
+                            this.ctx.fillStyle = 'rgba(244, 67, 54, 0.9)';
+                            this.ctx.fillText('🔒 LOCKED', screenX + size / 2, screenY + size / 2 + 30);
+                        }
+                        
+                        this.ctx.restore();
                     }
                 }
             }
         }
-        
-        this.ctx.stroke();
     }
     
     /**
