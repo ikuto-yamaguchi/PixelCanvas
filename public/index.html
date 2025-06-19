@@ -19,13 +19,13 @@
     
     <!-- PixiJS Tilemap Plugin - 互換バージョン (複数CDN試行) -->
     <script>
-        // pixi-tilemap fallback loading
+        // pixi-tilemap fallback loading - Updated for @pixi/tilemap v5+
         function loadTilemap() {
             const urls = [
-                'https://cdn.jsdelivr.net/npm/@pixi/tilemap@latest/dist/pixi-tilemap.umd.js',
-                'https://unpkg.com/@pixi/tilemap@latest/dist/pixi-tilemap.umd.js',
-                'https://cdn.jsdelivr.net/npm/@pixi/tilemap@4.0.0/dist/pixi-tilemap.umd.js',
-                'https://unpkg.com/@pixi/tilemap@4.0.0/dist/pixi-tilemap.umd.js'
+                'https://cdn.jsdelivr.net/npm/@pixi/tilemap@5.0.1/dist/pixi-tilemap.min.js',
+                'https://unpkg.com/@pixi/tilemap@5.0.1/dist/pixi-tilemap.min.js',
+                'https://cdn.jsdelivr.net/npm/@pixi/tilemap@latest/dist/pixi-tilemap.min.js',
+                'https://unpkg.com/@pixi/tilemap@latest/dist/pixi-tilemap.min.js'
             ];
             
             let index = 0;
@@ -48,13 +48,13 @@
             tryLoad();
         }
         
-        // pixi-viewport fallback loading
+        // pixi-viewport fallback loading - Updated for latest versions  
         function loadViewport() {
             const urls = [
-                'https://cdn.jsdelivr.net/npm/pixi-viewport@4.34.4/dist/viewport.min.js',
-                'https://unpkg.com/pixi-viewport@4.34.4/dist/viewport.min.js',
-                'https://cdn.jsdelivr.net/npm/pixi-viewport@4.32.0/dist/viewport.min.js',
-                'https://unpkg.com/pixi-viewport@4.32.0/dist/viewport.min.js'
+                'https://cdn.jsdelivr.net/npm/pixi-viewport@5.0.2/dist/viewport.min.js',
+                'https://unpkg.com/pixi-viewport@5.0.2/dist/viewport.min.js',
+                'https://cdn.jsdelivr.net/npm/pixi-viewport@latest/dist/viewport.min.js',
+                'https://unpkg.com/pixi-viewport@latest/dist/viewport.min.js'
             ];
             
             let index = 0;

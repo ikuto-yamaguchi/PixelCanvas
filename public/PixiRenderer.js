@@ -48,10 +48,8 @@ export class PixiRenderer {
                 return false;
             }
             
-            if (!window.PIXI.tilemap) {
-                console.warn('⚠️ pixi-tilemap not loaded, falling back to Canvas renderer');
-                return false;
-            }
+            // 🚨 CRITICAL FIX: Don't require tilemap - use basic PIXI functionality
+            console.log('🔧 Using basic PixiJS without tilemap dependency');
             
             console.log('🚀 Initializing PixiJS renderer...');
             console.log('PixiJS version:', window.PIXI.VERSION || 'unknown');
@@ -89,20 +87,40 @@ export class PixiRenderer {
             this.app.view.style.position = 'absolute';
             this.app.view.style.top = '0';
             this.app.view.style.left = '0';
-            this.app.view.style.zIndex = '2'; // 既存Canvasより上に
+            this.app.view.style.width = '100%';
+            this.app.view.style.height = '100%';
+            this.app.view.style.zIndex = '10'; // 🔧 CRITICAL: Higher z-index to ensure visibility
+            this.app.view.style.pointerEvents = 'auto';
+            this.app.view.style.display = 'block';
+            
+            console.log('🔧 Adding PixiJS canvas to container', {
+                containerSize: { width: containerWidth, height: containerHeight },
+                canvasStyle: this.app.view.style.cssText
+            });
+            
             this.container.appendChild(this.app.view);
             
-            // Viewportセットアップ
-            this.setupViewport();
+            // 🔧 EMERGENCY: Force canvas visibility
+            setTimeout(() => {
+                this.app.view.style.opacity = '1';
+                this.app.view.style.visibility = 'visible';
+                console.log('🔧 PixiJS canvas forced visible');
+            }, 100);
             
-            // TileMapセットアップ
-            this.setupTileMap();
+            // 🔧 CRITICAL FIX: Setup simplified rendering without dependencies
+            this.setupSimpleContainer();
+            
+            // TileMapセットアップ（オプション）
+            this.trySetupTileMap();
             
             // リサイズハンドラ
             this.setupResize();
             
             this.isInitialized = true;
             console.log('✅ PixiJS renderer initialized successfully');
+            
+            // 🧪 CRITICAL TEST: Add test sprite to verify rendering works
+            this.addTestSprite();
             
             // 初回LOD生成を開始（非同期）
             this.startInitialLODGeneration();
@@ -120,64 +138,188 @@ export class PixiRenderer {
         }
     }
     
-    setupViewport() {
+    setupSimpleContainer() {
         try {
-            console.log('🔧 Setting up Viewport...');
+            console.log('🔧 Setting up simple container without Viewport dependency...');
             
-            // pixi-viewport で2Dカメラ作成
+            // 🚨 CRITICAL FIX: Use basic PIXI Container instead of Viewport
+            this.viewport = new PIXI.Container();
+            
+            // Set initial position to show sector (0,0) where most pixels are
+            this.viewport.x = 0;
+            this.viewport.y = 0;
+            this.viewport.scale.set(2); // Reasonable zoom to see pixels
+            
+            this.app.stage.addChild(this.viewport);
+            
+            console.log('✅ Simple container created successfully');
+            
+            // Try to setup Viewport if available (optional enhancement)
+            this.trySetupViewport();
+            
+        } catch (error) {
+            console.error('❌ Simple container setup failed:', error);
+            throw error;
+        }
+    }
+    
+    trySetupViewport() {
+        try {
+            console.log('🔧 Attempting to setup Viewport (optional)...');
+            
             const ViewportClass = window.PIXI.Viewport || window.Viewport;
             if (!ViewportClass) {
-                throw new Error('Viewport class not found - pixi-viewport not loaded properly');
+                console.log('⚠️ Viewport not available, using simple container');
+                return;
             }
+            
+            // Replace simple container with viewport
+            this.app.stage.removeChild(this.viewport);
             
             this.viewport = new ViewportClass({
                 screenWidth: this.container.clientWidth || 800,
                 screenHeight: this.container.clientHeight || 600,
                 worldWidth: 100000,
                 worldHeight: 100000,
-                interaction: this.app.renderer.plugins.interaction
+                events: this.app.renderer.events // 🔧 FIXED: Use events instead of interaction
             });
             
-            console.log('✅ Viewport created successfully');
-        
-        // カメラ操作設定
-        this.viewport
-            .drag()
-            .pinch()
-            .wheel({ smooth: 3 })
-            .decelerate()
-            .clampZoom({ minScale: 0.05, maxScale: 16 });
-        
-        // 🔧 CRITICAL: Set initial viewport to show sector (0,0) - where most pixels are
-        console.log('🔧 Setting initial viewport position to show sector (0,0)');
-        this.viewport.moveCenter(CONFIG.GRID_SIZE / 2, CONFIG.GRID_SIZE / 2);
-        this.viewport.setZoom(2); // Reasonable zoom to see pixels
-        
-        // イベントリスナー
-        this.viewport.on('moved', () => this.onViewportChange());
-        this.viewport.on('zoomed', () => this.onViewportChange());
-        
-        // LOD切り替えのためのスケール監視
-        this.viewport.on('zoomed-end', () => this.checkLODLevel());
-        
-        this.app.stage.addChild(this.viewport);
-        
+            // カメラ操作設定
+            this.viewport
+                .drag()
+                .pinch()
+                .wheel({ smooth: 3 })
+                .decelerate()
+                .clampZoom({ minScale: 0.05, maxScale: 16 });
+            
+            // Set initial viewport to show sector (0,0)
+            this.viewport.moveCenter(CONFIG.GRID_SIZE / 2, CONFIG.GRID_SIZE / 2);
+            this.viewport.setZoom(2);
+            
+            // イベントリスナー
+            this.viewport.on('moved', () => this.onViewportChange());
+            this.viewport.on('zoomed', () => this.onViewportChange());
+            this.viewport.on('zoomed-end', () => this.checkLODLevel());
+            
+            this.app.stage.addChild(this.viewport);
+            
+            console.log('✅ Viewport upgrade successful');
+            
         } catch (error) {
-            console.error('❌ Viewport setup failed:', error);
-            throw error;
+            console.warn('⚠️ Viewport setup failed, using simple container:', error);
         }
     }
     
-    setupTileMap() {
+    addTestSprite() {
         try {
-            console.log('🔧 Setting up TileMap...');
+            console.log('🧪 Adding test sprite to verify PixiJS rendering...');
             
-            if (!window.PIXI.tilemap) {
-                throw new Error('pixi-tilemap not loaded');
+            // Create a simple colored square as test
+            const graphics = new PIXI.Graphics();
+            graphics.beginFill(0xff0000); // Red color
+            graphics.drawRect(0, 0, 50, 50);
+            graphics.endFill();
+            
+            // Position it in the center of screen
+            graphics.x = 100;
+            graphics.y = 100;
+            
+            this.viewport.addChild(graphics);
+            
+            // Also add a text label
+            const text = new PIXI.Text('PixiJS Test', {
+                fontFamily: 'Arial',
+                fontSize: 16,
+                fill: 0xffffff
+            });
+            text.x = 100;
+            text.y = 160;
+            
+            this.viewport.addChild(text);
+            
+            console.log('✅ Test sprite added successfully');
+            
+        } catch (error) {
+            console.error('❌ Failed to add test sprite:', error);
+        }
+    }
+    
+    // 🔧 CRITICAL: Main render method called from main.js
+    async render() {
+        if (!this.isInitialized) {
+            console.warn('⚠️ PixiJS renderer not initialized');
+            return;
+        }
+        
+        console.log('🎨 PixiJS render called');
+        
+        // 🔧 CRITICAL FIX: Render actual pixels from storage
+        this.renderFromPixelStorage();
+        
+        // Also load LOD data if available
+        this.loadVisibleSectors();
+    }
+    
+    // 🚨 CRITICAL: Create pixel textures directly from PixelStorage
+    renderFromPixelStorage() {
+        try {
+            const pixelStorage = this.pixelCanvas.pixelStorage;
+            if (!pixelStorage || pixelStorage.pixels.size === 0) {
+                console.log('⚠️ No pixels in storage to render');
+                return;
             }
             
-            // TileMapレイヤー作成
-            this.tileLayer = new window.PIXI.tilemap.CompositeRectTileLayer();
+            console.log(`🎨 Rendering ${pixelStorage.pixels.size} pixels with PixiJS`);
+            
+            // Clear previous pixels (simple approach)
+            this.viewport.children
+                .filter(child => child.userData && child.userData.isPixel)
+                .forEach(pixel => this.viewport.removeChild(pixel));
+            
+            let rendered = 0;
+            const maxPixels = 1000; // Limit for performance
+            
+            for (const [key, color] of pixelStorage.pixels) {
+                if (rendered >= maxPixels) break;
+                
+                const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+                
+                // Convert to world coordinates
+                const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+                const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+                
+                // Create pixel sprite
+                const graphics = new PIXI.Graphics();
+                graphics.beginFill(parseInt(CONFIG.PALETTE[color].replace('#', '0x')));
+                graphics.drawRect(0, 0, 1, 1); // 1x1 pixel
+                graphics.endFill();
+                
+                graphics.x = worldX;
+                graphics.y = worldY;
+                graphics.userData = { isPixel: true };
+                
+                this.viewport.addChild(graphics);
+                rendered++;
+            }
+            
+            console.log(`✅ Rendered ${rendered} pixels with PixiJS`);
+            
+        } catch (error) {
+            console.error('❌ PixiJS pixel rendering failed:', error);
+        }
+    }
+    
+    trySetupTileMap() {
+        try {
+            console.log('🔧 Attempting to setup TileMap (optional)...');
+            
+            if (!window.PIXI.tilemap) {
+                console.log('⚠️ PIXI.tilemap not available, using sprite fallback');
+                return;
+            }
+            
+            // 🔧 FIXED: Use correct CompositeTilemap class from latest @pixi/tilemap
+            this.tileLayer = new window.PIXI.tilemap.CompositeTilemap();
             this.viewport.addChild(this.tileLayer);
             
             console.log('✅ TileMap created successfully');
@@ -500,21 +642,27 @@ export class PixiRenderer {
         
         console.log(`🎨 Rendering texture for sector (${sectorX}, ${sectorY}) at world (${worldX}, ${worldY}) size ${size}`);
         
+        // 🚨 CRITICAL FIX: Use Sprite instead of problematic TileMap
         try {
-            // TileMapに追加
-            this.tileLayer.addRect(texture, worldX, worldY, worldX + size, worldY + size);
-            console.log(`✅ Added texture to TileMap for sector (${sectorX}, ${sectorY})`);
-        } catch (error) {
-            console.error(`❌ Failed to add texture to TileMap:`, error);
-            
-            // 🔧 FALLBACK: Use Sprite instead of TileMap
             const sprite = new PIXI.Sprite(texture);
             sprite.x = worldX;
             sprite.y = worldY;
             sprite.width = size;
             sprite.height = size;
+            
+            // 重複チェック - 同じ位置のスプライトを削除
+            const existingSprites = this.viewport.children.filter(child => 
+                child instanceof PIXI.Sprite && 
+                child.x === worldX && 
+                child.y === worldY
+            );
+            existingSprites.forEach(sprite => this.viewport.removeChild(sprite));
+            
             this.viewport.addChild(sprite);
-            console.log(`✅ Added sprite fallback for sector (${sectorX}, ${sectorY})`);
+            console.log(`✅ Added sprite for sector (${sectorX}, ${sectorY}) at (${worldX}, ${worldY})`);
+            
+        } catch (error) {
+            console.error(`❌ Failed to add sprite:`, error);
         }
     }
     
