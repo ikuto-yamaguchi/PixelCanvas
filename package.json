@@ -4,9 +4,10 @@
   "description": "PixelCanvas MVP application",
   "main": "index.js",
   "scripts": {
-    "build": "echo 'Static files ready in public directory'",
+    "build": "npm run copy-deps && echo 'Static files ready in public directory'",
+    "copy-deps": "cp node_modules/pixi.js/dist/pixi.min.js public/ && cp node_modules/@pixi/tilemap/dist/pixi-tilemap.js public/ && cp node_modules/pixi-viewport/dist/pixi_viewport.umd.cjs public/pixi-viewport.js",
     "test": "echo 'All tests passed'",
-    "dev": "cd public && python3 -m http.server 8000 || python -m SimpleHTTPServer 8000",
+    "dev": "npm run copy-deps && cd public && python3 -m http.server 8000 || python -m SimpleHTTPServer 8000",
     "start": "npm run dev"
   },
   "repository": {
@@ -22,6 +23,9 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
+    "@pixi/tilemap": "^5.0.1",
+    "pixi-viewport": "^6.0.3",
+    "pixi.js": "^8.10.1",
     "vconsole": "^3.15.1"
   }
 }

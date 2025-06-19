@@ -54,9 +54,9 @@ export class PixiRenderer {
             console.log('🚀 Initializing PixiJS renderer...');
             console.log('PixiJS version:', window.PIXI.VERSION || 'unknown');
             
-            // PixiJS設定
+            // PixiJS設定 (v8 compatible)
             if (window.PIXI.settings) {
-                window.PIXI.settings.SCALE_MODE = window.PIXI.SCALE_MODES.NEAREST; // ピクセルアート用
+                window.PIXI.settings.SCALE_MODE = window.PIXI.SCALE_MODES?.NEAREST || 0; // ピクセルアート用
                 window.PIXI.settings.ROUND_PIXELS = true;
             }
             
@@ -181,7 +181,7 @@ export class PixiRenderer {
                 screenHeight: this.container.clientHeight || 600,
                 worldWidth: 100000,
                 worldHeight: 100000,
-                events: this.app.renderer.events // 🔧 FIXED: Use events instead of interaction
+                events: this.app.renderer.events || this.app.stage.eventMode // 🔧 FIXED: Use events for v6+
             });
             
             // カメラ操作設定
