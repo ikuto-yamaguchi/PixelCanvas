@@ -66,7 +66,15 @@
                 
                 const script = document.createElement('script');
                 script.src = urls[index];
-                script.onload = () => console.log('✅ pixi-viewport loaded from:', urls[index]);
+                script.onload = () => {
+                    console.log('✅ pixi-viewport loaded from:', urls[index]);
+                    // Ensure viewport is properly attached to PIXI
+                    setTimeout(() => {
+                        if (window.Viewport && window.PIXI) {
+                            window.PIXI.Viewport = window.Viewport;
+                        }
+                    }, 100);
+                };
                 script.onerror = () => {
                     console.warn('❌ Failed to load pixi-viewport from:', urls[index]);
                     index++;

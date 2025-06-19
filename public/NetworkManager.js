@@ -256,11 +256,14 @@ export class NetworkManager {
     async loadPixelsFromSupabase() {
         
         try {
-            // 🔧 ENHANCED: Load more pixels for better coverage across sectors
+            // 🔧 ENHANCED: Load pixels with better distribution across sectors
+            
+            // First, try to load 10000 pixels with proper Range header
             const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=10000&offset=0`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                    'Range': '0-9999'  // Request up to 10000 rows (0-indexed)
                 }
             });
             
@@ -268,8 +271,35 @@ export class NetworkManager {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            const allPixels = await response.json();
-            console.log(`📦 Loaded ${allPixels.length} pixels from database`);
+            let allPixels = await response.json();
+            console.log(`📦 Loaded ${allPixels.length} pixels from database (first batch)`);
+            
+            // If we got fewer than expected, try to load more with different strategies
+            if (allPixels.length < 5000) {
+                console.log('🔄 Loading additional pixels from different sectors...');
+                
+                // Load a random sampling from different sectors
+                const additionalResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&order=id.desc&limit=5000&offset=1000`, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                        'Range': '0-4999'
+                    }
+                });
+                
+                if (additionalResponse.ok) {
+                    const additionalPixels = await additionalResponse.json();
+                    console.log(`📦 Loaded ${additionalPixels.length} additional pixels`);
+                    
+                    // Merge and deduplicate
+                    const pixelMap = new Map();
+                    [...allPixels, ...additionalPixels].forEach(pixel => {
+                        const key = `${pixel.sector_x},${pixel.sector_y},${pixel.local_x},${pixel.local_y}`;
+                        pixelMap.set(key, pixel);
+                    });
+                    allPixels = Array.from(pixelMap.values());
+                }
+            }
             
             // Add each pixel to the pixels map and calculate occupied sectors
             const occupiedSectors = new Set();
@@ -326,7 +356,8 @@ export class NetworkManager {
             const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=10000&offset=0`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                    'Range': '0-9999'  // Request up to 10000 rows (0-indexed)
                 }
             });
             
