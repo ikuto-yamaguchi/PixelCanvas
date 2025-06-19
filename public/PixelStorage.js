@@ -328,11 +328,11 @@ export class PixelStorage {
         const pixelKey = Utils.createPixelKey(sectorX, sectorY, localX, localY);
         this.pixels.set(pixelKey, color);
         
-        // ローカルストレージにも保存
-        this.savePixelToLocalStorage(pixelKey, color);
+        // ローカルストレージにも保存（データベース読み込み時はスキップ）
+        // this.savePixelToLocalStorage(pixelKey, color);
         
-        // ピクセル数カウント表示を更新
-        this.updateStockDisplay();
+        // ピクセル数カウント表示は呼び出し元で更新
+        // this.updateStockDisplay();
     }
     
     // ピクセル数表示更新

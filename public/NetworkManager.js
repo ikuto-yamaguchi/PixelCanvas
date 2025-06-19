@@ -14,9 +14,31 @@ export class NetworkManager {
     }
     
     initializeSupabase() {
+        console.log('🔧 Initializing Supabase client...');
+        console.log('🔧 window.supabase available:', !!window.supabase);
+        console.log('🔧 SUPABASE_URL:', CONFIG.SUPABASE_URL);
+        console.log('🔧 SUPABASE_ANON_KEY:', CONFIG.SUPABASE_ANON_KEY ? 'Set' : 'Missing');
+        
         if (typeof window !== 'undefined' && window.supabase) {
-            this.supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-            this.setupRealtimeSubscription();
+            try {
+                this.supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                console.log('✅ Supabase client created successfully');
+                this.setupRealtimeSubscription();
+            } catch (error) {
+                console.error('❌ Failed to create Supabase client:', error);
+            }
+        } else {
+            console.error('❌ window.supabase not available - retrying in 1 second...');
+            
+            // 🚨 CRITICAL: Retry initialization after delay
+            setTimeout(() => {
+                if (window.supabase && !this.supabaseClient) {
+                    console.log('🔄 Retrying Supabase initialization...');
+                    this.supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                    console.log('✅ Supabase client created on retry');
+                    this.setupRealtimeSubscription();
+                }
+            }, 1000);
         }
     }
     
@@ -464,50 +486,76 @@ export class NetworkManager {
             }
         }
         
-        this.pixelCanvas.debugPanel.log(`🎯 Initialized ${this.pixelCanvas.activeSectors.size} active sectors (${occupiedSectors.size} occupied + neighbors)`);
-        this.pixelCanvas.debugPanel.log(`📍 Active sectors: ${Array.from(this.pixelCanvas.activeSectors).slice(0, 10).join(', ')}${this.pixelCanvas.activeSectors.size > 10 ? '...' : ''}`);
+        console.log(`🎯 Initialized ${this.pixelCanvas.activeSectors.size} active sectors (${occupiedSectors.size} occupied + neighbors)`);
+        console.log(`📍 Active sectors: ${Array.from(this.pixelCanvas.activeSectors).slice(0, 10).join(', ')}${this.pixelCanvas.activeSectors.size > 10 ? '...' : ''}`);
     }
     
     // 🚨 CRITICAL MISSING METHODS: データベースからピクセル読み込み
     async loadPixelsFromSupabase() {
+        console.log('🚀 loadPixelsFromSupabase called');
+        console.log('🔧 Supabase client status:', !!this.supabaseClient);
+        
         if (!this.supabaseClient) {
             console.error('❌ Supabase client not initialized');
-            return;
+            
+            // 🚨 EMERGENCY: Try to initialize now
+            console.log('🔄 Attempting emergency Supabase initialization...');
+            this.initializeSupabase();
+            
+            // Wait a moment and check again
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            if (!this.supabaseClient) {
+                console.error('❌ Emergency initialization failed');
+                return;
+            }
         }
         
         try {
             console.log('📥 Loading pixels from Supabase...');
+            console.log('🔧 Using URL:', CONFIG.SUPABASE_URL);
             
-            // 大量データを効率的に読み込み（バッチ処理）
-            const batchSize = 10000;
-            let allPixels = [];
-            let from = 0;
-            let hasMore = true;
+            // 🚨 SIMPLIFIED: Single query first to test connection
+            console.log('🧪 Testing connection with simple count query...');
+            const { count, error: countError } = await this.supabaseClient
+                .from('pixels')
+                .select('*', { count: 'exact', head: true });
             
-            while (hasMore) {
-                console.log(`📊 Loading batch ${Math.floor(from / batchSize) + 1}...`);
-                
-                const { data: pixels, error } = await this.supabaseClient
-                    .from('pixels')
-                    .select('sector_x, sector_y, local_x, local_y, color')
-                    .range(from, from + batchSize - 1)
-                    .order('created_at', { ascending: true });
-                
-                if (error) {
-                    console.error('❌ Error loading pixels:', error);
-                    break;
-                }
-                
-                if (!pixels || pixels.length === 0) {
-                    hasMore = false;
-                    break;
-                }
-                
-                allPixels = allPixels.concat(pixels);
-                console.log(`✅ Loaded ${pixels.length} pixels (total: ${allPixels.length})`);
-                
-                // 即座にPixelStorageに追加
-                for (const pixel of pixels) {
+            if (countError) {
+                console.error('❌ Count query failed:', countError);
+                return;
+            }
+            
+            console.log(`📊 Total pixels in database: ${count}`);
+            
+            if (count === 0) {
+                console.warn('⚠️ No pixels found in database');
+                return;
+            }
+            
+            // 🚨 SIMPLIFIED: Load all pixels at once for debugging
+            console.log('📥 Loading all pixels...');
+            const { data: pixels, error } = await this.supabaseClient
+                .from('pixels')
+                .select('sector_x, sector_y, local_x, local_y, color')
+                .limit(70000); // Increased limit to handle all pixels
+            
+            if (error) {
+                console.error('❌ Error loading pixels:', error);
+                return;
+            }
+            
+            if (!pixels || pixels.length === 0) {
+                console.warn('⚠️ No pixels returned from query');
+                return;
+            }
+            
+            console.log(`✅ Loaded ${pixels.length} pixels from database`);
+            
+            // 即座にPixelStorageに追加
+            let addedCount = 0;
+            for (const pixel of pixels) {
+                try {
                     this.pixelCanvas.pixelStorage.setPixel(
                         pixel.sector_x,
                         pixel.sector_y,
@@ -515,25 +563,25 @@ export class NetworkManager {
                         pixel.local_y,
                         pixel.color
                     );
-                }
-                
-                // ページネーション
-                from += batchSize;
-                
-                // バッチサイズより少ない場合は最後のバッチ
-                if (pixels.length < batchSize) {
-                    hasMore = false;
+                    addedCount++;
+                } catch (setError) {
+                    console.error('❌ Error setting pixel:', setError, pixel);
                 }
             }
             
-            console.log(`🎉 Successfully loaded ${allPixels.length} pixels from Supabase`);
+            console.log(`✅ Added ${addedCount} pixels to PixelStorage`);
             console.log(`📊 PixelStorage now contains ${this.pixelCanvas.pixelStorage.pixels.size} pixels`);
             
             // ピクセル数カウント表示更新
-            this.pixelCanvas.updateStockDisplay();
+            if (this.pixelCanvas.updateStockDisplay) {
+                this.pixelCanvas.updateStockDisplay();
+            } else {
+                this.pixelCanvas.pixelStorage.updateStockDisplay();
+            }
             
         } catch (error) {
             console.error('❌ Failed to load pixels from Supabase:', error);
+            console.error('❌ Error details:', error.message, error.stack);
             throw error;
         }
     }

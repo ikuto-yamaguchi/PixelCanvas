@@ -175,6 +175,17 @@ class PixelCanvas {
             // 🚨 DEBUGGING: Check PixelStorage before loading
             console.log(`📊 PixelStorage before loading: ${this.pixelStorage.pixels.size} pixels`);
             
+            // 🚨 CRITICAL: Ensure NetworkManager is properly initialized
+            console.log('🔧 NetworkManager status:', !!this.networkManager);
+            console.log('🔧 Supabase client status:', !!this.networkManager?.supabaseClient);
+            
+            // Wait a moment for Supabase to initialize if needed
+            if (!this.networkManager.supabaseClient) {
+                console.log('⏳ Waiting for Supabase client...');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                console.log('🔧 Supabase client after wait:', !!this.networkManager?.supabaseClient);
+            }
+            
             // Await pixel loading to ensure completion
             console.log('📥 Loading pixels from Supabase...');
             await this.networkManager.loadPixelsFromSupabase();
@@ -182,18 +193,31 @@ class PixelCanvas {
             // 🚨 DEBUGGING: Check PixelStorage after loading
             console.log(`📊 PixelStorage after loading: ${this.pixelStorage.pixels.size} pixels`);
             
+            // 🚨 CRITICAL: Update display immediately
+            if (this.pixelStorage.pixels.size > 0) {
+                console.log('📊 Updating pixel count display...');
+                this.pixelStorage.updateStockDisplay();
+            }
+            
             // Force render to show loaded pixels
             console.log('🎨 Forcing render after pixel loading...');
             this.render();
             
+            // Additional render after a short delay
+            setTimeout(() => {
+                console.log('🎨 Secondary render for good measure...');
+                this.render();
+            }, 500);
+            
             // Load sector counts (for reference only, we use real-time counting) 
             console.log('📊 Loading sector counts...');
-            this.networkManager.loadSectorCounts();
+            await this.networkManager.loadSectorCounts();
             
             console.log('✅ Initial data loading completed');
             
         } catch (error) {
             console.error('❌ Initial data loading failed:', error);
+            console.error('❌ Error details:', error.message, error.stack);
             
             // 🚨 EMERGENCY: Force render even on error
             console.log('🚨 Forcing render despite loading error...');

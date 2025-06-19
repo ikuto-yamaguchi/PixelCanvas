@@ -5,22 +5,19 @@ export class DebugPanel {
     constructor() {
         this.debugLogs = [];
         this.logsFrozen = false;
-        this.isVisible = true; // Start visible to show all errors immediately
+        this.isVisible = false; // 🔧 DISABLED: Hide debug panel completely
         this.vConsoleDetected = false;
         
         // Check if vConsole is active
         this.checkVConsole();
         
-        if (!this.vConsoleDetected) {
-            this.createDebugPanel();
-            this.createButtons();
-            this.setupEventListeners();
-            // Show panel immediately
-            this.panel.style.display = 'block';
-            // Debug Panel initialized - logging disabled for performance
-        } else {
-            // vConsole detected - native DebugPanel disabled to avoid conflicts
-        }
+        // 🔧 DISABLED: Debug panel completely disabled
+        // if (!this.vConsoleDetected) {
+        //     this.createDebugPanel();
+        //     this.createButtons();
+        //     this.setupEventListeners();
+        //     this.panel.style.display = 'block';
+        // }
         
         // PERFORMANCE: Disable console interception
         // this.interceptConsole();
