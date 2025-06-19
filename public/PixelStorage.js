@@ -321,4 +321,68 @@ export class PixelStorage {
             stockPercentage: (this.pixelStock / CONFIG.MAX_PIXEL_STOCK) * 100
         };
     }
+    
+    // 🚨 CRITICAL MISSING METHODS: データベース読み込み用
+    setPixel(sectorX, sectorY, localX, localY, color) {
+        // NetworkManagerから呼ばれるピクセル設定メソッド
+        const pixelKey = Utils.createPixelKey(sectorX, sectorY, localX, localY);
+        this.pixels.set(pixelKey, color);
+        
+        // ローカルストレージにも保存
+        this.savePixelToLocalStorage(pixelKey, color);
+        
+        // ピクセル数カウント表示を更新
+        this.updateStockDisplay();
+    }
+    
+    // ピクセル数表示更新
+    updateStockDisplay() {
+        const pixelCountElement = document.getElementById('pixelCount');
+        if (pixelCountElement) {
+            const totalPixels = this.pixels.size;
+            pixelCountElement.textContent = `${totalPixels}px`;
+            
+            console.log(`📊 Updated pixel count display: ${totalPixels} pixels`);
+        }
+        
+        // ストック表示も更新
+        const stockDisplay = document.querySelector('.stock-display');
+        if (stockDisplay) {
+            stockDisplay.textContent = `Stock: ${this.pixelStock}/${CONFIG.MAX_PIXEL_STOCK}`;
+        }
+    }
+    
+    // ピクセル削除
+    deletePixel(sectorX, sectorY, localX, localY) {
+        const pixelKey = Utils.createPixelKey(sectorX, sectorY, localX, localY);
+        const removed = this.pixels.delete(pixelKey);
+        
+        if (removed) {
+            // ローカルストレージからも削除
+            this.removePixelFromLocalStorage(pixelKey);
+            this.updateStockDisplay();
+        }
+        
+        return removed;
+    }
+    
+    // ローカルストレージからピクセル削除
+    removePixelFromLocalStorage(pixelKey) {
+        try {
+            const stored = localStorage.getItem('pixelcanvas_pixels');
+            if (stored) {
+                const storedPixels = JSON.parse(stored);
+                delete storedPixels[pixelKey];
+                localStorage.setItem('pixelcanvas_pixels', JSON.stringify(storedPixels));
+            }
+        } catch (error) {
+            console.error('Failed to remove pixel from localStorage:', error);
+        }
+    }
+    
+    // ピクセル存在確認
+    hasPixel(sectorX, sectorY, localX, localY) {
+        const pixelKey = Utils.createPixelKey(sectorX, sectorY, localX, localY);
+        return this.pixels.has(pixelKey);
+    }
 }

@@ -150,25 +150,35 @@ export class RenderEngine {
         // 🔧 FIXED: Use proper pixelStorage reference
         const visibleBounds = this.calculateSimpleVisibleBounds();
         let pixelsRendered = 0;
-        const maxPixels = 5000; // 🔧 FIXED: 描画上限を緩和
+        const maxPixels = 50000; // 🔧 CRITICAL: 大幅に上限を増加（65536ピクセル対応）
         
         // Access pixels through pixelStorage for consistency
         const pixels = this.pixelCanvas.pixelStorage ? 
             this.pixelCanvas.pixelStorage.pixels : 
             this.pixelCanvas.pixels || new Map();
         
+        // 🚨 DEBUGGING: Detailed pixel information
+        console.log(`🔍 LEGACY RENDER - Total pixels available: ${pixels.size}`);
+        console.log(`🔍 LEGACY RENDER - Visible bounds:`, visibleBounds);
+        console.log(`🔍 LEGACY RENDER - Max pixels to render: ${maxPixels}`);
+        
         for (const [key, color] of pixels) {
-            if (pixelsRendered >= maxPixels) break; // 🚨 EMERGENCY: 上限チェック
+            if (pixelsRendered >= maxPixels) {
+                console.log(`⚠️ LEGACY RENDER - Hit max pixel limit: ${maxPixels}`);
+                break; 
+            }
             
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
-            if (this.isPixelInBounds(world.x, world.y, visibleBounds)) {
+            // 🔧 CRITICAL: 境界チェックを緩和して全ピクセルを描画
+            if (this.isPixelInBounds(world.x, world.y, visibleBounds) || pixelsRendered < 1000) {
                 this.renderPixel(world.x, world.y, color);
                 pixelsRendered++;
             }
         }
         
+        console.log(`✅ LEGACY RENDER - Actually rendered: ${pixelsRendered} pixels`);
         this.performanceStats.pixelsRendered = pixelsRendered;
     }
     
@@ -176,13 +186,15 @@ export class RenderEngine {
         // 🔧 FIXED: More comprehensive minimal rendering
         const bounds = this.calculateSimpleVisibleBounds();
         let pixelsRendered = 0;
-        const maxPixels = this.maxPixelsPerFrame;
+        const maxPixels = Math.max(this.maxPixelsPerFrame, 10000); // 🔧 CRITICAL: 最低10000ピクセルは描画
         
         // Access pixels through pixelStorage for consistency
         const pixels = this.pixelCanvas.pixelStorage ? 
             this.pixelCanvas.pixelStorage.pixels : 
             this.pixelCanvas.pixels || new Map();
             
+        // 🚨 DEBUGGING: Minimal render information
+        console.log(`🔍 MINIMAL RENDER - Total pixels: ${pixels.size}, Max: ${maxPixels}`);
         
         // Render all visible pixels within bounds (not just center)
         for (const [key, color] of pixels) {
@@ -191,13 +203,14 @@ export class RenderEngine {
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
-            // Render if within visible bounds
-            if (this.isPixelInBounds(world.x, world.y, bounds)) {
+            // 🔧 CRITICAL: 境界チェックを緩和して多くのピクセルを描画
+            if (this.isPixelInBounds(world.x, world.y, bounds) || pixelsRendered < 5000) {
                 this.renderPixel(world.x, world.y, color);
                 pixelsRendered++;
             }
         }
         
+        console.log(`✅ MINIMAL RENDER - Actually rendered: ${pixelsRendered} pixels`);
         this.performanceStats.pixelsRendered = pixelsRendered;
         
         // Show user that we're in emergency mode

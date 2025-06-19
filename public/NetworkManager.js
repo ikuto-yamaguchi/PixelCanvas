@@ -467,4 +467,119 @@ export class NetworkManager {
         this.pixelCanvas.debugPanel.log(`🎯 Initialized ${this.pixelCanvas.activeSectors.size} active sectors (${occupiedSectors.size} occupied + neighbors)`);
         this.pixelCanvas.debugPanel.log(`📍 Active sectors: ${Array.from(this.pixelCanvas.activeSectors).slice(0, 10).join(', ')}${this.pixelCanvas.activeSectors.size > 10 ? '...' : ''}`);
     }
+    
+    // 🚨 CRITICAL MISSING METHODS: データベースからピクセル読み込み
+    async loadPixelsFromSupabase() {
+        if (!this.supabaseClient) {
+            console.error('❌ Supabase client not initialized');
+            return;
+        }
+        
+        try {
+            console.log('📥 Loading pixels from Supabase...');
+            
+            // 大量データを効率的に読み込み（バッチ処理）
+            const batchSize = 10000;
+            let allPixels = [];
+            let from = 0;
+            let hasMore = true;
+            
+            while (hasMore) {
+                console.log(`📊 Loading batch ${Math.floor(from / batchSize) + 1}...`);
+                
+                const { data: pixels, error } = await this.supabaseClient
+                    .from('pixels')
+                    .select('sector_x, sector_y, local_x, local_y, color')
+                    .range(from, from + batchSize - 1)
+                    .order('created_at', { ascending: true });
+                
+                if (error) {
+                    console.error('❌ Error loading pixels:', error);
+                    break;
+                }
+                
+                if (!pixels || pixels.length === 0) {
+                    hasMore = false;
+                    break;
+                }
+                
+                allPixels = allPixels.concat(pixels);
+                console.log(`✅ Loaded ${pixels.length} pixels (total: ${allPixels.length})`);
+                
+                // 即座にPixelStorageに追加
+                for (const pixel of pixels) {
+                    this.pixelCanvas.pixelStorage.setPixel(
+                        pixel.sector_x,
+                        pixel.sector_y,
+                        pixel.local_x,
+                        pixel.local_y,
+                        pixel.color
+                    );
+                }
+                
+                // ページネーション
+                from += batchSize;
+                
+                // バッチサイズより少ない場合は最後のバッチ
+                if (pixels.length < batchSize) {
+                    hasMore = false;
+                }
+            }
+            
+            console.log(`🎉 Successfully loaded ${allPixels.length} pixels from Supabase`);
+            console.log(`📊 PixelStorage now contains ${this.pixelCanvas.pixelStorage.pixels.size} pixels`);
+            
+            // ピクセル数カウント表示更新
+            this.pixelCanvas.updateStockDisplay();
+            
+        } catch (error) {
+            console.error('❌ Failed to load pixels from Supabase:', error);
+            throw error;
+        }
+    }
+    
+    // セクターカウント読み込み
+    async loadSectorCounts() {
+        if (!this.supabaseClient) {
+            console.warn('⚠️ Supabase client not initialized');
+            return;
+        }
+        
+        try {
+            console.log('📥 Loading sector counts from Supabase...');
+            
+            const { data: sectors, error } = await this.supabaseClient
+                .from('sectors')
+                .select('sector_x, sector_y, is_active, pixel_count');
+            
+            if (error) {
+                console.error('❌ Error loading sector counts:', error);
+                return;
+            }
+            
+            if (sectors && sectors.length > 0) {
+                // セクター情報をSectorManagerに反映
+                for (const sector of sectors) {
+                    const sectorKey = `${sector.sector_x},${sector.sector_y}`;
+                    
+                    if (sector.is_active) {
+                        this.pixelCanvas.activeSectors.add(sectorKey);
+                    }
+                    
+                    // セクターピクセル数をキャッシュ
+                    if (sector.pixel_count > 0) {
+                        this.pixelCanvas.sectorPixelCounts.set(sectorKey, sector.pixel_count);
+                    }
+                }
+                
+                console.log(`✅ Loaded ${sectors.length} sector counts`);
+                console.log(`📊 Active sectors: ${this.pixelCanvas.activeSectors.size}`);
+            } else {
+                console.log('📊 No sector counts found in database');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to load sector counts:', error);
+        }
+    }
 }

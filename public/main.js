@@ -170,14 +170,34 @@ class PixelCanvas {
     async loadInitialData() {
         
         try {
+            console.log('🚀 Starting initial data loading...');
+            
+            // 🚨 DEBUGGING: Check PixelStorage before loading
+            console.log(`📊 PixelStorage before loading: ${this.pixelStorage.pixels.size} pixels`);
+            
             // Await pixel loading to ensure completion
+            console.log('📥 Loading pixels from Supabase...');
             await this.networkManager.loadPixelsFromSupabase();
+            
+            // 🚨 DEBUGGING: Check PixelStorage after loading
+            console.log(`📊 PixelStorage after loading: ${this.pixelStorage.pixels.size} pixels`);
+            
+            // Force render to show loaded pixels
+            console.log('🎨 Forcing render after pixel loading...');
             this.render();
             
             // Load sector counts (for reference only, we use real-time counting) 
+            console.log('📊 Loading sector counts...');
             this.networkManager.loadSectorCounts();
+            
+            console.log('✅ Initial data loading completed');
+            
         } catch (error) {
-            console.error('Initial data loading failed:', error);
+            console.error('❌ Initial data loading failed:', error);
+            
+            // 🚨 EMERGENCY: Force render even on error
+            console.log('🚨 Forcing render despite loading error...');
+            this.render();
         }
     }
     
@@ -278,6 +298,12 @@ class PixelCanvas {
             // 🔧 Smart renderer selection based on pixel count and zoom level
             const pixelCount = this.pixelStorage.pixels.size;
             const scale = this.scale;
+            
+            // 🚨 DEBUGGING: Detailed pixel count information
+            console.log(`🔍 RENDER DEBUG - PixelStorage size: ${pixelCount}`);
+            console.log(`🔍 RENDER DEBUG - Legacy pixels fallback: ${this.pixels ? this.pixels.size : 'undefined'}`);
+            console.log(`🔍 RENDER DEBUG - Scale: ${scale.toFixed(2)}, USE_PIXI: ${CONFIG.USE_PIXI_RENDERER}`);
+            console.log(`🔍 RENDER DEBUG - PixiJS initialized: ${this.pixiRenderer?.isInitialized || false}`);
             
             // 🚀 PixiJS Performance Renderer (Re-enabled with proper conditions)
             if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized && pixelCount > 500) {
