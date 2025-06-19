@@ -17,59 +17,76 @@
     <!-- Core PixiJS v7.3.2 (LOCAL) -->
     <script src="pixi.min.js"></script>
     
-    <!-- Module system polyfill for CommonJS libraries -->
+    <!-- Setup global PIXI for plugins (required for v7 compatibility) -->
     <script>
-        // Setup module system for CommonJS libraries
-        window.exports = {};
-        window.module = { exports: window.exports };
-        
-        // Setup require function for CommonJS dependencies
-        window.require = function(name) {
-            if (name === '@pixi/display' || name === '@pixi/core' || name === '@pixi/constants' || name === '@pixi/math' || name === '@pixi/utils') {
-                return window.PIXI;
-            }
-            return window.PIXI;
-        };
+        // Ensure PIXI is available globally for plugins
+        if (window.PIXI) {
+            console.log('🔧 PIXI v7 global setup complete');
+        } else {
+            console.error('❌ PIXI not loaded - plugins will fail');
+        }
     </script>
     
-    <!-- PixiJS Tilemap Plugin v3.2.2 (LOCAL) -->
-    <script src="pixi-tilemap.js"></script>
+    <!-- PixiJS Tilemap Plugin v3.2.2 (LOCAL) - Direct UMD -->
+    <script>
+        // Manual tilemap attachment for v7 compatibility
+        (function() {
+            // Store original module/exports
+            const origModule = window.module;
+            const origExports = window.exports;
+            
+            // Setup for CommonJS detection
+            window.module = { exports: {} };
+            window.exports = window.module.exports;
+            
+            // Define require function for pixi modules
+            window.require = function(name) {
+                if (name.includes('@pixi/') || name === 'pixi.js') {
+                    return window.PIXI;
+                }
+                return {};
+            };
+            
+            // Load tilemap script inline
+            fetch('pixi-tilemap.js')
+                .then(response => response.text())
+                .then(code => {
+                    eval(code);
+                    
+                    // Attach to PIXI
+                    if (window.module.exports && window.PIXI) {
+                        window.PIXI.tilemap = window.module.exports;
+                        console.log('✅ PIXI.tilemap attached successfully');
+                    }
+                    
+                    // Restore original state
+                    window.module = origModule;
+                    window.exports = origExports;
+                })
+                .catch(err => console.error('❌ Failed to load tilemap:', err));
+        })();
+    </script>
     
-    <!-- PixiJS Viewport Plugin v5.0.2 (LOCAL) -->
+    <!-- PixiJS Viewport Plugin v5.0.2 (LOCAL) - Direct UMD -->
     <script src="pixi-viewport.js"></script>
     
-    <!-- Setup PIXI namespace (LOCAL VERSION) -->
+    <!-- Verify plugins after load -->
     <script>
-        // Setup plugin namespaces after all scripts load
         window.addEventListener('load', () => {
-            console.log('🔧 Setting up PIXI plugins from local files...');
-            
-            // Debug what's available
-            console.log('Available globals:', {
-                exports: !!window.exports,
-                module: !!window.module, 
-                pixi_viewport: !!window.pixi_viewport,
-                PIXI: !!window.PIXI
-            });
-            
-            // Setup tilemap plugin from exports
-            if (window.exports && window.PIXI) {
-                window.PIXI.tilemap = window.exports;
-                console.log('✅ PIXI.tilemap attached from exports');
-            }
-            
-            // Setup viewport plugin from pixi_viewport global
-            if (window.pixi_viewport && window.pixi_viewport.Viewport && window.PIXI) {
-                window.PIXI.Viewport = window.pixi_viewport.Viewport;
-                console.log('✅ PIXI.Viewport attached from pixi_viewport');
-            }
-            
-            // Final verification
-            console.log('Final plugin state:', {
-                'PIXI.tilemap': !!(window.PIXI && window.PIXI.tilemap),
-                'PIXI.Viewport': !!(window.PIXI && window.PIXI.Viewport),
-                'tilemap.Tilemap': !!(window.PIXI && window.PIXI.tilemap && window.PIXI.tilemap.Tilemap)
-            });
+            setTimeout(() => {
+                console.log('🔧 Plugin verification:', {
+                    'PIXI': !!window.PIXI,
+                    'PIXI.tilemap': !!(window.PIXI && window.PIXI.tilemap),
+                    'PIXI.Viewport': !!(window.PIXI && window.PIXI.Viewport),
+                    'pixi_viewport.Viewport': !!(window.pixi_viewport && window.pixi_viewport.Viewport)
+                });
+                
+                // Attach viewport from global if available
+                if (window.pixi_viewport && window.pixi_viewport.Viewport && window.PIXI) {
+                    window.PIXI.Viewport = window.pixi_viewport.Viewport;
+                    console.log('✅ PIXI.Viewport attached from pixi_viewport global');
+                }
+            }, 100);
         });
     </script>
     
@@ -117,65 +134,6 @@
         </div>
     </footer>
 
-    <!-- vConsole for mobile debugging -->
-    <!-- 安定版を使用する場合は以下をコメントアウト -->
-    <!-- <script src="https://unpkg.com/vconsole@3.15.1/dist/vconsole.min.js"></script> -->
-    <script src="https://unpkg.com/vconsole@latest/dist/vconsole.min.js"></script>
-    <script>
-        // Initialize vConsole for debugging
-        try {
-            const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            // Enable for mobile OR when URL contains debug=vconsole
-            const forceVConsole = new URLSearchParams(window.location.search).get('debug') === 'vconsole';
-            
-            if (isMobile || forceVConsole) {
-                const vc = new VConsole({ 
-                    maxLogNumber: 2000,
-                    theme: 'dark'
-                });
-                
-                // ▼オプションメニューに「Copy Logs」を追加
-                vc.addOptionMenu({
-                    name: 'Copy Logs',
-                    onClick() {
-                        // Log プラグインの内部配列を取得
-                        const logs = vc.pluginList.log.data;
-                        const text = logs
-                            .map(item => item.log.join(' '))  // 配列を 1 行文字列に
-                            .join('\n');
-
-                        navigator.clipboard.writeText(text).then(() => {
-                            alert('📋 全ログをコピーしました！');
-                        }).catch(() => {
-                            // フォールバック: テキストエリアを使用
-                            const textarea = document.createElement('textarea');
-                            textarea.value = text;
-                            document.body.appendChild(textarea);
-                            textarea.select();
-                            document.execCommand('copy');
-                            document.body.removeChild(textarea);
-                            alert('📋 全ログをコピーしました！');
-                        });
-                    },
-                });
-                
-                console.log('📱 vConsole ready for debugging!');
-                console.log(`📦 vConsole version: ${vc.version || 'unknown'}`);
-                console.warn('⚠️ Warning test message');
-                console.error('❌ Error test message');
-                
-                console.log(`📱 vConsole initialized - Mobile: ${isMobile}, Forced: ${forceVConsole}`);
-                
-                // Store reference globally for testing
-                window.vc = vc;
-            } else {
-                console.log('💻 Desktop mode - vConsole disabled (add ?debug=vconsole to URL to force enable)');
-            }
-        } catch (error) {
-            console.error('❌ Failed to initialize vConsole:', error);
-        }
-    </script>
 
     <script src="idb.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

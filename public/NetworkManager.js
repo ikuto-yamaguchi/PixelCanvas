@@ -260,11 +260,12 @@ export class NetworkManager {
             console.log('🎯 Loading pixels from highest density sectors first...');
             
             // Load from sector (0,0) first - contains 99% of all pixels
-            const mainResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.0&sector_y=eq.0`, {
+            const mainResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.0&sector_y=eq.0&limit=100000`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                    'Range': '0-99999' // Request up to 100k rows to get all pixels in sector
+                    'Range': '0-99999', // Request up to 100k rows to get all pixels in sector
+                    'Prefer': 'count=exact' // Also get total count
                 }
             });
             
@@ -284,10 +285,11 @@ export class NetworkManager {
             
             for (const sector of adjacentSectors) {
                 try {
-                    const sectorResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.${sector.x}&sector_y=eq.${sector.y}`, {
+                    const sectorResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.${sector.x}&sector_y=eq.${sector.y}&limit=100000`, {
                         headers: {
                             'apikey': CONFIG.SUPABASE_ANON_KEY,
-                            'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                            'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                            'Range': '0-99999'
                         }
                     });
                     
@@ -355,11 +357,12 @@ export class NetworkManager {
             console.log('📊 Loading pixels directly from database...');
             
             // Load more pixels for proper initialization  
-            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=10000&offset=0`, {
+            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=100000&offset=0`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                    'Range': '0-9999'  // Request up to 10000 rows (0-indexed)
+                    'Range': '0-99999',  // Request up to 100k rows
+                    'Prefer': 'count=exact'
                 }
             });
             
