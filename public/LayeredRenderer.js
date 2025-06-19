@@ -108,16 +108,24 @@ export class LayeredRenderer {
         }
         
         // 画面内のピクセルを直接描画
-        for (let sectorX = bounds.minSectorX; sectorX <= bounds.maxSectorX; sectorX++) {
-            for (let sectorY = bounds.minSectorY; sectorY <= bounds.maxSectorY; sectorY++) {
+        let timeoutReached = false;
+        for (let sectorX = bounds.minSectorX; sectorX <= bounds.maxSectorX && !timeoutReached; sectorX++) {
+            for (let sectorY = bounds.minSectorY; sectorY <= bounds.maxSectorY && !timeoutReached; sectorY++) {
                 // 🚨 EMERGENCY: 時間制限追加
                 if (performance.now() - startTime > 50) {
                     console.warn('🚨 Rendering timeout, breaking early');
+                    timeoutReached = true;
                     break;
                 }
                 
-                for (let localX = 0; localX < CONFIG.GRID_SIZE && rendered < maxPixels; localX++) {
-                    for (let localY = 0; localY < CONFIG.GRID_SIZE && rendered < maxPixels; localY++) {
+                // Skip sectors that have no pixels for performance
+                const pixelCount = pixelStorage.getSectorPixelCount(sectorX, sectorY);
+                if (pixelCount === 0) {
+                    continue; // Skip empty sectors
+                }
+                
+                for (let localX = 0; localX < CONFIG.GRID_SIZE && rendered < maxPixels && !timeoutReached; localX++) {
+                    for (let localY = 0; localY < CONFIG.GRID_SIZE && rendered < maxPixels && !timeoutReached; localY++) {
                         const color = pixelStorage.getPixel(sectorX, sectorY, localX, localY);
                         if (color !== undefined) {
                             // ワールド座標からスクリーン座標に変換
