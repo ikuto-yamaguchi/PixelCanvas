@@ -23,9 +23,9 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
-    "@pixi/tilemap": "^5.0.1",
-    "pixi-viewport": "^6.0.3",
-    "pixi.js": "^8.10.1",
+    "@pixi/tilemap": "^3.2.2",
+    "pixi-viewport": "^5.0.2",
+    "pixi.js": "^7.3.2",
     "vconsole": "^3.15.1"
   }
 }

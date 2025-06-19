@@ -181,7 +181,7 @@ export class PixiRenderer {
                 screenHeight: this.container.clientHeight || 600,
                 worldWidth: 100000,
                 worldHeight: 100000,
-                events: this.app.renderer.events || this.app.stage.eventMode // 🔧 FIXED: Use events for v6+
+                events: this.app.renderer.events || this.app.renderer.plugins.interaction // 🔧 FIXED: Use events for v5+
             });
             
             // カメラ操作設定
