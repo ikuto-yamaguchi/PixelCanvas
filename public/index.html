@@ -17,6 +17,21 @@
     <!-- Core PixiJS v7.3.2 (LOCAL) -->
     <script src="pixi.min.js"></script>
     
+    <!-- Module system polyfill for CommonJS libraries -->
+    <script>
+        // Setup module system for CommonJS libraries
+        window.exports = {};
+        window.module = { exports: window.exports };
+        
+        // Setup require function for CommonJS dependencies
+        window.require = function(name) {
+            if (name === '@pixi/display' || name === '@pixi/core' || name === '@pixi/constants' || name === '@pixi/math' || name === '@pixi/utils') {
+                return window.PIXI;
+            }
+            return window.PIXI;
+        };
+    </script>
+    
     <!-- PixiJS Tilemap Plugin v3.2.2 (LOCAL) -->
     <script src="pixi-tilemap.js"></script>
     
@@ -25,21 +40,26 @@
     
     <!-- Setup PIXI namespace (LOCAL VERSION) -->
     <script>
-        // Attach plugins to PIXI namespace when loaded
-        window.addEventListener('load', () => {
+        // Setup plugin namespaces after scripts are loaded
+        window.addEventListener('DOMContentLoaded', () => {
             console.log('🔧 Setting up PIXI plugins from local files...');
             
-            // Attach viewport to PIXI namespace if available
-            if (typeof Viewport !== 'undefined' && window.PIXI) {
-                window.PIXI.Viewport = Viewport;
-                console.log('✅ PIXI.Viewport attached');
+            // Setup tilemap plugin from exports
+            if (window.exports && window.exports.Tilemap && window.PIXI) {
+                window.PIXI.tilemap = window.exports;
+                console.log('✅ PIXI.tilemap attached from exports:', !!window.PIXI.tilemap.Tilemap);
             }
             
-            // Log what's available
+            // Setup viewport plugin from pixi_viewport global
+            if (window.pixi_viewport && window.pixi_viewport.Viewport && window.PIXI) {
+                window.PIXI.Viewport = window.pixi_viewport.Viewport;
+                console.log('✅ PIXI.Viewport attached from pixi_viewport:', !!window.PIXI.Viewport);
+            }
+            
+            // Log final state
             console.log('PIXI available:', !!window.PIXI);
             console.log('PIXI.tilemap available:', !!(window.PIXI && window.PIXI.tilemap));
             console.log('PIXI.Viewport available:', !!(window.PIXI && window.PIXI.Viewport));
-            console.log('Viewport available:', !!window.Viewport);
         });
     </script>
     
