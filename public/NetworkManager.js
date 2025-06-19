@@ -260,7 +260,7 @@ export class NetworkManager {
             console.log('🎯 Loading pixels from highest density sectors first...');
             
             // Load from sector (0,0) first - contains 99% of all pixels
-            const mainResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.0&sector_y=eq.0&limit=5000`, {
+            const mainResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.0&sector_y=eq.0`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
@@ -283,7 +283,7 @@ export class NetworkManager {
             
             for (const sector of adjacentSectors) {
                 try {
-                    const sectorResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.${sector.x}&sector_y=eq.${sector.y}&limit=1000`, {
+                    const sectorResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.${sector.x}&sector_y=eq.${sector.y}`, {
                         headers: {
                             'apikey': CONFIG.SUPABASE_ANON_KEY,
                             'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`

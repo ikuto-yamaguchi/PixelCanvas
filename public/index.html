@@ -40,26 +40,36 @@
     
     <!-- Setup PIXI namespace (LOCAL VERSION) -->
     <script>
-        // Setup plugin namespaces after scripts are loaded
-        window.addEventListener('DOMContentLoaded', () => {
+        // Setup plugin namespaces after all scripts load
+        window.addEventListener('load', () => {
             console.log('🔧 Setting up PIXI plugins from local files...');
             
+            // Debug what's available
+            console.log('Available globals:', {
+                exports: !!window.exports,
+                module: !!window.module, 
+                pixi_viewport: !!window.pixi_viewport,
+                PIXI: !!window.PIXI
+            });
+            
             // Setup tilemap plugin from exports
-            if (window.exports && window.exports.Tilemap && window.PIXI) {
+            if (window.exports && window.PIXI) {
                 window.PIXI.tilemap = window.exports;
-                console.log('✅ PIXI.tilemap attached from exports:', !!window.PIXI.tilemap.Tilemap);
+                console.log('✅ PIXI.tilemap attached from exports');
             }
             
             // Setup viewport plugin from pixi_viewport global
             if (window.pixi_viewport && window.pixi_viewport.Viewport && window.PIXI) {
                 window.PIXI.Viewport = window.pixi_viewport.Viewport;
-                console.log('✅ PIXI.Viewport attached from pixi_viewport:', !!window.PIXI.Viewport);
+                console.log('✅ PIXI.Viewport attached from pixi_viewport');
             }
             
-            // Log final state
-            console.log('PIXI available:', !!window.PIXI);
-            console.log('PIXI.tilemap available:', !!(window.PIXI && window.PIXI.tilemap));
-            console.log('PIXI.Viewport available:', !!(window.PIXI && window.PIXI.Viewport));
+            // Final verification
+            console.log('Final plugin state:', {
+                'PIXI.tilemap': !!(window.PIXI && window.PIXI.tilemap),
+                'PIXI.Viewport': !!(window.PIXI && window.PIXI.Viewport),
+                'tilemap.Tilemap': !!(window.PIXI && window.PIXI.tilemap && window.PIXI.tilemap.Tilemap)
+            });
         });
     </script>
     
