@@ -49,8 +49,8 @@ export class RenderEngine {
             this.renderPixelsLegacy();
         }
         
-        // 🚨 EMERGENCY: セクター境界線描画を一時無効化（フリーズ防止）
-        // this.renderActiveSectorBounds();
+        // 🔧 FIXED: セクター境界線描画を復活（パフォーマンス最適化済み）
+        this.renderActiveSectorBounds();
         
         // Update performance stats
         this.updatePerformanceStats(startTime);
@@ -232,26 +232,27 @@ export class RenderEngine {
         // Only show visual bounds when sectors are large enough to see
         if (sectorSize < 20) return;
         
-        // Calculate visible sector range
+        // Calculate visible sector range with performance limits
         const startSectorX = Math.floor(-this.pixelCanvas.offsetX / sectorSize);
         const endSectorX = Math.ceil((this.canvas.width - this.pixelCanvas.offsetX) / sectorSize);
         const startSectorY = Math.floor(-this.pixelCanvas.offsetY / sectorSize);
         const endSectorY = Math.ceil((this.canvas.height - this.pixelCanvas.offsetY) / sectorSize);
         
+        // 🔧 PERFORMANCE: Limit maximum sectors to render
+        const maxSectorsX = Math.min(endSectorX - startSectorX + 1, 50);
+        const maxSectorsY = Math.min(endSectorY - startSectorY + 1, 50);
+        const clampedEndX = startSectorX + maxSectorsX - 1;
+        const clampedEndY = startSectorY + maxSectorsY - 1;
+        
         // Draw each visible sector using hybrid DB + client state
-        for (let sectorX = startSectorX; sectorX <= endSectorX; sectorX++) {
-            for (let sectorY = startSectorY; sectorY <= endSectorY; sectorY++) {
+        for (let sectorX = startSectorX; sectorX <= clampedEndX; sectorX++) {
+            for (let sectorY = startSectorY; sectorY <= clampedEndY; sectorY++) {
                 const sectorKey = `${sectorX},${sectorY}`;
                 const sectorState = this.pixelCanvas.sectorManager.getSectorState(sectorKey);
                 
-                // Count actual pixels in this sector (for accurate display)
-                let actualPixelCount = 0;
-                for (const [key, color] of this.pixelCanvas.pixels) {
-                    const [pSectorX, pSectorY] = key.split(',').map(Number);
-                    if (pSectorX === sectorX && pSectorY === sectorY) {
-                        actualPixelCount++;
-                    }
-                }
+                // 🔧 OPTIMIZED: Use efficient pixel count from PixelStorage
+                const actualPixelCount = this.pixelCanvas.pixelStorage ? 
+                    this.pixelCanvas.pixelStorage.getSectorPixelCount(sectorX, sectorY) : 0;
                 
                 // Calculate screen position of sector
                 const screenX = this.pixelCanvas.offsetX + sectorX * sectorSize;
