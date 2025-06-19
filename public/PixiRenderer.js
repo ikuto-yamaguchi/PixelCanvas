@@ -251,16 +251,6 @@ export class PixiRenderer {
         const bounds = this.calculateVisibleBounds();
         const lodLevel = this.currentLOD;
         
-        console.log(`📊 Loading LOD ${lodLevel} sectors:`, bounds);
-        console.log(`🔍 Looking for pixels in sector (0,0)...`);
-        
-        // Debug: Check if sector (0,0) has pixels
-        let sector00Count = 0;
-        for (const [key, color] of this.pixelCanvas.pixelStorage.pixels) {
-            const [sX, sY] = key.split(',').map(Number);
-            if (sX === 0 && sY === 0) sector00Count++;
-        }
-        console.log(`🔍 Sector (0,0) has ${sector00Count} pixels`);
         
         // 表示範囲のセクターを取得
         for (let sectorX = bounds.minSectorX; sectorX <= bounds.maxSectorX; sectorX++) {

@@ -254,12 +254,6 @@ export class NetworkManager {
     }
     
     async loadPixelsFromSupabase() {
-        console.log('🔍 Loading pixels from Supabase...');
-        console.log('🔍 Layer manager available:', !!this.pixelCanvas.layerManager);
-        console.log('🔍 Layer manager supabase:', !!this.pixelCanvas.layerManager?.supabase);
-        
-        // 🚨 FORCE DIRECT LOADING: Skip layer system for now
-        console.log('🔧 Using direct pixel loading for immediate results...');
         
         try {
             // 🔧 EMERGENCY: Load first 5000 pixels for proper display
@@ -281,7 +275,6 @@ export class NetworkManager {
             const occupiedSectors = new Set();
             
             for (const pixel of allPixels) {
-                // 🚨 EMERGENCY FIX: Use PixelStorage.addPixel instead of direct map access
                 this.pixelCanvas.pixelStorage.addPixel(
                     pixel.sector_x,
                     pixel.sector_y,
@@ -294,9 +287,6 @@ export class NetworkManager {
                 const sectorKey = Utils.createSectorKey(pixel.sector_x, pixel.sector_y);
                 occupiedSectors.add(sectorKey);
             }
-            
-            console.log(`🔍 Pixels added to storage, total count:`, this.pixelCanvas.pixelStorage.pixels.size);
-            console.log(`🔍 Occupied sectors:`, occupiedSectors.size);
             
             // Initialize active sectors: start with (0,0) and add neighbors of any occupied sectors
             this.initializeActiveSectors(occupiedSectors);
