@@ -256,48 +256,49 @@ export class NetworkManager {
     async loadPixelsFromSupabase() {
         
         try {
-            // 🔧 ENHANCED: Load pixels with better distribution across sectors
+            // 🔧 CRITICAL FIX: Load from dense sectors first (0,0) then expand
+            console.log('🎯 Loading pixels from highest density sectors first...');
             
-            // First, try to load 10000 pixels with proper Range header
-            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=10000&offset=0`, {
+            // Load from sector (0,0) first - contains 99% of all pixels
+            const mainResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.0&sector_y=eq.0&limit=5000`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                    'Range': '0-9999'  // Request up to 10000 rows (0-indexed)
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
                 }
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            if (!mainResponse.ok) {
+                throw new Error(`HTTP ${mainResponse.status}: ${mainResponse.statusText}`);
             }
             
-            let allPixels = await response.json();
-            console.log(`📦 Loaded ${allPixels.length} pixels from database (first batch)`);
+            let allPixels = await mainResponse.json();
+            console.log(`📦 Loaded ${allPixels.length} pixels from sector (0,0)`);
             
-            // If we got fewer than expected, try to load more with different strategies
-            if (allPixels.length < 5000) {
-                console.log('🔄 Loading additional pixels from different sectors...');
-                
-                // Load a random sampling from different sectors
-                const additionalResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&order=id.desc&limit=5000&offset=1000`, {
-                    headers: {
-                        'apikey': CONFIG.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                        'Range': '0-4999'
-                    }
-                });
-                
-                if (additionalResponse.ok) {
-                    const additionalPixels = await additionalResponse.json();
-                    console.log(`📦 Loaded ${additionalPixels.length} additional pixels`);
-                    
-                    // Merge and deduplicate
-                    const pixelMap = new Map();
-                    [...allPixels, ...additionalPixels].forEach(pixel => {
-                        const key = `${pixel.sector_x},${pixel.sector_y},${pixel.local_x},${pixel.local_y}`;
-                        pixelMap.set(key, pixel);
+            // Load from adjacent sectors (-1,-1), (-1,0), (0,-1) etc.
+            const adjacentSectors = [
+                { x: -1, y: -1 }, { x: -1, y: 0 }, { x: 0, y: -1 },
+                { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 },
+                { x: 3, y: -4 }, { x: -2, y: -1 } // High density sectors from data
+            ];
+            
+            for (const sector of adjacentSectors) {
+                try {
+                    const sectorResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.${sector.x}&sector_y=eq.${sector.y}&limit=1000`, {
+                        headers: {
+                            'apikey': CONFIG.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                        }
                     });
-                    allPixels = Array.from(pixelMap.values());
+                    
+                    if (sectorResponse.ok) {
+                        const sectorPixels = await sectorResponse.json();
+                        if (sectorPixels.length > 0) {
+                            allPixels = allPixels.concat(sectorPixels);
+                            console.log(`📦 Added ${sectorPixels.length} pixels from sector (${sector.x},${sector.y})`);
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`Failed to load sector (${sector.x},${sector.y}):`, error);
                 }
             }
             

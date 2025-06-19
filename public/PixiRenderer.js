@@ -292,12 +292,29 @@ export class PixiRenderer {
                 this.textureCache.set(cacheKey, texture);
                 this.renderSectorTexture(sectorX, sectorY, lodLevel);
             } else {
-                // LODデータが存在しない場合は生成
-                await this.generateSectorLOD(sectorX, sectorY, lodLevel);
+                // 🔧 CRITICAL FIX: LODデータが存在しない場合はPixelStorageから直接テクスチャを生成
+                console.log(`🔧 No LOD data for sector (${sectorX},${sectorY}), generating from PixelStorage`);
+                const texture = await this.createTextureFromPixelStorage(sectorX, sectorY, lodLevel);
+                if (texture) {
+                    this.textureCache.set(cacheKey, texture);
+                    this.renderSectorTexture(sectorX, sectorY, lodLevel);
+                }
             }
             
         } catch (error) {
             console.error(`❌ Failed to load sector LOD ${cacheKey}:`, error);
+            
+            // 🔧 CRITICAL FALLBACK: Try PixelStorage even on error
+            try {
+                console.log(`🔧 Falling back to PixelStorage for sector (${sectorX},${sectorY})`);
+                const texture = await this.createTextureFromPixelStorage(sectorX, sectorY, lodLevel);
+                if (texture) {
+                    this.textureCache.set(cacheKey, texture);
+                    this.renderSectorTexture(sectorX, sectorY, lodLevel);
+                }
+            } catch (fallbackError) {
+                console.error(`❌ PixelStorage fallback also failed:`, fallbackError);
+            }
         }
     }
     
@@ -320,6 +337,60 @@ export class PixiRenderer {
         const baseTexture = PIXI.BaseTexture.from(canvas);
         baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
         return new PIXI.Texture(baseTexture);
+    }
+    
+    // 🔧 CRITICAL NEW: Create texture directly from PixelStorage
+    async createTextureFromPixelStorage(sectorX, sectorY, lodLevel) {
+        const pixelStorage = this.pixelCanvas.pixelStorage;
+        const scale = Math.pow(2, lodLevel); // 1, 2, 4, 8
+        const textureSize = Math.floor(CONFIG.GRID_SIZE / scale);
+        
+        console.log(`🎨 Creating texture for sector (${sectorX},${sectorY}) LOD ${lodLevel}, size: ${textureSize}x${textureSize}`);
+        
+        // Create canvas for texture
+        const canvas = document.createElement('canvas');
+        canvas.width = textureSize;
+        canvas.height = textureSize;
+        const ctx = canvas.getContext('2d');
+        
+        // Clear with transparent background
+        ctx.clearRect(0, 0, textureSize, textureSize);
+        
+        let pixelsRendered = 0;
+        
+        // Render pixels from storage to canvas
+        for (let localY = 0; localY < CONFIG.GRID_SIZE; localY += scale) {
+            for (let localX = 0; localX < CONFIG.GRID_SIZE; localX += scale) {
+                // Get pixel color from storage
+                const color = pixelStorage.getPixel(sectorX, sectorY, localX, localY);
+                
+                if (color !== undefined) {
+                    // Convert to canvas coordinates
+                    const canvasX = Math.floor(localX / scale);
+                    const canvasY = Math.floor(localY / scale);
+                    
+                    // Get color from palette
+                    const hexColor = CONFIG.PALETTE[color] || '#000000';
+                    ctx.fillStyle = hexColor;
+                    
+                    // Fill pixel (with scaling for LOD)
+                    const pixelSize = Math.max(1, 1);
+                    ctx.fillRect(canvasX, canvasY, pixelSize, pixelSize);
+                    pixelsRendered++;
+                }
+            }
+        }
+        
+        console.log(`🎨 Rendered ${pixelsRendered} pixels to texture for sector (${sectorX},${sectorY})`);
+        
+        // Only create texture if there are pixels to show
+        if (pixelsRendered > 0) {
+            const baseTexture = PIXI.BaseTexture.from(canvas);
+            baseTexture.scaleMode = PIXI.SCALE_MODES.NEAREST;
+            return new PIXI.Texture(baseTexture);
+        }
+        
+        return null;
     }
     
     decodeRLEToCanvas(rleData, ctx, width, height) {
