@@ -273,26 +273,33 @@ class PixelCanvas {
     // Delegate methods to appropriate modules
     render() {
         try {
-            // 🚨 TEMPORARY FIX: Use LayeredRenderer until PixiJS is fully working
-            // PixiJS renderer has initialization issues, falling back to working renderer
+            // 🔧 Smart renderer selection based on pixel count and zoom level
+            const pixelCount = this.pixelStorage.pixels.size;
+            const scale = this.scale;
             
-            // 🔧 LayeredRenderer (Primary - WORKING)
-            if (this.layeredRenderer) {
-                console.log('🎨 Using LayeredRenderer, pixel count:', this.pixelStorage.pixels.size);
-                this.layeredRenderer.render();
-                return;
-            }
-            
-            // 🚀 PixiJS Performance Renderer (Disabled temporarily)
-            if (false && CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
-                console.log('🎨 Using PixiJS Renderer, pixel count:', this.pixelStorage.pixels.size);
+            // 🚀 PixiJS Performance Renderer (Re-enabled with proper conditions)
+            if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized && pixelCount > 500) {
+                console.log(`🎨 Using PixiJS Renderer (${pixelCount} pixels, scale: ${scale.toFixed(2)})`);
                 this.pixiRenderer.render();
                 return;
             }
             
-            // Legacy rendering (フォールバック)
-            console.log('🎨 Using RenderEngine (legacy), pixel count:', this.pixelStorage.pixels.size);
+            // 🔧 LayeredRenderer (Primary for medium loads)
+            if (this.layeredRenderer && pixelCount > 0) {
+                console.log(`🎨 Using LayeredRenderer (${pixelCount} pixels, scale: ${scale.toFixed(2)})`);
+                this.layeredRenderer.render();
+                return;
+            }
+            
+            // Legacy rendering (fallback for empty areas or low pixel counts)
+            console.log(`🎨 Using RenderEngine fallback (${pixelCount} pixels, scale: ${scale.toFixed(2)})`);
             this.renderEngine.render();
+            
+            // Show pixel distribution info when in empty areas
+            if (pixelCount === 0) {
+                this.showPixelDistributionHint();
+            }
+            
         } catch (error) {
             console.error('❌ Render failed, using legacy fallback:', error);
             this.renderEngine.render();
@@ -459,6 +466,95 @@ class PixelCanvas {
     logPerformance() {
         const stats = this.getPerformanceStats();
         return stats;
+    }
+    
+    // Add pixel distribution analysis
+    analyzePixelDistribution() {
+        const sectorMap = new Map();
+        
+        // Count pixels per sector
+        for (const [key, color] of this.pixelStorage.pixels) {
+            const [sectorX, sectorY] = key.split(',').map(Number);
+            const sectorKey = `${sectorX},${sectorY}`;
+            sectorMap.set(sectorKey, (sectorMap.get(sectorKey) || 0) + 1);
+        }
+        
+        // Sort by pixel count
+        const sortedSectors = Array.from(sectorMap.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10); // Top 10 sectors
+        
+        console.log('📊 Pixel Distribution Analysis:');
+        console.log(`Total pixels: ${this.pixelStorage.pixels.size}`);
+        console.log(`Active sectors: ${sectorMap.size}`);
+        console.log('Top sectors by pixel count:');
+        sortedSectors.forEach(([sectorKey, count]) => {
+            console.log(`  Sector ${sectorKey}: ${count} pixels`);
+        });
+        
+        return {
+            totalPixels: this.pixelStorage.pixels.size,
+            activeSectors: sectorMap.size,
+            sectorDistribution: sortedSectors,
+            currentViewport: {
+                centerX: Math.floor(-this.offsetX / (CONFIG.PIXEL_SIZE * this.scale) / CONFIG.GRID_SIZE),
+                centerY: Math.floor(-this.offsetY / (CONFIG.PIXEL_SIZE * this.scale) / CONFIG.GRID_SIZE),
+                scale: this.scale
+            }
+        };
+    }
+    
+    // Show hint when user is in empty area
+    showPixelDistributionHint() {
+        const analysis = this.analyzePixelDistribution();
+        
+        if (analysis.totalPixels === 0) return;
+        
+        // Create or update hint overlay
+        let hint = document.getElementById('pixelDistributionHint');
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.id = 'pixelDistributionHint';
+            hint.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 15px;
+                border-radius: 8px;
+                font-family: monospace;
+                font-size: 12px;
+                z-index: 1000;
+                max-width: 300px;
+                border: 1px solid #333;
+            `;
+            document.body.appendChild(hint);
+        }
+        
+        const topSector = analysis.sectorDistribution[0];
+        if (topSector) {
+            const [sectorKey, pixelCount] = topSector;
+            hint.innerHTML = `
+                <div style="color: #ffaa00; font-weight: bold;">📍 Pixel Distribution</div>
+                <div style="margin-top: 8px;">
+                    <div>Total pixels: ${analysis.totalPixels}</div>
+                    <div>Active sectors: ${analysis.activeSectors}</div>
+                    <div style="margin-top: 8px; color: #44ff44;">
+                        Highest density: Sector ${sectorKey}<br>
+                        ${pixelCount} pixels
+                    </div>
+                    <div style="margin-top: 8px; color: #aaa; font-size: 10px;">
+                        Current: ${analysis.currentViewport.centerX},${analysis.currentViewport.centerY}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (hint) hint.style.display = 'none';
+        }, 5000);
     }
     
     // vConsole testing methods  

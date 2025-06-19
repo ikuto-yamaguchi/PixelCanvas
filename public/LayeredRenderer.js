@@ -185,7 +185,7 @@ export class LayeredRenderer {
     }
     
     /**
-     * レイヤー要素の個別レンダリング
+     * レイヤー要素の個別レンダリング - Fixed coordinate transformation
      */
     renderLayerElement(layer, data) {
         const pixelCoords = this.layerManager.layerToPixelCoords(
@@ -198,14 +198,16 @@ export class LayeredRenderer {
         const worldX = data.sector_x * CONFIG.GRID_SIZE + pixelCoords.pixelX;
         const worldY = data.sector_y * CONFIG.GRID_SIZE + pixelCoords.pixelY;
         
-        // スクリーン座標に変換
-        const screenX = (worldX - this.pixelCanvas.offsetX) * this.pixelCanvas.scale;
-        const screenY = (worldY - this.pixelCanvas.offsetY) * this.pixelCanvas.scale;
+        // 🔧 FIXED: Correct world to screen coordinate transformation
+        // Must match the inverse of input handling: screenCoord = worldCoord * PIXEL_SIZE * scale + offset
+        const screenX = worldX * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetX;
+        const screenY = worldY * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetY;
         
         // 画面外チェック
-        if (screenX < -layer.blockSize || screenY < -layer.blockSize || 
-            screenX > this.canvas.width + layer.blockSize || 
-            screenY > this.canvas.height + layer.blockSize) {
+        const renderSize = Math.max(1, layer.blockSize * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale);
+        if (screenX < -renderSize || screenY < -renderSize || 
+            screenX > this.canvas.width + renderSize || 
+            screenY > this.canvas.height + renderSize) {
             return;
         }
         
@@ -214,7 +216,6 @@ export class LayeredRenderer {
         this.ctx.fillStyle = color;
         
         // レイヤーブロックサイズで描画
-        const renderSize = Math.max(1, layer.blockSize * this.pixelCanvas.scale);
         this.ctx.fillRect(screenX, screenY, renderSize, renderSize);
     }
     
@@ -250,7 +251,7 @@ export class LayeredRenderer {
     }
     
     /**
-     * ビューポート範囲計算
+     * ビューポート範囲計算 - Fixed coordinate transformation
      */
     calculateViewportBounds() {
         // 🚨 EMERGENCY: セーフガード追加でフリーズ防止
@@ -262,21 +263,25 @@ export class LayeredRenderer {
         
         const padding = 100;
         
-        const minX = Math.floor((offsetX - padding) / scale);
-        const maxX = Math.ceil((offsetX + width + padding) / scale);
-        const minY = Math.floor((offsetY - padding) / scale);
-        const maxY = Math.ceil((offsetY + height + padding) / scale);
+        // 🔧 FIXED: Correct coordinate transformation to match input handling
+        // Screen to world: (screenCoord - offset) / (PIXEL_SIZE * scale) = worldCoord
+        const pixelSize = CONFIG.PIXEL_SIZE * scale;
+        
+        const minWorldX = Math.floor((-offsetX - padding) / pixelSize);
+        const maxWorldX = Math.ceil((width - offsetX + padding) / pixelSize);
+        const minWorldY = Math.floor((-offsetY - padding) / pixelSize);
+        const maxWorldY = Math.ceil((height - offsetY + padding) / pixelSize);
         
         // 🔧 FIXED: セクター範囲制限を緩和
-        const minSectorX = Math.max(-200, Math.floor(minX / CONFIG.GRID_SIZE));
-        const maxSectorX = Math.min(200, Math.ceil(maxX / CONFIG.GRID_SIZE));
-        const minSectorY = Math.max(-200, Math.floor(minY / CONFIG.GRID_SIZE));
-        const maxSectorY = Math.min(200, Math.ceil(maxY / CONFIG.GRID_SIZE));
+        const minSectorX = Math.max(-200, Math.floor(minWorldX / CONFIG.GRID_SIZE));
+        const maxSectorX = Math.min(200, Math.ceil(maxWorldX / CONFIG.GRID_SIZE));
+        const minSectorY = Math.max(-200, Math.floor(minWorldY / CONFIG.GRID_SIZE));
+        const maxSectorY = Math.min(200, Math.ceil(maxWorldY / CONFIG.GRID_SIZE));
         
-        console.log(`🔧 BOUNDS: sectors(${minSectorX},${minSectorY})-(${maxSectorX},${maxSectorY}), scale:${scale}`);
+        console.log(`🔧 BOUNDS: world(${minWorldX},${minWorldY})-(${maxWorldX},${maxWorldY}) sectors(${minSectorX},${minSectorY})-(${maxSectorX},${maxSectorY}), scale:${scale}`);
         
         return {
-            minX, maxX, minY, maxY,
+            minX: minWorldX, maxX: maxWorldX, minY: minWorldY, maxY: maxWorldY,
             minSectorX, maxSectorX, minSectorY, maxSectorY
         };
     }
@@ -318,7 +323,7 @@ export class LayeredRenderer {
     }
     
     /**
-     * セクター情報描画
+     * セクター情報描画 - Fixed coordinate transformation
      */
     renderSectorInfo(bounds) {
         // セクター境界線描画
@@ -330,11 +335,30 @@ export class LayeredRenderer {
             for (let sectorY = bounds.minSectorY; sectorY <= bounds.maxSectorY; sectorY++) {
                 const worldX = sectorX * CONFIG.GRID_SIZE;
                 const worldY = sectorY * CONFIG.GRID_SIZE;
-                const screenX = (worldX - this.pixelCanvas.offsetX) * this.pixelCanvas.scale;
-                const screenY = (worldY - this.pixelCanvas.offsetY) * this.pixelCanvas.scale;
-                const size = CONFIG.GRID_SIZE * this.pixelCanvas.scale;
                 
-                this.ctx.rect(screenX, screenY, size, size);
+                // 🔧 FIXED: Correct world to screen coordinate transformation
+                const screenX = worldX * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetX;
+                const screenY = worldY * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale + this.pixelCanvas.offsetY;
+                const size = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
+                
+                // Only draw if visible on screen
+                if (screenX < this.canvas.width + size && screenX + size > 0 &&
+                    screenY < this.canvas.height + size && screenY + size > 0) {
+                    this.ctx.rect(screenX, screenY, size, size);
+                    
+                    // Add sector label if sector is large enough
+                    if (size > 40) {
+                        const pixelCount = this.pixelCanvas.pixelStorage.getSectorPixelCount(sectorX, sectorY);
+                        if (pixelCount > 0) {
+                            this.ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+                            this.ctx.font = `${Math.min(12, size / 8)}px monospace`;
+                            this.ctx.textAlign = 'center';
+                            this.ctx.textBaseline = 'middle';
+                            this.ctx.fillText(`(${sectorX},${sectorY})\\n${pixelCount}px`, 
+                                             screenX + size / 2, screenY + size / 2);
+                        }
+                    }
+                }
             }
         }
         

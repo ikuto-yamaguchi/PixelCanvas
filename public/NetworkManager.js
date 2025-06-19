@@ -256,8 +256,8 @@ export class NetworkManager {
     async loadPixelsFromSupabase() {
         
         try {
-            // 🔧 EMERGENCY: Load first 5000 pixels for proper display
-            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=5000&offset=0`, {
+            // 🔧 ENHANCED: Load more pixels for better coverage across sectors
+            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=10000&offset=0`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
@@ -323,7 +323,7 @@ export class NetworkManager {
             console.log('📊 Loading pixels directly from database...');
             
             // Load more pixels for proper initialization  
-            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=5000&offset=0`, {
+            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=10000&offset=0`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
