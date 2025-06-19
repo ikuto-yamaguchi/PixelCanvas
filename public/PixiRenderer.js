@@ -148,6 +148,11 @@ export class PixiRenderer {
             .decelerate()
             .clampZoom({ minScale: 0.05, maxScale: 16 });
         
+        // 🔧 CRITICAL: Set initial viewport to show sector (0,0) - where most pixels are
+        console.log('🔧 Setting initial viewport position to show sector (0,0)');
+        this.viewport.moveCenter(CONFIG.GRID_SIZE / 2, CONFIG.GRID_SIZE / 2);
+        this.viewport.setZoom(2); // Reasonable zoom to see pixels
+        
         // イベントリスナー
         this.viewport.on('moved', () => this.onViewportChange());
         this.viewport.on('zoomed', () => this.onViewportChange());
@@ -483,15 +488,34 @@ export class PixiRenderer {
         const cacheKey = `${sectorX},${sectorY}:${lodLevel}`;
         const texture = this.textureCache.get(cacheKey);
         
-        if (!texture) return;
+        if (!texture) {
+            console.warn(`⚠️ No texture found for ${cacheKey}`);
+            return;
+        }
         
-        // セクターの世界座標計算
-        const worldX = sectorX * CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE;
-        const worldY = sectorY * CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE;
-        const size = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE;
+        // 🔧 FIXED: PixiJS world coordinates (no pixel size scaling needed here)
+        const worldX = sectorX * CONFIG.GRID_SIZE;
+        const worldY = sectorY * CONFIG.GRID_SIZE;
+        const size = CONFIG.GRID_SIZE;
         
-        // TileMapに追加
-        this.tileLayer.addRect(texture, worldX, worldY, worldX + size, worldY + size);
+        console.log(`🎨 Rendering texture for sector (${sectorX}, ${sectorY}) at world (${worldX}, ${worldY}) size ${size}`);
+        
+        try {
+            // TileMapに追加
+            this.tileLayer.addRect(texture, worldX, worldY, worldX + size, worldY + size);
+            console.log(`✅ Added texture to TileMap for sector (${sectorX}, ${sectorY})`);
+        } catch (error) {
+            console.error(`❌ Failed to add texture to TileMap:`, error);
+            
+            // 🔧 FALLBACK: Use Sprite instead of TileMap
+            const sprite = new PIXI.Sprite(texture);
+            sprite.x = worldX;
+            sprite.y = worldY;
+            sprite.width = size;
+            sprite.height = size;
+            this.viewport.addChild(sprite);
+            console.log(`✅ Added sprite fallback for sector (${sectorX}, ${sectorY})`);
+        }
     }
     
     async generateSectorLOD(sectorX, sectorY, lodLevel) {
@@ -533,16 +557,32 @@ export class PixiRenderer {
     }
     
     calculateVisibleBounds() {
-        const bounds = this.viewport.getVisibleBounds();
-        const pixelSize = CONFIG.PIXEL_SIZE;
-        const gridSize = CONFIG.GRID_SIZE * pixelSize;
+        if (!this.viewport) {
+            // Fallback if viewport not ready
+            return {
+                minSectorX: -1, maxSectorX: 1,
+                minSectorY: -1, maxSectorY: 1
+            };
+        }
         
-        return {
+        const bounds = this.viewport.getVisibleBounds();
+        const gridSize = CONFIG.GRID_SIZE; // PixiJS uses world coordinates directly
+        
+        console.log(`🔧 PIXI Viewport bounds:`, {
+            x: bounds.x, y: bounds.y, 
+            width: bounds.width, height: bounds.height,
+            gridSize: gridSize
+        });
+        
+        const result = {
             minSectorX: Math.floor(bounds.x / gridSize) - 1,
             maxSectorX: Math.ceil((bounds.x + bounds.width) / gridSize) + 1,
             minSectorY: Math.floor(bounds.y / gridSize) - 1,
             maxSectorY: Math.ceil((bounds.y + bounds.height) / gridSize) + 1
         };
+        
+        console.log(`🔧 PIXI Calculated sector bounds:`, result);
+        return result;
     }
     
     cleanupTextures() {
@@ -567,10 +607,64 @@ export class PixiRenderer {
             return;
         }
         
+        console.log(`🔧 PIXI Render called, pixels available: ${this.pixelCanvas.pixelStorage.pixels.size}`);
+        
         // PixiJSは自動レンダリング
         // 必要に応じてtileLayerを更新
         this.tileLayer.clear();
-        this.loadVisibleSectors();
+        
+        // 🔧 EMERGENCY FIX: Force PixelStorage rendering instead of LOD database queries
+        this.renderFromPixelStorage();
+    }
+    
+    renderFromPixelStorage() {
+        const pixelStorage = this.pixelCanvas.pixelStorage;
+        console.log(`🎨 PIXI rendering from PixelStorage: ${pixelStorage.pixels.size} pixels`);
+        
+        // Get visible bounds in sector coordinates
+        const bounds = this.calculateVisibleBounds();
+        console.log(`🔧 Visible bounds:`, bounds);
+        
+        // Render sectors that have pixels
+        const sectorsToRender = new Set();
+        
+        // Check which sectors have pixels
+        for (const [key, color] of pixelStorage.pixels) {
+            const [sectorX, sectorY] = key.split(',').map(Number);
+            const sectorKey = `${sectorX},${sectorY}`;
+            sectorsToRender.add(sectorKey);
+        }
+        
+        console.log(`🎨 Sectors with pixels: ${sectorsToRender.size}`, Array.from(sectorsToRender));
+        
+        // Render each sector that has pixels
+        for (const sectorKey of sectorsToRender) {
+            const [sectorX, sectorY] = sectorKey.split(',').map(Number);
+            
+            // Force create texture from PixelStorage
+            this.forceRenderSector(sectorX, sectorY);
+        }
+    }
+    
+    async forceRenderSector(sectorX, sectorY) {
+        console.log(`🔧 Force rendering sector (${sectorX}, ${sectorY})`);
+        
+        const lodLevel = this.currentLOD;
+        const cacheKey = `${sectorX},${sectorY}:${lodLevel}`;
+        
+        try {
+            // Create texture directly from PixelStorage
+            const texture = await this.createTextureFromPixelStorage(sectorX, sectorY, lodLevel);
+            if (texture) {
+                this.textureCache.set(cacheKey, texture);
+                this.renderSectorTexture(sectorX, sectorY, lodLevel);
+                console.log(`✅ Successfully rendered sector (${sectorX}, ${sectorY})`);
+            } else {
+                console.warn(`⚠️ No texture created for sector (${sectorX}, ${sectorY})`);
+            }
+        } catch (error) {
+            console.error(`❌ Failed to force render sector (${sectorX}, ${sectorY}):`, error);
+        }
     }
     
     // 🚀 Supabase Realtime統合
