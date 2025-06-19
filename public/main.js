@@ -55,23 +55,25 @@ class PixelCanvas {
             // Connect LayeredRenderer to LayerManager
             this.layeredRenderer.layerManager = this.layerManager;
             
-            // 🚀 NEW: Initialize PixiJS Renderer (Performance Enhancement)
-            // PixiJSの初期化は少し遅らせる（ライブラリ読み込み完了を待つ）
+            // 🚀 FIXED: Wait for ALL PixiJS libraries before initializing
             if (CONFIG.USE_PIXI_RENDERER) {
-                setTimeout(() => {
+                this.waitForPixiLibraries().then(() => {
                     try {
-                        // Try full PixiJS renderer with plugins first
+                        console.log('🔧 All PixiJS libraries ready, initializing renderer...');
                         this.pixiRenderer = new PixiRenderer(this);
                     } catch (error) {
-                        
+                        console.error('🔧 PixiJS renderer failed, trying fallback:', error);
                         try {
-                            // Fallback to SimplePixiRenderer (plugin-free)
                             this.pixiRenderer = new SimplePixiRenderer(this);
                         } catch (fallbackError) {
+                            console.error('🔧 All PixiJS renderers failed:', fallbackError);
                             CONFIG.USE_PIXI_RENDERER = false;
                         }
                     }
-                }, 500); // 500ms遅延
+                }).catch(error => {
+                    console.error('🔧 PixiJS libraries failed to load:', error);
+                    CONFIG.USE_PIXI_RENDERER = false;
+                });
             }
             
             // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection
@@ -466,6 +468,51 @@ class PixelCanvas {
     logPerformance() {
         const stats = this.getPerformanceStats();
         return stats;
+    }
+    
+    // 🔧 CRITICAL: Wait for all PixiJS libraries to load
+    waitForPixiLibraries() {
+        return new Promise((resolve, reject) => {
+            const maxAttempts = 50; // 5 seconds total
+            let attempts = 0;
+            
+            const checkLibraries = () => {
+                attempts++;
+                
+                const pixiReady = !!window.PIXI;
+                const tilemapReady = !!(window.PIXI && window.PIXI.tilemap);
+                const viewportReady = !!(
+                    (window.PIXI && window.PIXI.Viewport) ||
+                    window.Viewport
+                );
+                
+                console.log(`🔧 PixiJS library check ${attempts}/${maxAttempts}:`, {
+                    PIXI: pixiReady,
+                    tilemap: tilemapReady, 
+                    viewport: viewportReady
+                });
+                
+                if (pixiReady && tilemapReady && viewportReady) {
+                    // Ensure viewport is attached to PIXI
+                    if (window.Viewport && window.PIXI && !window.PIXI.Viewport) {
+                        window.PIXI.Viewport = window.Viewport;
+                    }
+                    
+                    console.log('✅ All PixiJS libraries ready!');
+                    resolve();
+                    return;
+                }
+                
+                if (attempts >= maxAttempts) {
+                    reject(new Error(`PixiJS libraries not ready after ${maxAttempts} attempts`));
+                    return;
+                }
+                
+                setTimeout(checkLibraries, 100);
+            };
+            
+            checkLibraries();
+        });
     }
     
     // Add pixel distribution analysis
