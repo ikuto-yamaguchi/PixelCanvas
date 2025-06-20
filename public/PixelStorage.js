@@ -327,15 +327,15 @@ export class PixelStorage {
         // NetworkManagerから呼ばれるピクセル設定メソッド
         const pixelKey = Utils.createPixelKey(sectorX, sectorY, localX, localY);
         
-        // 🚨 DEBUGGING: Detailed logging
-        console.log(`🔧 PixelStorage.setPixel called: key=${pixelKey}, color=${color}`);
-        console.log(`🔧 PixelStorage before: ${this.pixels.size} pixels`);
+        // 🚨 DEBUGGING: Detailed logging (reduced frequency)
+        if (this.pixels.size < 50 || this.pixels.size % 1000 === 0) {
+            console.log(`🔧 PixelStorage.setPixel: key=${pixelKey}, color=${color}, size: ${this.pixels.size} → ${this.pixels.size + 1}`);
+        }
         
         this.pixels.set(pixelKey, color);
         
-        console.log(`🔧 PixelStorage after: ${this.pixels.size} pixels`);
-        if (this.pixels.size <= 10) {
-            console.log(`🔧 All pixels:`, Array.from(this.pixels.entries()));
+        if (this.pixels.size <= 20 || this.pixels.size % 5000 === 0) {
+            console.log(`✅ PixelStorage now has ${this.pixels.size} pixels`);
         }
         
         // ローカルストレージにも保存（データベース読み込み時はスキップ）

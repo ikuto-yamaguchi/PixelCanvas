@@ -100,6 +100,8 @@
                     <path d="M2 2h6v6H2V2zm10 0h6v6h-6V2zM2 12h6v6H2v-6zm10 0h6v6h-6v-6z" stroke="currentColor" stroke-width="1"/>
                 </svg>
             </button>
+            <button onclick="forceLoadPixels()" style="font-size:10px; padding:2px 4px; background:#ff4444; color:white; border:none; border-radius:3px; margin:0 2px;">🚨 Force DB</button>
+            <button onclick="clearTestPixels()" style="font-size:10px; padding:2px 4px; background:#44ff44; color:white; border:none; border-radius:3px; margin:0 2px;">🧹 Clear</button>
             <div class="pixel-count" id="pixelCount">0px</div>
             <div class="cooldown-indicator" id="cooldownIndicator"></div>
             <span class="status-indicator" id="status"></span>
@@ -138,5 +140,46 @@
     <script src="idb.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script type="module" src="main.js" defer></script>
+    
+    <!-- 🚨 EMERGENCY: Manual control functions -->
+    <script>
+        let pixelCanvasInstance = null;
+        
+        // Wait for PixelCanvas to be initialized
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                pixelCanvasInstance = window.pixelCanvas;
+                console.log('🔧 PixelCanvas instance captured:', !!pixelCanvasInstance);
+            }, 1000);
+        });
+        
+        // Force load pixels from database
+        async function forceLoadPixels() {
+            console.log('🚨 MANUAL: Force load pixels button clicked');
+            if (pixelCanvasInstance && pixelCanvasInstance.forceLoadSupabasePixels) {
+                try {
+                    await pixelCanvasInstance.forceLoadSupabasePixels();
+                    console.log('✅ MANUAL: Force load completed');
+                } catch (error) {
+                    console.error('❌ MANUAL: Force load failed:', error);
+                }
+            } else {
+                console.error('❌ MANUAL: PixelCanvas instance not available');
+            }
+        }
+        
+        // Clear all pixels
+        function clearTestPixels() {
+            console.log('🧹 MANUAL: Clear pixels button clicked');
+            if (pixelCanvasInstance && pixelCanvasInstance.pixelStorage) {
+                pixelCanvasInstance.pixelStorage.pixels.clear();
+                pixelCanvasInstance.pixelStorage.updateStockDisplay();
+                pixelCanvasInstance.render();
+                console.log('✅ MANUAL: Pixels cleared');
+            } else {
+                console.error('❌ MANUAL: PixelCanvas instance not available');
+            }
+        }
+    </script>
 </body>
 </html>

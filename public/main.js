@@ -298,10 +298,93 @@ class PixelCanvas {
         // Force render
         this.render();
         
+        // 🚨 CRITICAL: Force Supabase pixel loading after 3 seconds
+        setTimeout(async () => {
+            console.log('🚨 FORCE: Attempting manual Supabase pixel load...');
+            try {
+                await this.forceLoadSupabasePixels();
+            } catch (error) {
+                console.error('❌ Force load failed:', error);
+            }
+        }, 3000);
+        
         setTimeout(() => {
             console.log('🔧 Secondary render after test pixels...');
             this.render();
         }, 1000);
+    }
+    
+    // 🚨 EMERGENCY: Force Supabase pixel loading
+    async forceLoadSupabasePixels() {
+        console.log('🚨 FORCE: Starting manual Supabase pixel load...');
+        console.log('🔧 NetworkManager exists:', !!this.networkManager);
+        console.log('🔧 Supabase client exists:', !!this.networkManager?.supabaseClient);
+        
+        // 🚨 CRITICAL: Direct Supabase access if client not ready
+        if (!this.networkManager?.supabaseClient && window.supabase) {
+            console.log('🔄 Creating direct Supabase client...');
+            const directClient = window.supabase.createClient(
+                'https://lgvjdefkyeuvquzckkvb.supabase.co',
+                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY'
+            );
+            
+            console.log('🔧 Direct client created, testing...');
+            const { count, error } = await directClient
+                .from('pixels')
+                .select('*', { count: 'exact', head: true });
+                
+            if (error) {
+                console.error('❌ Direct client test failed:', error);
+                return;
+            }
+            
+            console.log(`📊 Direct client found ${count} pixels`);
+            
+            // Load actual pixel data
+            console.log('📥 Loading pixels with direct client...');
+            const { data: pixels, error: dataError } = await directClient
+                .from('pixels')
+                .select('sector_x, sector_y, local_x, local_y, color')
+                .limit(70000);
+                
+            if (dataError) {
+                console.error('❌ Direct pixel load failed:', dataError);
+                return;
+            }
+            
+            console.log(`✅ Direct client loaded ${pixels.length} pixels`);
+            
+            // Clear existing test pixels
+            console.log('🧹 Clearing existing pixels...');
+            this.pixelStorage.pixels.clear();
+            
+            // Add all loaded pixels
+            for (const pixel of pixels) {
+                this.pixelStorage.setPixel(
+                    pixel.sector_x,
+                    pixel.sector_y,
+                    pixel.local_x,
+                    pixel.local_y,
+                    pixel.color
+                );
+            }
+            
+            console.log(`🎉 Successfully loaded ${this.pixelStorage.pixels.size} pixels directly`);
+            
+            // Update display and render
+            this.pixelStorage.updateStockDisplay();
+            this.render();
+            
+            return;
+        }
+        
+        // Fallback to NetworkManager
+        if (this.networkManager?.supabaseClient) {
+            console.log('🔄 Using NetworkManager to force load...');
+            await this.networkManager.loadPixelsFromSupabase();
+        } else {
+            console.error('❌ No Supabase client available');
+        }
     }
     
     showOutOfBoundsWarning() {
@@ -814,6 +897,15 @@ class PixelCanvas {
 function initializePixelCanvas() {
     try {
         window.pixelCanvas = new PixelCanvas();
+        console.log('🔧 PixelCanvas initialized and exposed to window.pixelCanvas');
+        
+        // 🚨 DEBUGGING: Add global access helpers
+        window.forceLoadPixelsGlobal = async () => {
+            if (window.pixelCanvas && window.pixelCanvas.forceLoadSupabasePixels) {
+                await window.pixelCanvas.forceLoadSupabasePixels();
+            }
+        };
+        
     } catch (error) {
         console.error('❌ Failed to initialize PixelCanvas:', error);
         document.body.innerHTML = `
