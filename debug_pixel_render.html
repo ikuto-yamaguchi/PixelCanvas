@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚨 PixelCanvas Debug - 65,536ピクセル表示問題診断</title>
+    <style>
+        body { font-family: monospace; background: #1a1a1a; color: #00ff00; margin: 20px; }
+        .debug-panel { background: #000; border: 1px solid #00ff00; padding: 15px; margin: 10px 0; }
+        .error { color: #ff4444; }
+        .success { color: #44ff44; }
+        .warning { color: #ffaa00; }
+        button { background: #333; color: #00ff00; border: 1px solid #00ff00; padding: 10px; margin: 5px; cursor: pointer; }
+        button:hover { background: #00ff00; color: #000; }
+        #canvas { border: 2px solid #00ff00; }
+        .info { color: #aabbff; }
+    </style>
+</head>
+<body>
+    <h1>🚨 PixelCanvas Debug Tool - 65,536ピクセル問題診断</h1>
+    
+    <div class="debug-panel">
+        <h3>📊 現在の状況</h3>
+        <div id="status">初期化中...</div>
+    </div>
+    
+    <div class="debug-panel">
+        <h3>🔧 デバッグ操作</h3>
+        <button onclick="checkPixelStorage()">PixelStorage確認</button>
+        <button onclick="checkViewport()">ビューポート確認</button>
+        <button onclick="forceRenderAll()">全ピクセル強制描画</button>
+        <button onclick="testDirectRender()">直接描画テスト</button>
+        <button onclick="analyzeSupabaseData()">Supabaseデータ解析</button>
+        <button onclick="debugCoordinateTransform()">座標変換デバッグ</button>
+    </div>
+    
+    <div class="debug-panel">
+        <h3>🎯 レンダリングテスト</h3>
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+    
+    <div class="debug-panel">
+        <h3>📋 診断結果</h3>
+        <div id="results"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // PixelCanvas設定（簡易版）
+        const CONFIG = {
+            GRID_SIZE: 256,
+            PIXEL_SIZE: 4,
+            SUPABASE_URL: 'https://lgvjdefkyeuvquzckkvb.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY',
+            COLORS: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#800000', '#008000', '#000080', '#808000', '#800080', '#008080', '#C0C0C0', '#808080']
+        };
+        
+        let supabaseClient = null;
+        let pixelData = new Map();
+        let canvas = null;
+        let ctx = null;
+        
+        // 初期化
+        window.addEventListener('load', async () => {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            try {
+                supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                log('✅ Supabase client created', 'success');
+                await initialDiagnosis();
+            } catch (error) {
+                log('❌ Supabase initialization failed: ' + error.message, 'error');
+            }
+        });
+        
+        function log(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            const className = type;
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `<div class="${className}">[${timestamp}] ${message}</div>`;
+            resultsDiv.innerHTML = logEntry + resultsDiv.innerHTML;
+            
+            if (type === 'error') {
+                statusDiv.innerHTML = `<span class="error">${message}</span>`;
+            } else if (type === 'success') {
+                statusDiv.innerHTML = `<span class="success">${message}</span>`;
+            } else {
+                statusDiv.innerHTML = `<span class="info">${message}</span>`;
+            }
+        }
+        
+        async function initialDiagnosis() {
+            log('🔍 初期診断開始...', 'info');
+            
+            // 1. データベース接続確認
+            try {
+                const { count, error } = await supabaseClient
+                    .from('pixels')
+                    .select('*', { count: 'exact', head: true });
+                    
+                if (error) throw error;
+                log(`📊 データベース接続OK - 総ピクセル数: ${count}`, 'success');
+            } catch (error) {
+                log(`❌ データベース接続エラー: ${error.message}`, 'error');
+                return;
+            }
+            
+            // 2. セクター(0,0)のピクセル数確認
+            try {
+                const { count, error } = await supabaseClient
+                    .from('pixels')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('sector_x', 0)
+                    .eq('sector_y', 0);
+                    
+                if (error) throw error;
+                log(`🎯 セクター(0,0)ピクセル数: ${count}`, count > 0 ? 'success' : 'warning');
+                
+                if (count === 65536) {
+                    log('✅ 完全に埋まっている（65,536ピクセル）', 'success');
+                } else if (count > 0) {
+                    log(`⚠️ 部分的に埋まっている（${count}/65,536ピクセル）`, 'warning');
+                } else {
+                    log('❌ 空のセクター', 'error');
+                }
+            } catch (error) {
+                log(`❌ セクター確認エラー: ${error.message}`, 'error');
+            }
+            
+            // 3. ピクセルデータ読み込み
+            await loadPixelsFromSupabase();
+        }
+        
+        async function loadPixelsFromSupabase() {
+            log('📥 Supabaseからピクセルデータを読み込み中...', 'info');
+            
+            try {
+                // セクター(0,0)の全ピクセルを読み込み
+                const { data: pixels, error } = await supabaseClient
+                    .from('pixels')
+                    .select('sector_x, sector_y, local_x, local_y, color')
+                    .eq('sector_x', 0)
+                    .eq('sector_y', 0)
+                    .limit(70000);
+                    
+                if (error) throw error;
+                
+                log(`📦 読み込み完了: ${pixels.length}ピクセル`, 'success');
+                
+                // ピクセルデータをMapに保存
+                pixelData.clear();
+                for (const pixel of pixels) {
+                    const key = `${pixel.sector_x},${pixel.sector_y},${pixel.local_x},${pixel.local_y}`;
+                    pixelData.set(key, pixel.color);
+                }
+                
+                log(`💾 メモリ保存完了: ${pixelData.size}ピクセル`, 'success');
+                
+                // サンプルピクセル確認
+                const sampleKeys = Array.from(pixelData.keys()).slice(0, 5);
+                log(`🔍 サンプルピクセル: ${sampleKeys.join(', ')}`, 'info');
+                
+            } catch (error) {
+                log(`❌ ピクセル読み込みエラー: ${error.message}`, 'error');
+            }
+        }
+        
+        async function checkPixelStorage() {
+            log('🔍 PixelStorage状況確認...', 'info');
+            log(`📊 現在のピクセル数: ${pixelData.size}`, 'info');
+            
+            if (pixelData.size === 0) {
+                log('❌ ピクセルデータが空です', 'error');
+                return;
+            }
+            
+            // 分布確認
+            const sectorCount = new Map();
+            for (const key of pixelData.keys()) {
+                const [sectorX, sectorY] = key.split(',').map(Number);
+                const sectorKey = `${sectorX},${sectorY}`;
+                sectorCount.set(sectorKey, (sectorCount.get(sectorKey) || 0) + 1);
+            }
+            
+            log('📍 セクター別分布:', 'info');
+            for (const [sector, count] of sectorCount) {
+                log(`  セクター${sector}: ${count}ピクセル`, 'info');
+            }
+        }
+        
+        async function checkViewport() {
+            log('🔍 ビューポート確認...', 'info');
+            
+            const canvasRect = canvas.getBoundingClientRect();
+            log(`📐 Canvas サイズ: ${canvasRect.width}x${canvasRect.height}`, 'info');
+            
+            // セクター(0,0)の表示範囲を計算
+            const scale = 1.0; // 仮のスケール
+            const offsetX = 0; // 仮のオフセット
+            const offsetY = 0;
+            
+            const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE * scale; // 256 * 4 * 1 = 1024
+            log(`📏 セクターサイズ: ${sectorSize}px (scale: ${scale})`, 'info');
+            
+            const sectorScreenX = offsetX;
+            const sectorScreenY = offsetY;
+            log(`📍 セクター(0,0)画面位置: (${sectorScreenX}, ${sectorScreenY})`, 'info');
+            
+            if (sectorScreenX > canvasRect.width || sectorScreenY > canvasRect.height || 
+                sectorScreenX + sectorSize < 0 || sectorScreenY + sectorSize < 0) {
+                log('❌ セクター(0,0)が画面外にあります！', 'error');
+            } else {
+                log('✅ セクター(0,0)は画面内にあります', 'success');
+            }
+        }
+        
+        async function forceRenderAll() {
+            log('🎨 全ピクセル強制描画テスト...', 'info');
+            
+            if (pixelData.size === 0) {
+                log('❌ ピクセルデータが空です', 'error');
+                return;
+            }
+            
+            // キャンバスクリア
+            ctx.fillStyle = '#404040';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const scale = 0.5; // 小さめのスケールで全体を表示
+            const offsetX = 50;
+            const offsetY = 50;
+            
+            let rendered = 0;
+            const maxRender = 5000; // 表示制限
+            
+            for (const [key, colorIndex] of pixelData) {
+                if (rendered >= maxRender) break;
+                
+                const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+                
+                // ワールド座標に変換
+                const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+                const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+                
+                // スクリーン座標に変換
+                const screenX = worldX * CONFIG.PIXEL_SIZE * scale + offsetX;
+                const screenY = worldY * CONFIG.PIXEL_SIZE * scale + offsetY;
+                const pixelSize = CONFIG.PIXEL_SIZE * scale;
+                
+                // 画面内チェック
+                if (screenX >= 0 && screenY >= 0 && 
+                    screenX < canvas.width && screenY < canvas.height) {
+                    
+                    const color = CONFIG.COLORS[colorIndex] || '#FFFFFF';
+                    ctx.fillStyle = color;
+                    ctx.fillRect(screenX, screenY, Math.max(1, pixelSize), Math.max(1, pixelSize));
+                    rendered++;
+                }
+            }
+            
+            log(`🎨 描画完了: ${rendered}/${pixelData.size}ピクセル (scale: ${scale})`, 'success');
+            
+            if (rendered === 0) {
+                log('❌ 1つもピクセルが描画されませんでした！', 'error');
+            } else if (rendered < 1000) {
+                log('⚠️ 描画されたピクセル数が少ないです', 'warning');
+            }
+        }
+        
+        async function testDirectRender() {
+            log('🔧 直接描画テスト開始...', 'info');
+            
+            // キャンバスクリア
+            ctx.fillStyle = '#404040';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 手動で数ピクセル描画
+            const testPixels = [
+                { x: 0, y: 0, color: 1 },
+                { x: 1, y: 0, color: 2 },
+                { x: 0, y: 1, color: 3 },
+                { x: 1, y: 1, color: 4 },
+                { x: 100, y: 100, color: 5 }
+            ];
+            
+            const scale = 2;
+            const offsetX = 100;
+            const offsetY = 100;
+            
+            for (const pixel of testPixels) {
+                const screenX = pixel.x * CONFIG.PIXEL_SIZE * scale + offsetX;
+                const screenY = pixel.y * CONFIG.PIXEL_SIZE * scale + offsetY;
+                const pixelSize = CONFIG.PIXEL_SIZE * scale;
+                
+                ctx.fillStyle = CONFIG.COLORS[pixel.color];
+                ctx.fillRect(screenX, screenY, pixelSize, pixelSize);
+            }
+            
+            log(`✅ 直接描画テスト完了: ${testPixels.length}ピクセル`, 'success');
+        }
+        
+        async function analyzeSupabaseData() {
+            log('🔍 Supabaseデータ詳細解析...', 'info');
+            
+            try {
+                // 実際のピクセルデータサンプルを取得
+                const { data: sample, error } = await supabaseClient
+                    .from('pixels')
+                    .select('*')
+                    .eq('sector_x', 0)
+                    .eq('sector_y', 0)
+                    .limit(10);
+                    
+                if (error) throw error;
+                
+                log('📋 サンプルピクセルデータ:', 'info');
+                for (const pixel of sample) {
+                    log(`  (${pixel.sector_x},${pixel.sector_y},${pixel.local_x},${pixel.local_y}) = 色${pixel.color}`, 'info');
+                }
+                
+                // 色分布確認
+                const colorCount = new Map();
+                for (const pixel of sample) {
+                    colorCount.set(pixel.color, (colorCount.get(pixel.color) || 0) + 1);
+                }
+                
+                log('🎨 色分布 (サンプル):', 'info');
+                for (const [color, count] of colorCount) {
+                    log(`  色${color} (${CONFIG.COLORS[color]}): ${count}個`, 'info');
+                }
+                
+            } catch (error) {
+                log(`❌ データ解析エラー: ${error.message}`, 'error');
+            }
+        }
+        
+        async function debugCoordinateTransform() {
+            log('🧮 座標変換デバッグ...', 'info');
+            
+            const testCases = [
+                { sector: [0, 0], local: [0, 0] },
+                { sector: [0, 0], local: [255, 255] },
+                { sector: [0, 0], local: [100, 100] },
+                { sector: [1, 0], local: [0, 0] },
+                { sector: [0, 1], local: [0, 0] }
+            ];
+            
+            const scale = 1;
+            const offsetX = 0;
+            const offsetY = 0;
+            
+            log('📐 座標変換テスト:', 'info');
+            for (const test of testCases) {
+                const [sectorX, sectorY] = test.sector;
+                const [localX, localY] = test.local;
+                
+                // ワールド座標
+                const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+                const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+                
+                // スクリーン座標
+                const screenX = worldX * CONFIG.PIXEL_SIZE * scale + offsetX;
+                const screenY = worldY * CONFIG.PIXEL_SIZE * scale + offsetY;
+                
+                log(`  セクター(${sectorX},${sectorY}) ローカル(${localX},${localY}) → ワールド(${worldX},${worldY}) → スクリーン(${screenX},${screenY})`, 'info');
+            }
+        }
+    </script>
+</body>
+</html>

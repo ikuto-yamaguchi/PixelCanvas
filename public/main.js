@@ -124,6 +124,8 @@ class PixelCanvas {
             console.log('🧪 Adding manual test pixels...');
             this.addTestPixels();
             
+            // 🚨 EMERGENCY: 強制的にセクター(0,0)を表示
+            this.forceViewportToSectorZero();
             this.viewportController.centerViewportOnActiveSectors();
             
         } catch (error) {
@@ -218,6 +220,11 @@ class PixelCanvas {
             await this.networkManager.loadSectorCounts();
             
             console.log('✅ Initial data loading completed');
+            
+            // 🚨 EMERGENCY: 確実にセクター(0,0)を表示
+            if (this.pixelStorage.pixels.size > 0) {
+                this.forceViewportToSectorZero();
+            }
             
         } catch (error) {
             console.error('❌ Initial data loading failed:', error);
@@ -373,7 +380,9 @@ class PixelCanvas {
             
             // Update display and render
             this.pixelStorage.updateStockDisplay();
-            this.render();
+            
+            // 🚨 EMERGENCY: 強制的にセクター(0,0)を表示
+            this.forceViewportToSectorZero();
             
             return;
         }
@@ -382,6 +391,10 @@ class PixelCanvas {
         if (this.networkManager?.supabaseClient) {
             console.log('🔄 Using NetworkManager to force load...');
             await this.networkManager.loadPixelsFromSupabase();
+            
+            // 🚨 EMERGENCY: NetworkManager経由でも強制表示
+            this.pixelStorage.updateStockDisplay();
+            this.forceViewportToSectorZero();
         } else {
             console.error('❌ No Supabase client available');
         }
@@ -799,6 +812,39 @@ class PixelCanvas {
         console.log('🏗️ Starting LOD generation...');
         await this.pixiRenderer.lodGenerator.generateAllLODs();
         return 'LOD generation completed - check console for details';
+    }
+    
+    // 🚨 EMERGENCY: 強制的にビューポートをセクター(0,0)に設定
+    forceViewportToSectorZero() {
+        console.log('🎯 EMERGENCY: Forcing viewport to sector (0,0)...');
+        
+        // セクター(0,0)の中心を計算
+        const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE; // 256 * 4 = 1024
+        const sectorCenterX = sectorSize / 2; // 512
+        const sectorCenterY = sectorSize / 2; // 512
+        
+        // スクリーンの中心を計算
+        const canvasWidth = this.logicalWidth || 800;
+        const canvasHeight = this.logicalHeight || 600;
+        const screenCenterX = canvasWidth / 2;
+        const screenCenterY = canvasHeight / 2;
+        
+        // セクター(0,0)の中心がスクリーン中心に来るようにオフセットを設定
+        // セクター(0,0)は ワールド座標 (0,0) から (255,255) まで
+        // その中心は (127.5, 127.5) * PIXEL_SIZE * scale = (510, 510) (scale=1の場合)
+        
+        // 適切なスケールを設定（全セクターが見えるように）
+        this.scale = Math.min(canvasWidth / sectorSize, canvasHeight / sectorSize) * 0.8; // 80%のマージン
+        
+        // オフセットを設定してセクター中心を画面中心に
+        this.offsetX = screenCenterX - sectorCenterX * this.scale;
+        this.offsetY = screenCenterY - sectorCenterY * this.scale;
+        
+        console.log(`🎯 Viewport set: scale=${this.scale.toFixed(3)}, offset=(${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)})`);
+        console.log(`📐 Sector (0,0) screen bounds: (${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)}) to (${(this.offsetX + sectorSize * this.scale).toFixed(1)}, ${(this.offsetY + sectorSize * this.scale).toFixed(1)})`);
+        
+        // 強制レンダリング
+        this.render();
     }
     
     switchRenderer(type = 'auto') {

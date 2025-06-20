@@ -91,7 +91,7 @@ export class LayeredRenderer {
     renderFromPixelStorage(bounds) {
         const pixelStorage = this.pixelCanvas.pixelStorage;
         let rendered = 0;
-        const maxPixels = 5000; // 🔧 FIXED: 描画上限を緩和
+        const maxPixels = 100000; // 🚨 EMERGENCY: 65,536ピクセル完全対応
         
         console.log(`🔧 FIXED: Rendering from pixel storage. Scale: ${this.pixelCanvas.scale}, Bounds:`, bounds);
         

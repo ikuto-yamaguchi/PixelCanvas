@@ -150,7 +150,7 @@ export class RenderEngine {
         // 🔧 FIXED: Use proper pixelStorage reference
         const visibleBounds = this.calculateSimpleVisibleBounds();
         let pixelsRendered = 0;
-        const maxPixels = 50000; // 🔧 CRITICAL: 大幅に上限を増加（65536ピクセル対応）
+        const maxPixels = 100000; // 🚨 EMERGENCY: 65,536ピクセル完全対応
         
         // Access pixels through pixelStorage for consistency
         const pixels = this.pixelCanvas.pixelStorage ? 
@@ -171,8 +171,8 @@ export class RenderEngine {
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
-            // 🔧 CRITICAL: 境界チェックを緩和して全ピクセルを描画
-            if (this.isPixelInBounds(world.x, world.y, visibleBounds) || pixelsRendered < 1000) {
+            // 🚨 EMERGENCY: 全ピクセル強制描画（境界チェック大幅緩和）
+            if (this.isPixelInBounds(world.x, world.y, visibleBounds) || pixelsRendered < 70000) {
                 this.renderPixel(world.x, world.y, color);
                 pixelsRendered++;
             }
@@ -186,7 +186,7 @@ export class RenderEngine {
         // 🔧 FIXED: More comprehensive minimal rendering
         const bounds = this.calculateSimpleVisibleBounds();
         let pixelsRendered = 0;
-        const maxPixels = Math.max(this.maxPixelsPerFrame, 10000); // 🔧 CRITICAL: 最低10000ピクセルは描画
+        const maxPixels = Math.max(this.maxPixelsPerFrame, 100000); // 🚨 EMERGENCY: 65,536ピクセル完全対応
         
         // Access pixels through pixelStorage for consistency
         const pixels = this.pixelCanvas.pixelStorage ? 
@@ -203,8 +203,8 @@ export class RenderEngine {
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
-            // 🔧 CRITICAL: 境界チェックを緩和して多くのピクセルを描画
-            if (this.isPixelInBounds(world.x, world.y, bounds) || pixelsRendered < 5000) {
+            // 🚨 EMERGENCY: 全ピクセル強制描画（境界チェック大幅緩和）
+            if (this.isPixelInBounds(world.x, world.y, bounds) || pixelsRendered < 70000) {
                 this.renderPixel(world.x, world.y, color);
                 pixelsRendered++;
             }

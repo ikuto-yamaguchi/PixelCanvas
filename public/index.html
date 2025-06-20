@@ -13,78 +13,19 @@
     <link rel="preconnect" href="https://lgvjdefkyeuvquzckkvb.supabase.co">
     <link rel="dns-prefetch" href="https://lgvjdefkyeuvquzckkvb.supabase.co">
     
-    <!-- PixiJS Libraries for Performance Enhancement - LOCAL INSTALL -->
-    <!-- Core PixiJS v7.3.2 (LOCAL) -->
+    <!-- 🔧 SIMPLIFIED: Basic PixiJS only (removed complex plugins) -->
     <script src="pixi.min.js"></script>
     
-    <!-- Setup global PIXI for plugins (required for v7 compatibility) -->
-    <script>
-        // Ensure PIXI is available globally for plugins
-        if (window.PIXI) {
-            console.log('🔧 PIXI v7 global setup complete');
-        } else {
-            console.error('❌ PIXI not loaded - plugins will fail');
-        }
-    </script>
-    
-    <!-- PixiJS Tilemap Plugin v3.2.2 (LOCAL) - Direct UMD -->
-    <script>
-        // Manual tilemap attachment for v7 compatibility
-        (function() {
-            // Store original module/exports
-            const origModule = window.module;
-            const origExports = window.exports;
-            
-            // Setup for CommonJS detection
-            window.module = { exports: {} };
-            window.exports = window.module.exports;
-            
-            // Define require function for pixi modules
-            window.require = function(name) {
-                if (name.includes('@pixi/') || name === 'pixi.js') {
-                    return window.PIXI;
-                }
-                return {};
-            };
-            
-            // Load tilemap script inline
-            fetch('pixi-tilemap.js')
-                .then(response => response.text())
-                .then(code => {
-                    eval(code);
-                    
-                    // Attach to PIXI
-                    if (window.module.exports && window.PIXI) {
-                        window.PIXI.tilemap = window.module.exports;
-                        console.log('✅ PIXI.tilemap attached successfully');
-                    }
-                    
-                    // Restore original state
-                    window.module = origModule;
-                    window.exports = origExports;
-                })
-                .catch(err => console.error('❌ Failed to load tilemap:', err));
-        })();
-    </script>
-    
-    <!-- PixiJS Viewport Plugin v5.0.2 (LOCAL) - Direct UMD -->
-    <script src="pixi-viewport.js"></script>
-    
-    <!-- Verify plugins after load -->
+    <!-- 🔧 SIMPLIFIED: Basic PixiJS verification -->
     <script>
         window.addEventListener('load', () => {
             setTimeout(() => {
-                console.log('🔧 Plugin verification:', {
-                    'PIXI': !!window.PIXI,
-                    'PIXI.tilemap': !!(window.PIXI && window.PIXI.tilemap),
-                    'PIXI.Viewport': !!(window.PIXI && window.PIXI.Viewport),
-                    'pixi_viewport.Viewport': !!(window.pixi_viewport && window.pixi_viewport.Viewport)
-                });
-                
-                // Attach viewport from global if available
-                if (window.pixi_viewport && window.pixi_viewport.Viewport && window.PIXI) {
-                    window.PIXI.Viewport = window.pixi_viewport.Viewport;
-                    console.log('✅ PIXI.Viewport attached from pixi_viewport global');
+                if (window.PIXI) {
+                    console.log('✅ PixiJS loaded successfully:', window.PIXI.VERSION || 'unknown version');
+                    // Set up minimal required globals
+                    window.PIXI.settings = window.PIXI.settings || {};
+                } else {
+                    console.error('❌ PixiJS failed to load');
                 }
             }, 100);
         });
@@ -137,9 +78,110 @@
     </footer>
 
 
+    <!-- 🔧 ENHANCED: Reliable library loading with fallbacks -->
     <script src="idb.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="main.js" defer></script>
+    
+    <!-- 🔧 CRITICAL: Enhanced Supabase loading with verification -->
+    <script>
+        // Supabase loading with retry and verification
+        (function loadSupabase() {
+            let retryCount = 0;
+            const maxRetries = 3;
+            
+            function attemptSupabaseLoad() {
+                console.log(`🔧 Loading Supabase (attempt ${retryCount + 1}/${maxRetries})...`);
+                
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+                script.async = true;
+                
+                script.onload = function() {
+                    // Verify Supabase loaded correctly
+                    setTimeout(() => {
+                        if (window.supabase && typeof window.supabase.createClient === 'function') {
+                            console.log('✅ Supabase loaded successfully');
+                            window.supabaseReady = true;
+                            window.dispatchEvent(new Event('supabase-ready'));
+                        } else {
+                            console.warn('⚠️ Supabase script loaded but createClient not available');
+                            retrySupabase();
+                        }
+                    }, 100);
+                };
+                
+                script.onerror = function() {
+                    console.error(`❌ Supabase load failed (attempt ${retryCount + 1})`);
+                    retrySupabase();
+                };
+                
+                document.head.appendChild(script);
+            }
+            
+            function retrySupabase() {
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    console.log(`🔄 Retrying Supabase load in 1 second...`);
+                    setTimeout(attemptSupabaseLoad, 1000);
+                } else {
+                    console.error('❌ Supabase failed to load after all retries');
+                    window.supabaseLoadFailed = true;
+                    window.dispatchEvent(new Event('supabase-failed'));
+                }
+            }
+            
+            attemptSupabaseLoad();
+        })();
+    </script>
+    
+    <!-- 🔧 CRITICAL: Load main.js only after all dependencies are ready -->
+    <script type="module">
+        // Wait for all dependencies before loading main application
+        async function waitForDependencies() {
+            console.log('🔧 Waiting for dependencies...');
+            
+            // Wait for PixiJS
+            let pixiRetries = 0;
+            while (!window.PIXI && pixiRetries < 50) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                pixiRetries++;
+            }
+            
+            if (!window.PIXI) {
+                console.warn('⚠️ PixiJS not loaded after 5 seconds, continuing anyway');
+            } else {
+                console.log('✅ PixiJS dependency ready');
+            }
+            
+            // Wait for Supabase
+            let supabaseRetries = 0;
+            while (!window.supabaseReady && !window.supabaseLoadFailed && supabaseRetries < 50) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                supabaseRetries++;
+            }
+            
+            if (window.supabaseReady) {
+                console.log('✅ Supabase dependency ready');
+            } else {
+                console.warn('⚠️ Supabase not loaded, app will continue with limited functionality');
+            }
+            
+            // Load main application
+            console.log('🚀 Loading main application...');
+            const mainScript = document.createElement('script');
+            mainScript.type = 'module';
+            mainScript.src = 'main.js';
+            mainScript.onload = () => console.log('✅ Main application loaded');
+            mainScript.onerror = (error) => console.error('❌ Main application failed to load:', error);
+            document.head.appendChild(mainScript);
+        }
+        
+        // Start dependency waiting when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', waitForDependencies);
+        } else {
+            waitForDependencies();
+        }
+    </script>
     
     <!-- 🚨 EMERGENCY: Manual control functions -->
     <script>

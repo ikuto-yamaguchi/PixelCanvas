@@ -164,50 +164,12 @@ export class PixiRenderer {
     }
     
     trySetupViewport() {
-        try {
-            console.log('🔧 Attempting to setup Viewport (optional)...');
-            
-            const ViewportClass = window.PIXI.Viewport || window.Viewport;
-            if (!ViewportClass) {
-                console.log('⚠️ Viewport not available, using simple container');
-                return;
-            }
-            
-            // Replace simple container with viewport
-            this.app.stage.removeChild(this.viewport);
-            
-            this.viewport = new ViewportClass({
-                screenWidth: this.container.clientWidth || 800,
-                screenHeight: this.container.clientHeight || 600,
-                worldWidth: 100000,
-                worldHeight: 100000,
-                events: this.app.renderer.events || this.app.renderer.plugins.interaction // 🔧 FIXED: Use events for v5+
-            });
-            
-            // カメラ操作設定
-            this.viewport
-                .drag()
-                .pinch()
-                .wheel({ smooth: 3 })
-                .decelerate()
-                .clampZoom({ minScale: 0.05, maxScale: 16 });
-            
-            // Set initial viewport to show sector (0,0)
-            this.viewport.moveCenter(CONFIG.GRID_SIZE / 2, CONFIG.GRID_SIZE / 2);
-            this.viewport.setZoom(2);
-            
-            // イベントリスナー
-            this.viewport.on('moved', () => this.onViewportChange());
-            this.viewport.on('zoomed', () => this.onViewportChange());
-            this.viewport.on('zoomed-end', () => this.checkLODLevel());
-            
-            this.app.stage.addChild(this.viewport);
-            
-            console.log('✅ Viewport upgrade successful');
-            
-        } catch (error) {
-            console.warn('⚠️ Viewport setup failed, using simple container:', error);
-        }
+        // 🔧 SIMPLIFIED: Skip complex viewport setup to avoid plugin dependencies
+        console.log('🔧 Viewport upgrade skipped - using simple container for compatibility');
+        
+        // Keep simple container as viewport (already set up in setupSimpleContainer)
+        // This avoids plugin dependency issues while maintaining basic functionality
+        return;
     }
     
     addTestSprite() {
@@ -310,24 +272,10 @@ export class PixiRenderer {
     }
     
     trySetupTileMap() {
-        try {
-            console.log('🔧 Attempting to setup TileMap (optional)...');
-            
-            if (!window.PIXI.tilemap) {
-                console.log('⚠️ PIXI.tilemap not available, using sprite fallback');
-                return;
-            }
-            
-            // 🔧 FIXED: Use correct CompositeTilemap class from latest @pixi/tilemap
-            this.tileLayer = new window.PIXI.tilemap.CompositeTilemap();
-            this.viewport.addChild(this.tileLayer);
-            
-            console.log('✅ TileMap created successfully');
-            
-        } catch (error) {
-            console.error('❌ TileMap setup failed:', error);
-            throw error;
-        }
+        // 🔧 DISABLED: Skip tilemap completely to avoid plugin dependencies
+        console.log('🔧 TileMap disabled - using sprite-only rendering for compatibility');
+        this.tileLayer = null;
+        return;
     }
     
     setupResize() {
@@ -758,8 +706,10 @@ export class PixiRenderer {
         console.log(`🔧 PIXI Render called, pixels available: ${this.pixelCanvas.pixelStorage.pixels.size}`);
         
         // PixiJSは自動レンダリング
-        // 必要に応じてtileLayerを更新
-        this.tileLayer.clear();
+        // 🔧 FIXED: Safe tilemap handling
+        if (this.tileLayer && this.tileLayer.clear) {
+            this.tileLayer.clear();
+        }
         
         // 🔧 EMERGENCY FIX: Force PixelStorage rendering instead of LOD database queries
         this.renderFromPixelStorage();
