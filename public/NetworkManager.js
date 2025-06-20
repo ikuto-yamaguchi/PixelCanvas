@@ -554,8 +554,13 @@ export class NetworkManager {
             
             // 即座にPixelStorageに追加
             let addedCount = 0;
+            console.log('🚨 DETAILED: About to process pixels:', pixels.slice(0, 3));
+            
             for (const pixel of pixels) {
                 try {
+                    if (addedCount < 5) {
+                        console.log(`🔧 Processing pixel ${addedCount + 1}:`, pixel);
+                    }
                     this.pixelCanvas.pixelStorage.setPixel(
                         pixel.sector_x,
                         pixel.sector_y,
@@ -564,6 +569,10 @@ export class NetworkManager {
                         pixel.color
                     );
                     addedCount++;
+                    
+                    if (addedCount <= 5) {
+                        console.log(`✅ Successfully added pixel ${addedCount}`);
+                    }
                 } catch (setError) {
                     console.error('❌ Error setting pixel:', setError, pixel);
                 }

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PixelCanvas Debug Test</title>
+</head>
+<body>
+    <h1>Supabase Pixel Load Test</h1>
+    <div id="status">Loading...</div>
+    <div id="result"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const CONFIG = {
+            SUPABASE_URL: 'https://lgvjdefkyeuvquzckkvb.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY'
+        };
+        
+        async function testSupabaseConnection() {
+            console.log('🧪 Testing Supabase connection...');
+            document.getElementById('status').textContent = 'Testing Supabase connection...';
+            
+            try {
+                console.log('🔧 window.supabase available:', !!window.supabase);
+                
+                if (!window.supabase) {
+                    throw new Error('Supabase library not loaded');
+                }
+                
+                const supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+                console.log('✅ Supabase client created');
+                
+                // Test count query
+                console.log('🧪 Testing count query...');
+                const { count, error: countError } = await supabaseClient
+                    .from('pixels')
+                    .select('*', { count: 'exact', head: true });
+                
+                if (countError) {
+                    throw new Error(`Count query failed: ${countError.message}`);
+                }
+                
+                console.log(`📊 Total pixels in database: ${count}`);
+                document.getElementById('status').textContent = `Found ${count} pixels in database`;
+                
+                // Test data query
+                console.log('🧪 Testing data query...');
+                const { data: pixels, error } = await supabaseClient
+                    .from('pixels')
+                    .select('sector_x, sector_y, local_x, local_y, color')
+                    .limit(10);
+                
+                if (error) {
+                    throw new Error(`Data query failed: ${error.message}`);
+                }
+                
+                console.log(`✅ Loaded ${pixels.length} sample pixels:`, pixels);
+                
+                document.getElementById('result').innerHTML = `
+                    <h2>✅ Test Successful</h2>
+                    <p>Total pixels: ${count}</p>
+                    <p>Sample pixels loaded: ${pixels.length}</p>
+                    <pre>${JSON.stringify(pixels.slice(0, 3), null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                console.error('❌ Test failed:', error);
+                document.getElementById('result').innerHTML = `
+                    <h2>❌ Test Failed</h2>
+                    <p>Error: ${error.message}</p>
+                `;
+            }
+        }
+        
+        // Run test when page loads
+        window.addEventListener('load', () => {
+            setTimeout(testSupabaseConnection, 1000);
+        });
+    </script>
+</body>
+</html>

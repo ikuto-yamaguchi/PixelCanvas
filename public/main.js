@@ -120,6 +120,10 @@ class PixelCanvas {
             // Await initial data loading
             await this.loadInitialData();
             
+            // 🚨 EMERGENCY TEST: Add manual test pixels
+            console.log('🧪 Adding manual test pixels...');
+            this.addTestPixels();
+            
             this.viewportController.centerViewportOnActiveSectors();
             
         } catch (error) {
@@ -273,6 +277,31 @@ class PixelCanvas {
         if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
             this.sectorManager.expandSectorsLocally(sectorX, sectorY);
         }
+    }
+    
+    // 🚨 EMERGENCY TEST: Manual test pixels
+    addTestPixels() {
+        console.log('🧪 Adding manual test pixels for debugging...');
+        console.log(`🔧 PixelStorage before test: ${this.pixelStorage.pixels.size} pixels`);
+        
+        // Add a few test pixels at sector 0,0
+        for (let i = 0; i < 10; i++) {
+            this.pixelStorage.setPixel(0, 0, i * 10, 10, i % 16);
+        }
+        
+        console.log(`🔧 PixelStorage after test: ${this.pixelStorage.pixels.size} pixels`);
+        console.log('🔧 Test pixels added, forcing render...');
+        
+        // Update display
+        this.pixelStorage.updateStockDisplay();
+        
+        // Force render
+        this.render();
+        
+        setTimeout(() => {
+            console.log('🔧 Secondary render after test pixels...');
+            this.render();
+        }, 1000);
     }
     
     showOutOfBoundsWarning() {
