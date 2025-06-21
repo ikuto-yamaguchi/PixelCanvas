@@ -1,90 +1,333 @@
-// 📊 Performance Monitor for Ultra Fast PixelCanvas
+// Performance Monitor for Ultra Fast PixelCanvas
 // Tracks: Loading time, FPS, Latency, Memory usage
 
 export class PerformanceMonitor {
     constructor() {
+        // Performance metrics
         this.metrics = {
             // Loading performance
-            loadingStages: [],
+            loadingStartTime: 0,
+            loadingEndTime: 0,
             totalLoadTime: 0,
-            targetLoadTime: 10000, // 10 seconds
+            stageLoadTimes: {},
             
-            // Rendering performance  
+            // Runtime performance
             fps: 0,
-            averageFrameTime: 0,
-            targetFPS: 60,
+            averageFPS: 0,
             frameCount: 0,
+            lastFrameTime: 0,
             
-            // Network performance
-            updateLatency: 0,
+            // Network latency
+            latency: 0,
             averageLatency: 0,
-            targetLatency: 100, // 100ms
-            messagesReceived: 0,
+            latencyCount: 0,
+            totalLatency: 0,
             
             // Memory usage
             memoryUsage: 0,
-            pixelCount: 0,
-            cacheSize: 0,
-            targetMemory: 20 * 1024 * 1024 // 20MB
+            peakMemoryUsage: 0,
+            
+            // Pixel rendering
+            pixelsRendered: 0,
+            renderTime: 0
         };
         
-        this.startTime = performance.now();
-        this.lastFrameTime = 0;
+        // Performance targets
+        this.targets = {
+            maxLoadTime: 10000,    // 10 seconds
+            minFPS: 30,            // 30 FPS minimum
+            maxLatency: 100,       // 100ms maximum
+            maxMemoryMB: 100       // 100MB maximum
+        };
+        
+        // Monitoring state
+        this.isMonitoring = false;
+        this.monitoringInterval = null;
+        
+        // Performance history for averaging
+        this.fpsHistory = [];
+        this.latencyHistory = [];
+        this.maxHistorySize = 60; // 1 second at 60fps
+        
+        console.log('Performance Monitor initialized');
+    }
+    
+    // Start monitoring
+    startMonitoring() {
+        if (this.isMonitoring) return;
+        
+        this.isMonitoring = true;
+        this.metrics.loadingStartTime = performance.now();
+        
+        // Monitor every 100ms
+        this.monitoringInterval = setInterval(() => {
+            this.updateMetrics();
+        }, 100);
+        
+        console.log('Performance monitoring started');
+    }
+    
+    // Stop monitoring
+    stopMonitoring() {
+        if (!this.isMonitoring) return;
+        
         this.isMonitoring = false;
         
-        // Performance thresholds
-        this.thresholds = {
-            excellent: { load: 3000, fps: 58, latency: 50, memory: 10 },
-            good: { load: 7000, fps: 45, latency: 100, memory: 20 },
-            poor: { load: 15000, fps: 30, latency: 200, memory: 50 }
-        };
-    }
-    
-    // 🚀 ローディング測定開始
-    startLoadingMeasurement() {
-        this.startTime = performance.now();
-        this.metrics.loadingStages = [];
-        console.log('📊 Performance monitoring started');
-    }
-    
-    // ⏱️ ローディングステージ記録
-    recordLoadingStage(stageName, duration, pixelCount) {
-        const stage = {
-            name: stageName,
-            duration,
-            pixelCount,
-            timestamp: performance.now() - this.startTime
-        };
-        
-        this.metrics.loadingStages.push(stage);
-        
-        const isWithinTarget = this.checkLoadingTarget(stage);
-        console.log(`📊 Stage ${stageName}: ${duration.toFixed(0)}ms, ${pixelCount} pixels ${isWithinTarget ? '✅' : '⚠️'}`);
-    }
-    
-    // 🎯 ローディング目標チェック
-    checkLoadingTarget(stage) {
-        const targets = {
-            immediate: 500,   // 0.5s
-            detailed: 3000,   // 3s
-            complete: 10000   // 10s
-        };
-        
-        return stage.duration <= (targets[stage.name] || 10000);
-    }
-    
-    // 🎨 フレームレート測定
-    measureFrame() {
-        const now = performance.now();
-        
-        if (this.lastFrameTime) {
-            const frameTime = now - this.lastFrameTime;
-            this.metrics.averageFrameTime = (this.metrics.averageFrameTime + frameTime) / 2;
-            this.metrics.fps = 1000 / this.metrics.averageFrameTime;
+        if (this.monitoringInterval) {
+            clearInterval(this.monitoringInterval);
+            this.monitoringInterval = null;
         }
         
-        this.lastFrameTime = now;
-        this.metrics.frameCount++;
+        console.log('Performance monitoring stopped');
+    }
+    
+    // Mark loading stage completion
+    markStageComplete(stageName, pixelsLoaded = 0) {
+        const currentTime = performance.now();
+        const stageTime = currentTime - this.metrics.loadingStartTime;
         
-        // 1秒ごとにFPS報告
-        if (this.metrics.frameCount % 60 === 0) {\n            const fpsGrade = this.gradeFPS(this.metrics.fps);\n            console.log(`📊 FPS: ${this.metrics.fps.toFixed(1)} (${fpsGrade})`);\n        }\n    }\n    \n    // 📡 ネットワーク遅延測定\n    measureLatency(sendTime, receiveTime) {\n        const latency = receiveTime - sendTime;\n        this.metrics.updateLatency = latency;\n        this.metrics.averageLatency = (this.metrics.averageLatency + latency) / 2;\n        this.metrics.messagesReceived++;\n        \n        const latencyGrade = this.gradeLatency(latency);\n        \n        if (this.metrics.messagesReceived % 10 === 0) {\n            console.log(`📊 Latency: ${latency.toFixed(0)}ms avg: ${this.metrics.averageLatency.toFixed(0)}ms (${latencyGrade})`);\n        }\n    }\n    \n    // 💾 メモリ使用量測定\n    measureMemory(pixelCount, cacheSize) {\n        this.metrics.pixelCount = pixelCount;\n        this.metrics.cacheSize = cacheSize;\n        \n        // 概算メモリ使用量計算\n        this.metrics.memoryUsage = (\n            pixelCount * 5 +      // 5 bytes per pixel\n            cacheSize * 1024 +    // 1KB per cache entry\n            1024 * 1024           // 1MB base overhead\n        );\n        \n        const memoryGrade = this.gradeMemory(this.metrics.memoryUsage);\n        \n        if (this.metrics.frameCount % 300 === 0) { // 5秒ごと\n            console.log(`📊 Memory: ${(this.metrics.memoryUsage / 1024 / 1024).toFixed(1)}MB (${memoryGrade})`);\n        }\n    }\n    \n    // 🏆 総合パフォーマンス評価\n    getOverallGrade() {\n        const loadGrade = this.gradeLoading(this.metrics.totalLoadTime);\n        const fpsGrade = this.gradeFPS(this.metrics.fps);\n        const latencyGrade = this.gradeLatency(this.metrics.averageLatency);\n        const memoryGrade = this.gradeMemory(this.metrics.memoryUsage);\n        \n        const grades = [loadGrade, fpsGrade, latencyGrade, memoryGrade];\n        const scores = grades.map(grade => {\n            switch(grade) {\n                case 'excellent': return 3;\n                case 'good': return 2;\n                case 'poor': return 1;\n                default: return 0;\n            }\n        });\n        \n        const averageScore = scores.reduce((a, b) => a + b, 0) / scores.length;\n        \n        if (averageScore >= 2.5) return 'excellent';\n        if (averageScore >= 1.5) return 'good';\n        return 'poor';\n    }\n    \n    // 📊 個別グレーディング関数\n    gradeLoading(loadTime) {\n        if (loadTime <= this.thresholds.excellent.load) return 'excellent';\n        if (loadTime <= this.thresholds.good.load) return 'good';\n        return 'poor';\n    }\n    \n    gradeFPS(fps) {\n        if (fps >= this.thresholds.excellent.fps) return 'excellent';\n        if (fps >= this.thresholds.good.fps) return 'good';\n        return 'poor';\n    }\n    \n    gradeLatency(latency) {\n        if (latency <= this.thresholds.excellent.latency) return 'excellent';\n        if (latency <= this.thresholds.good.latency) return 'good';\n        return 'poor';\n    }\n    \n    gradeMemory(memoryMB) {\n        const mb = memoryMB / 1024 / 1024;\n        if (mb <= this.thresholds.excellent.memory) return 'excellent';\n        if (mb <= this.thresholds.good.memory) return 'good';\n        return 'poor';\n    }\n    \n    // 📈 詳細レポート生成\n    generateReport() {\n        const overallGrade = this.getOverallGrade();\n        \n        return {\n            overall: overallGrade,\n            timestamp: new Date().toISOString(),\n            \n            loading: {\n                totalTime: this.metrics.totalLoadTime,\n                stages: this.metrics.loadingStages,\n                grade: this.gradeLoading(this.metrics.totalLoadTime),\n                target: this.metrics.targetLoadTime,\n                success: this.metrics.totalLoadTime <= this.metrics.targetLoadTime\n            },\n            \n            rendering: {\n                fps: this.metrics.fps,\n                averageFrameTime: this.metrics.averageFrameTime,\n                frameCount: this.metrics.frameCount,\n                grade: this.gradeFPS(this.metrics.fps),\n                target: this.metrics.targetFPS,\n                success: this.metrics.fps >= this.metrics.targetFPS * 0.9\n            },\n            \n            network: {\n                latency: this.metrics.updateLatency,\n                averageLatency: this.metrics.averageLatency,\n                messagesReceived: this.metrics.messagesReceived,\n                grade: this.gradeLatency(this.metrics.averageLatency),\n                target: this.metrics.targetLatency,\n                success: this.metrics.averageLatency <= this.metrics.targetLatency\n            },\n            \n            memory: {\n                usage: this.metrics.memoryUsage,\n                usageMB: this.metrics.memoryUsage / 1024 / 1024,\n                pixelCount: this.metrics.pixelCount,\n                cacheSize: this.metrics.cacheSize,\n                grade: this.gradeMemory(this.metrics.memoryUsage),\n                target: this.metrics.targetMemory,\n                success: this.metrics.memoryUsage <= this.metrics.targetMemory\n            }\n        };\n    }\n    \n    // 🎯 目標達成状況\n    checkTargets() {\n        const report = this.generateReport();\n        \n        const results = {\n            loading: report.loading.success,\n            fps: report.rendering.success,\n            latency: report.network.success,\n            memory: report.memory.success\n        };\n        \n        const successCount = Object.values(results).filter(Boolean).length;\n        const totalTargets = Object.keys(results).length;\n        \n        console.log(`🎯 Targets achieved: ${successCount}/${totalTargets}`);\n        console.log('📊 Performance report:', report);\n        \n        return {\n            ...results,\n            overall: successCount === totalTargets,\n            grade: report.overall,\n            report\n        };\n    }\n    \n    // 🚀 監視開始\n    startMonitoring() {\n        this.isMonitoring = true;\n        \n        // 定期レポート (30秒ごと)\n        setInterval(() => {\n            if (this.isMonitoring) {\n                this.checkTargets();\n            }\n        }, 30000);\n        \n        console.log('📊 Performance monitoring active');\n    }\n    \n    // 🛑 監視停止\n    stopMonitoring() {\n        this.isMonitoring = false;\n        \n        const finalReport = this.checkTargets();\n        console.log('📊 Final performance report:', finalReport);\n        \n        return finalReport;\n    }\n    \n    // 📱 モバイル最適化チェック\n    checkMobileOptimization() {\n        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);\n        \n        if (isMobile) {\n            // モバイル向け調整\n            this.thresholds.good.fps = 30; // モバイルは30fps\n            this.thresholds.excellent.memory = 15; // メモリ制限厳しく\n            \n            console.log('📱 Mobile optimization enabled');\n        }\n        \n        return isMobile;\n    }\n}
+        this.metrics.stageLoadTimes[stageName] = {
+            time: stageTime,
+            pixelsLoaded,
+            timestamp: currentTime
+        };
+        
+        console.log(`Stage '${stageName}' completed in ${stageTime.toFixed(1)}ms (${pixelsLoaded} pixels)`);
+        
+        // Check if this is the final stage
+        if (stageName === 'complete') {
+            this.markLoadingComplete();
+        }
+    }
+    
+    // Mark loading complete
+    markLoadingComplete() {
+        this.metrics.loadingEndTime = performance.now();
+        this.metrics.totalLoadTime = this.metrics.loadingEndTime - this.metrics.loadingStartTime;
+        
+        const grade = this.getLoadingGrade();
+        console.log(`Loading completed in ${this.metrics.totalLoadTime.toFixed(1)}ms (${grade})`);
+        
+        // Log detailed stage breakdown
+        console.log('Loading stages:', this.metrics.stageLoadTimes);
+    }
+    
+    // Update real-time metrics
+    updateMetrics() {
+        if (!this.isMonitoring) return;
+        
+        // Update FPS
+        this.updateFPS();
+        
+        // Update memory usage
+        this.updateMemoryUsage();
+        
+        // Log performance summary every 5 seconds
+        if (this.metrics.frameCount % 300 === 0) {
+            this.logPerformanceSummary();
+        }
+    }
+    
+    // Update FPS calculation
+    updateFPS() {
+        const currentTime = performance.now();
+        
+        if (this.metrics.lastFrameTime > 0) {
+            const frameDelta = currentTime - this.metrics.lastFrameTime;
+            const instantFPS = 1000 / frameDelta;
+            
+            // Add to history
+            this.fpsHistory.push(instantFPS);
+            if (this.fpsHistory.length > this.maxHistorySize) {
+                this.fpsHistory.shift();
+            }
+            
+            // Calculate average
+            this.metrics.averageFPS = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+            this.metrics.fps = instantFPS;
+        }
+        
+        this.metrics.lastFrameTime = currentTime;
+        this.metrics.frameCount++;
+    }
+    
+    // Update memory usage
+    updateMemoryUsage() {
+        if (performance.memory) {
+            const memoryMB = performance.memory.usedJSHeapSize / 1024 / 1024;
+            this.metrics.memoryUsage = memoryMB;
+            
+            if (memoryMB > this.metrics.peakMemoryUsage) {
+                this.metrics.peakMemoryUsage = memoryMB;
+            }
+        }
+    }
+    
+    // Record latency measurement
+    recordLatency(latencyMs) {
+        this.metrics.latency = latencyMs;
+        this.metrics.totalLatency += latencyMs;
+        this.metrics.latencyCount++;
+        
+        // Add to history
+        this.latencyHistory.push(latencyMs);
+        if (this.latencyHistory.length > this.maxHistorySize) {
+            this.latencyHistory.shift();
+        }
+        
+        // Calculate average
+        this.metrics.averageLatency = this.latencyHistory.reduce((a, b) => a + b, 0) / this.latencyHistory.length;
+    }
+    
+    // Record render performance
+    recordRenderPerformance(pixelsRendered, renderTimeMs) {
+        this.metrics.pixelsRendered = pixelsRendered;
+        this.metrics.renderTime = renderTimeMs;
+    }
+    
+    // Get loading performance grade
+    getLoadingGrade() {
+        const loadTime = this.metrics.totalLoadTime;
+        
+        if (loadTime <= 3000) return 'Excellent';
+        if (loadTime <= 5000) return 'Good';
+        if (loadTime <= 10000) return 'Acceptable';
+        return 'Poor';
+    }
+    
+    // Get runtime performance grade
+    getRuntimeGrade() {
+        const fps = this.metrics.averageFPS;
+        const latency = this.metrics.averageLatency;
+        const memory = this.metrics.memoryUsage;
+        
+        let score = 0;
+        
+        // FPS score (40% weight)
+        if (fps >= 60) score += 40;
+        else if (fps >= 30) score += 30;
+        else if (fps >= 15) score += 20;
+        else score += 10;
+        
+        // Latency score (40% weight)
+        if (latency <= 50) score += 40;
+        else if (latency <= 100) score += 30;
+        else if (latency <= 200) score += 20;
+        else score += 10;
+        
+        // Memory score (20% weight)
+        if (memory <= 50) score += 20;
+        else if (memory <= 100) score += 15;
+        else if (memory <= 200) score += 10;
+        else score += 5;
+        
+        if (score >= 90) return 'Excellent';
+        if (score >= 70) return 'Good';
+        if (score >= 50) return 'Acceptable';
+        return 'Poor';
+    }
+    
+    // Check if performance targets are met
+    isPerformanceOptimal() {
+        return (
+            this.metrics.totalLoadTime <= this.targets.maxLoadTime &&
+            this.metrics.averageFPS >= this.targets.minFPS &&
+            this.metrics.averageLatency <= this.targets.maxLatency &&
+            this.metrics.memoryUsage <= this.targets.maxMemoryMB
+        );
+    }
+    
+    // Get detailed performance report
+    getPerformanceReport() {
+        const loadingGrade = this.getLoadingGrade();
+        const runtimeGrade = this.getRuntimeGrade();
+        const isOptimal = this.isPerformanceOptimal();
+        
+        return {
+            // Summary
+            loadingGrade,
+            runtimeGrade,
+            isOptimal,
+            
+            // Loading metrics
+            loading: {
+                totalTime: this.metrics.totalLoadTime,
+                stages: this.metrics.stageLoadTimes,
+                grade: loadingGrade
+            },
+            
+            // Runtime metrics
+            runtime: {
+                fps: Math.round(this.metrics.averageFPS),
+                latency: Math.round(this.metrics.averageLatency),
+                memory: Math.round(this.metrics.memoryUsage),
+                pixelsRendered: this.metrics.pixelsRendered,
+                renderTime: this.metrics.renderTime,
+                grade: runtimeGrade
+            },
+            
+            // Target comparison
+            targets: this.targets,
+            
+            // Raw metrics
+            raw: this.metrics
+        };
+    }
+    
+    // Log performance summary
+    logPerformanceSummary() {
+        const report = this.getPerformanceReport();
+        
+        console.log('Performance Summary:');
+        console.log(`  Loading: ${report.loading.totalTime.toFixed(1)}ms (${report.loadingGrade})`);
+        console.log(`  FPS: ${report.runtime.fps} (${report.runtime.grade})`);
+        console.log(`  Latency: ${report.runtime.latency}ms`);
+        console.log(`  Memory: ${report.runtime.memory}MB`);
+        console.log(`  Pixels: ${report.runtime.pixelsRendered}`);
+        console.log(`  Optimal: ${report.isOptimal ? 'YES' : 'NO'}`);
+    }
+    
+    // Detect mobile device
+    isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+    
+    // Get mobile-optimized settings
+    getMobileOptimizations() {
+        if (!this.isMobileDevice()) return null;
+        
+        return {
+            targetFPS: 30,        // Lower FPS target for mobile
+            maxPixels: 1000,      // Reduce pixel count
+            lodBias: 1,           // More aggressive LOD
+            memoryLimit: 50       // Lower memory limit
+        };
+    }
+    
+    // Export performance data
+    exportData() {
+        const report = this.getPerformanceReport();
+        const timestamp = new Date().toISOString();
+        
+        return {
+            timestamp,
+            userAgent: navigator.userAgent,
+            isMobile: this.isMobileDevice(),
+            report
+        };
+    }
+    
+    // Start frame timing (call this each frame)
+    startFrame() {
+        this.frameStartTime = performance.now();
+    }
+    
+    // End frame timing (call this at end of frame)
+    endFrame() {
+        if (this.frameStartTime) {
+            const frameTime = performance.now() - this.frameStartTime;
+            this.recordRenderPerformance(this.metrics.pixelsRendered, frameTime);
+            this.updateFPS();
+        }
+    }
+}
