@@ -533,23 +533,45 @@ export class NetworkManager {
                 return;
             }
             
-            // 🚀 LOD SYSTEM: Load all 65,536 pixels - LOD will handle performance
-            console.log('📥 Loading ALL pixels from sector (0,0) - LOD system will manage performance...');
+            // 🚀 CRITICAL FIX: Supabase API has 1000 row limit - use multiple requests
+            console.log('📥 Loading ALL 65,536 pixels via batched requests...');
             
-            const restResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=70000`, {
-                headers: {
-                    'apikey': CONFIG.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                    'Range': '0-69999',
-                    'Prefer': 'count=exact'
+            let allPixels = [];
+            const batchSize = 1000;
+            const totalExpected = 65536;
+            
+            // Load in batches to avoid API limits
+            for (let offset = 0; offset < totalExpected; offset += batchSize) {
+                console.log(`📥 Loading batch ${Math.floor(offset/batchSize) + 1}/${Math.ceil(totalExpected/batchSize)} (offset: ${offset})`);
+                
+                const restResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=${batchSize}&offset=${offset}`, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (!restResponse.ok) {
+                    console.error(`❌ Batch ${Math.floor(offset/batchSize) + 1} failed: ${restResponse.status}`);
+                    break;
                 }
-            });
-            
-            if (!restResponse.ok) {
-                throw new Error(`REST API failed: ${restResponse.status} ${restResponse.statusText}`);
+                
+                const batchPixels = await restResponse.json();
+                allPixels = allPixels.concat(batchPixels);
+                
+                console.log(`✅ Loaded batch: ${batchPixels.length} pixels (total: ${allPixels.length})`);
+                
+                // Break if we got fewer pixels than expected (end of data)
+                if (batchPixels.length < batchSize) {
+                    console.log(`📊 Reached end of data at ${allPixels.length} pixels`);
+                    break;
+                }
+                
+                // Add small delay to prevent API rate limiting
+                await new Promise(resolve => setTimeout(resolve, 50));
             }
             
-            const pixels = await restResponse.json();
+            const pixels = allPixels;
             const error = null; // No error for successful REST response
             
             // Error handled by REST response check above

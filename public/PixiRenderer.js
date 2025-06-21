@@ -226,14 +226,14 @@ export class PixiRenderer {
         console.log('🎨 PixiJS render called');
         
         // 🔧 CRITICAL FIX: Render actual pixels from storage
-        this.renderFromPixelStorage();
+        await this.renderFromPixelStorage();
         
         // Also load LOD data if available
         this.loadVisibleSectors();
     }
     
     // 🚨 CRITICAL: Create pixel textures directly from PixelStorage
-    renderFromPixelStorage() {
+    async renderFromPixelStorage() {
         try {
             const pixelStorage = this.pixelCanvas.pixelStorage;
             if (!pixelStorage || pixelStorage.pixels.size === 0) {
@@ -248,29 +248,35 @@ export class PixiRenderer {
                 .filter(child => child.userData && child.userData.isPixel)
                 .forEach(pixel => this.viewport.removeChild(pixel));
             
-            // 🚀 LOD SYSTEM: Calculate visible bounds and pixel density
+            // 🚀 CRITICAL FIX: Ultra-lightweight LOD to prevent freezing
             const visibleBounds = this.getVisibleBounds();
             const scale = this.viewport.scale.x;
             
-            // Adaptive rendering based on zoom level
+            // EMERGENCY: Very aggressive LOD to prevent browser freeze
             let maxPixels, skipFactor;
-            if (scale > 2.0) {
-                // High zoom - render all visible pixels
-                maxPixels = 10000;
+            if (scale > 4.0) {
+                // Very high zoom - render visible pixels only
+                maxPixels = 500;
                 skipFactor = 1;
-            } else if (scale > 0.5) {
-                // Medium zoom - render every 2nd pixel
-                maxPixels = 5000;
+            } else if (scale > 2.0) {
+                // High zoom - render every 2nd pixel
+                maxPixels = 300;
                 skipFactor = 2;
-            } else {
-                // Low zoom - render every 4th pixel for performance
-                maxPixels = 2500;
+            } else if (scale > 1.0) {
+                // Medium zoom - render every 4th pixel
+                maxPixels = 200;
                 skipFactor = 4;
+            } else {
+                // Low zoom - render every 10th pixel for ultra performance
+                maxPixels = 100;
+                skipFactor = 10;
             }
             
             let rendered = 0;
             let skipped = 0;
+            const pixelBatch = [];
             
+            // First pass: collect pixels to render (fast)
             for (const [key, color] of pixelStorage.pixels) {
                 if (rendered >= maxPixels) break;
                 
@@ -278,39 +284,63 @@ export class PixiRenderer {
                 if (skipped++ % skipFactor !== 0) continue;
                 
                 const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
-                
-                // Convert to world coordinates
                 const worldX = sectorX * CONFIG.GRID_SIZE + localX;
                 const worldY = sectorY * CONFIG.GRID_SIZE + localY;
                 
-                // Culling: Skip pixels outside visible area
-                if (worldX < visibleBounds.x - 10 || worldX > visibleBounds.x + visibleBounds.width + 10 ||
-                    worldY < visibleBounds.y - 10 || worldY > visibleBounds.y + visibleBounds.height + 10) {
+                // Aggressive culling: Skip pixels far outside visible area
+                if (worldX < visibleBounds.x - 50 || worldX > visibleBounds.x + visibleBounds.width + 50 ||
+                    worldY < visibleBounds.y - 50 || worldY > visibleBounds.y + visibleBounds.height + 50) {
                     continue;
                 }
                 
+                pixelBatch.push({ worldX, worldY, color, skipFactor });
+                rendered++;
+            }
+            
+            console.log(`🎨 Processing ${pixelBatch.length} pixels in batches...`);
+            
+            // Second pass: render in small batches to avoid blocking
+            await this.renderPixelBatch(pixelBatch, skipFactor, scale);
+            
+        } catch (error) {
+            console.error('❌ PixiJS pixel rendering failed:', error);
+        }
+    }
+    
+    // 🚀 CRITICAL: Async batch rendering to prevent browser freeze
+    async renderPixelBatch(pixelBatch, skipFactor, scale) {
+        const batchSize = 50; // Render 50 pixels at a time
+        let rendered = 0;
+        
+        for (let i = 0; i < pixelBatch.length; i += batchSize) {
+            const batch = pixelBatch.slice(i, i + batchSize);
+            
+            // Render this batch
+            for (const pixel of batch) {
                 // Create pixel sprite with LOD-appropriate size
                 const graphics = new PIXI.Graphics();
-                graphics.beginFill(parseInt(CONFIG.PALETTE[color].replace('#', '0x')));
+                graphics.beginFill(parseInt(CONFIG.PALETTE[pixel.color].replace('#', '0x')));
                 
                 // Scale pixel size based on LOD
-                const pixelSize = Math.max(1, skipFactor / 2);
+                const pixelSize = Math.max(1, Math.min(4, skipFactor));
                 graphics.drawRect(0, 0, pixelSize, pixelSize);
                 graphics.endFill();
                 
-                graphics.x = worldX;
-                graphics.y = worldY;
+                graphics.x = pixel.worldX;
+                graphics.y = pixel.worldY;
                 graphics.userData = { isPixel: true };
                 
                 this.viewport.addChild(graphics);
                 rendered++;
             }
             
-            console.log(`✅ Rendered ${rendered} pixels with PixiJS (LOD skip factor: ${skipFactor}, scale: ${scale.toFixed(3)})`);
-            
-        } catch (error) {
-            console.error('❌ PixiJS pixel rendering failed:', error);
+            // Yield control back to browser every batch
+            if (i + batchSize < pixelBatch.length) {
+                await new Promise(resolve => setTimeout(resolve, 1));
+            }
         }
+        
+        console.log(`✅ Rendered ${rendered} pixels with PixiJS (LOD skip factor: ${skipFactor}, scale: ${scale.toFixed(3)})`);
     }
     
     trySetupTileMap() {
