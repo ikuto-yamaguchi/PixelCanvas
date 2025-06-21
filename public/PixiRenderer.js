@@ -142,8 +142,18 @@ export class PixiRenderer {
         try {
             console.log('🔧 Setting up simple container without Viewport dependency...');
             
-            // 🚨 CRITICAL FIX: Use basic PIXI Container instead of Viewport
+            // 🚨 CRITICAL FIX: Use basic PIXI Container with mock getVisibleBounds
             this.viewport = new PIXI.Container();
+            
+            // 🚨 CRITICAL: Add mock getVisibleBounds method to prevent errors
+            this.viewport.getVisibleBounds = () => {
+                return {
+                    x: -this.viewport.x / this.viewport.scale.x,
+                    y: -this.viewport.y / this.viewport.scale.y,
+                    width: this.app.screen.width / this.viewport.scale.x,
+                    height: this.app.screen.height / this.viewport.scale.y
+                };
+            };
             
             // Set initial position to show sector (0,0) where most pixels are
             this.viewport.x = 0;
@@ -653,15 +663,25 @@ export class PixiRenderer {
     }
     
     calculateVisibleBounds() {
-        if (!this.viewport) {
-            // Fallback if viewport not ready
+        if (!this.viewport || !this.viewport.getVisibleBounds) {
+            // 🚨 CRITICAL: Fallback if viewport not ready or method missing
+            console.log('⚠️ PIXI Viewport not ready, using fallback bounds');
             return {
                 minSectorX: -1, maxSectorX: 1,
                 minSectorY: -1, maxSectorY: 1
             };
         }
         
-        const bounds = this.viewport.getVisibleBounds();
+        let bounds;
+        try {
+            bounds = this.viewport.getVisibleBounds();
+        } catch (error) {
+            console.error('❌ PIXI Viewport.getVisibleBounds() failed:', error);
+            return {
+                minSectorX: -1, maxSectorX: 1,
+                minSectorY: -1, maxSectorY: 1
+            };
+        }
         const gridSize = CONFIG.GRID_SIZE; // PixiJS uses world coordinates directly
         
         console.log(`🔧 PIXI Viewport bounds:`, {
