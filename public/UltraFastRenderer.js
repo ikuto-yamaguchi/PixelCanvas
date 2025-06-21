@@ -1,4 +1,4 @@
-// 🎨 Ultra Fast Rendering Engine
+// Ultra Fast Rendering Engine
 // Target: 60fps with intelligent LOD + dirty region rendering
 
 import { CONFIG } from './Config.js';
@@ -9,33 +9,33 @@ export class UltraFastRenderer {
         this.ctx = canvas.getContext('2d');
         this.pixelStorage = pixelStorage;
         
-        // ImageData cache for ultra-fast pixel manipulation
-        this.imageData = null;
-        this.data = null;
-        this.width = 0;
-        this.height = 0;
-        
-        // LOD system
-        this.currentLOD = 0;
-        this.lodThresholds = [8.0, 4.0, 2.0, 1.0, 0.5]; // scale thresholds
-        
-        // Performance optimization
-        this.renderQueue = [];
-        this.dirtyRegions = new Set();
-        this.isRendering = false;
-        this.lastRenderTime = 0;
+        // Performance settings
         this.targetFPS = 60;
         this.frameTime = 1000 / this.targetFPS;
+        this.lastRenderTime = 0;
         
-        // Color palette (pre-computed RGBA values)
+        // LOD thresholds (scale values)
+        this.lodThresholds = [8, 4, 2, 1, 0.5, 0.25];
+        this.currentLOD = 0;
+        
+        // Canvas state
+        this.width = 0;
+        this.height = 0;
+        this.imageData = null;
+        this.data = null;
+        
+        // Color palette cache
         this.paletteRGBA = this.createPaletteCache();
         
-        // Statistics
+        // Dirty regions for differential rendering
+        this.dirtyRegions = new Set();
+        
+        // Performance stats
         this.stats = {
             frameCount: 0,
-            averageFPS: 0,
-            averageRenderTime: 0,
             pixelsRendered: 0,
+            averageRenderTime: 0,
+            averageFPS: 0,
             lodLevel: 0
         };
         
@@ -44,6 +44,308 @@ export class UltraFastRenderer {
         this.viewportChanged = true;
     }
     
-    // 🎨 メインレンダリング関数 (最適化済み)
-    render(viewport, scale) {\n        const renderStartTime = performance.now();
-        \n        // フレームレート制限\n        if (renderStartTime - this.lastRenderTime < this.frameTime) {\n            return; // Skip frame to maintain target FPS\n        }\n        \n        try {\n            // ビューポート変更検出\n            this.detectViewportChange(viewport);\n            \n            // キャンバスサイズ調整\n            this.resizeIfNeeded(viewport.width, viewport.height);\n            \n            // LODレベル計算\n            const lodLevel = this.calculateLOD(scale);\n            this.currentLOD = lodLevel;\n            \n            // 適応的レンダリング戦略選択\n            if (this.viewportChanged) {\n                this.renderFullViewport(viewport, scale, lodLevel);\n            } else if (this.dirtyRegions.size > 0) {\n                this.renderDirtyRegions(viewport, scale, lodLevel);\n            }\n            \n            // 統計更新\n            this.updateStats(renderStartTime);\n            \n            this.lastRenderTime = renderStartTime;\n            \n        } catch (error) {\n            console.error('❌ Render error:', error);\n        }\n    }\n    \n    // 🔍 LODレベル計算 (適応的)\n    calculateLOD(scale) {\n        for (let i = 0; i < this.lodThresholds.length; i++) {\n            if (scale >= this.lodThresholds[i]) {\n                return i;\n            }\n        }\n        return this.lodThresholds.length;\n    }\n    \n    // 🖼️ フルビューポートレンダリング\n    renderFullViewport(viewport, scale, lodLevel) {\n        console.log(`🎨 Full render: LOD${lodLevel}, scale: ${scale.toFixed(2)}`);\n        \n        // 背景クリア\n        this.clearCanvas();\n        \n        // LODに応じたピクセルサンプリング\n        const skipFactor = Math.pow(2, lodLevel);\n        const maxPixels = this.getMaxPixelsForLOD(lodLevel);\n        \n        // 表示範囲内のピクセル取得\n        const visiblePixels = this.getVisiblePixels(viewport, scale);\n        \n        // サンプリング + レンダリング\n        this.renderPixelsBatch(visiblePixels, viewport, scale, skipFactor, maxPixels);\n        \n        this.viewportChanged = false;\n        this.stats.pixelsRendered = Math.min(visiblePixels.length, maxPixels);\n    }\n    \n    // 🎯 差分領域レンダリング\n    renderDirtyRegions(viewport, scale, lodLevel) {\n        console.log(`🎯 Dirty render: ${this.dirtyRegions.size} regions`);\n        \n        for (const region of this.dirtyRegions) {\n            this.renderRegion(region, viewport, scale, lodLevel);\n        }\n        \n        this.dirtyRegions.clear();\n    }\n    \n    // 🔥 超高速ピクセルバッチレンダリング\n    renderPixelsBatch(pixels, viewport, scale, skipFactor, maxPixels) {\n        let rendered = 0;\n        const pixelSize = Math.max(1, Math.floor(scale));\n        \n        // ImageDataを直接操作\n        if (!this.data) return;\n        \n        for (let i = 0; i < pixels.length && rendered < maxPixels; i += skipFactor) {\n            const pixel = pixels[i];\n            \n            // ワールド座標からスクリーン座標\n            const screenX = Math.floor((pixel.worldX * scale) - viewport.x);\n            const screenY = Math.floor((pixel.worldY * scale) - viewport.y);\n            \n            // 境界チェック\n            if (screenX >= -pixelSize && screenX < this.width + pixelSize && \n                screenY >= -pixelSize && screenY < this.height + pixelSize) {\n                \n                this.drawPixelFast(screenX, screenY, pixel.color, pixelSize);\n                rendered++;\n            }\n        }\n        \n        // 一括更新\n        this.ctx.putImageData(this.imageData, 0, 0);\n        \n        console.log(`⚡ Rendered ${rendered} pixels (skip: ${skipFactor})`);\n    }\n    \n    // ⚡ 超高速ピクセル描画 (ImageData直接操作)\n    drawPixelFast(x, y, colorIndex, size) {\n        const color = this.paletteRGBA[colorIndex];\n        if (!color) return;\n        \n        // サイズに応じて描画\n        for (let dy = 0; dy < size; dy++) {\n            for (let dx = 0; dx < size; dx++) {\n                const px = x + dx;\n                const py = y + dy;\n                \n                if (px >= 0 && px < this.width && py >= 0 && py < this.height) {\n                    const index = (py * this.width + px) * 4;\n                    this.data[index] = color[0];     // R\n                    this.data[index + 1] = color[1]; // G\n                    this.data[index + 2] = color[2]; // B\n                    this.data[index + 3] = color[3]; // A\n                }\n            }\n        }\n    }\n    \n    // 🌈 カラーパレットキャッシュ作成\n    createPaletteCache() {\n        const cache = [];\n        \n        for (let i = 0; i < CONFIG.PALETTE.length; i++) {\n            const hex = CONFIG.PALETTE[i];\n            const r = parseInt(hex.slice(1, 3), 16);\n            const g = parseInt(hex.slice(3, 5), 16);\n            const b = parseInt(hex.slice(5, 7), 16);\n            cache[i] = [r, g, b, 255];\n        }\n        \n        return cache;\n    }\n    \n    // 👁️ 表示範囲ピクセル取得\n    getVisiblePixels(viewport, scale) {\n        // ワールド座標での表示範囲計算\n        const worldMinX = Math.floor(viewport.x / scale);\n        const worldMinY = Math.floor(viewport.y / scale);\n        const worldMaxX = Math.ceil((viewport.x + viewport.width) / scale);\n        const worldMaxY = Math.ceil((viewport.y + viewport.height) / scale);\n        \n        const visiblePixels = [];\n        \n        // PixelStorageから範囲内のピクセルを取得\n        for (const [key, color] of this.pixelStorage.pixels) {\n            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);\n            const worldX = sectorX * CONFIG.GRID_SIZE + localX;\n            const worldY = sectorY * CONFIG.GRID_SIZE + localY;\n            \n            if (worldX >= worldMinX && worldX <= worldMaxX && \n                worldY >= worldMinY && worldY <= worldMaxY) {\n                visiblePixels.push({\n                    worldX,\n                    worldY,\n                    color,\n                    key\n                });\n            }\n        }\n        \n        return visiblePixels;\n    }\n    \n    // 📏 キャンバスサイズ調整\n    resizeIfNeeded(width, height) {\n        if (this.width !== width || this.height !== height) {\n            this.width = width;\n            this.height = height;\n            \n            // 物理キャンバスサイズ更新\n            const dpr = window.devicePixelRatio || 1;\n            this.canvas.width = width * dpr;\n            this.canvas.height = height * dpr;\n            this.canvas.style.width = width + 'px';\n            this.canvas.style.height = height + 'px';\n            \n            this.ctx.scale(dpr, dpr);\n            \n            // ImageData再作成\n            this.imageData = this.ctx.createImageData(width, height);\n            this.data = this.imageData.data;\n            \n            console.log(`📏 Canvas resized: ${width}x${height} (DPR: ${dpr})`);\n        }\n    }\n    \n    // 🧹 キャンバスクリア\n    clearCanvas() {\n        if (this.data) {\n            // 高速メモリクリア\n            this.data.fill(0);\n        }\n    }\n    \n    // 🎯 領域レンダリング\n    renderRegion(region, viewport, scale, lodLevel) {\n        const regionPixels = this.getPixelsInRegion(region);\n        const skipFactor = Math.pow(2, lodLevel);\n        const maxPixels = 1000; // 領域あたりの最大ピクセル数\n        \n        this.renderPixelsBatch(regionPixels, viewport, scale, skipFactor, maxPixels);\n    }\n    \n    // 📊 領域内ピクセル取得\n    getPixelsInRegion(region) {\n        const pixels = [];\n        \n        for (const [key, color] of this.pixelStorage.pixels) {\n            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);\n            const worldX = sectorX * CONFIG.GRID_SIZE + localX;\n            const worldY = sectorY * CONFIG.GRID_SIZE + localY;\n            \n            if (worldX >= region.x && worldX < region.x + region.width &&\n                worldY >= region.y && worldY < region.y + region.height) {\n                pixels.push({ worldX, worldY, color, key });\n            }\n        }\n        \n        return pixels;\n    }\n    \n    // 🔍 ビューポート変更検出\n    detectViewportChange(viewport) {\n        if (!this.lastViewport) {\n            this.viewportChanged = true;\n            this.lastViewport = { ...viewport };\n            return;\n        }\n        \n        const threshold = 10; // 10ピクセル以上の移動で変更と判定\n        \n        this.viewportChanged = \n            Math.abs(viewport.x - this.lastViewport.x) > threshold ||\n            Math.abs(viewport.y - this.lastViewport.y) > threshold ||\n            viewport.width !== this.lastViewport.width ||\n            viewport.height !== this.lastViewport.height;\n            \n        if (this.viewportChanged) {\n            this.lastViewport = { ...viewport };\n        }\n    }\n    \n    // 🎯 ダーティ領域追加\n    addDirtyRegion(x, y, width = 10, height = 10) {\n        this.dirtyRegions.add({\n            x: Math.max(0, x - 5),\n            y: Math.max(0, y - 5),\n            width: width + 10,\n            height: height + 10\n        });\n    }\n    \n    // 📊 LODレベル別最大ピクセル数\n    getMaxPixelsForLOD(lodLevel) {\n        const maxPixels = [5000, 3000, 2000, 1000, 500, 250];\n        return maxPixels[lodLevel] || 100;\n    }\n    \n    // 📈 統計更新\n    updateStats(startTime) {\n        const renderTime = performance.now() - startTime;\n        this.stats.frameCount++;\n        this.stats.averageRenderTime = (this.stats.averageRenderTime + renderTime) / 2;\n        this.stats.lodLevel = this.currentLOD;\n        \n        // FPS計算 (1秒ごと)\n        if (this.stats.frameCount % 60 === 0) {\n            this.stats.averageFPS = 1000 / this.stats.averageRenderTime;\n            console.log(`📊 FPS: ${this.stats.averageFPS.toFixed(1)}, Render: ${this.stats.averageRenderTime.toFixed(1)}ms, LOD: ${this.currentLOD}`);\n        }\n    }\n    \n    // 📊 統計情報取得\n    getStats() {\n        return {\n            ...this.stats,\n            targetFPS: this.targetFPS,\n            dirtyRegions: this.dirtyRegions.size,\n            isOptimal: this.stats.averageFPS >= this.targetFPS * 0.9\n        };\n    }\n    \n    // 🧹 クリーンアップ\n    cleanup() {\n        this.dirtyRegions.clear();\n        this.renderQueue = [];\n        this.imageData = null;\n        this.data = null;\n        \n        console.log('🧹 UltraFastRenderer cleaned up');\n    }\n}
+    // Main rendering function (optimized)
+    render(viewport, scale) {
+        const renderStartTime = performance.now();
+        
+        // Frame rate limiting
+        if (renderStartTime - this.lastRenderTime < this.frameTime) {
+            return; // Skip frame to maintain target FPS
+        }
+        
+        try {
+            // Viewport change detection
+            this.detectViewportChange(viewport);
+            
+            // Canvas size adjustment
+            this.resizeIfNeeded(viewport.width, viewport.height);
+            
+            // LOD level calculation
+            const lodLevel = this.calculateLOD(scale);
+            this.currentLOD = lodLevel;
+            
+            // Adaptive rendering strategy selection
+            if (this.viewportChanged) {
+                this.renderFullViewport(viewport, scale, lodLevel);
+            } else if (this.dirtyRegions.size > 0) {
+                this.renderDirtyRegions(viewport, scale, lodLevel);
+            }
+            
+            // Update statistics
+            this.updateStats(renderStartTime);
+            
+            this.lastRenderTime = renderStartTime;
+            
+        } catch (error) {
+            console.error('Render error:', error);
+        }
+    }
+    
+    // LOD level calculation (adaptive)
+    calculateLOD(scale) {
+        for (let i = 0; i < this.lodThresholds.length; i++) {
+            if (scale >= this.lodThresholds[i]) {
+                return i;
+            }
+        }
+        return this.lodThresholds.length;
+    }
+    
+    // Full viewport rendering
+    renderFullViewport(viewport, scale, lodLevel) {
+        console.log(`Full render: LOD${lodLevel}, scale: ${scale.toFixed(2)}`);
+        
+        // Clear background
+        this.clearCanvas();
+        
+        // LOD-based pixel sampling
+        const skipFactor = Math.pow(2, lodLevel);
+        const maxPixels = this.getMaxPixelsForLOD(lodLevel);
+        
+        // Get visible pixels within range
+        const visiblePixels = this.getVisiblePixels(viewport, scale);
+        
+        // Sampling + rendering
+        this.renderPixelsBatch(visiblePixels, viewport, scale, skipFactor, maxPixels);
+        
+        this.viewportChanged = false;
+        this.stats.pixelsRendered = Math.min(visiblePixels.length, maxPixels);
+    }
+    
+    // Differential region rendering
+    renderDirtyRegions(viewport, scale, lodLevel) {
+        console.log(`Dirty render: ${this.dirtyRegions.size} regions`);
+        
+        for (const region of this.dirtyRegions) {
+            this.renderRegion(region, viewport, scale, lodLevel);
+        }
+        
+        this.dirtyRegions.clear();
+    }
+    
+    // Ultra-fast pixel batch rendering
+    renderPixelsBatch(pixels, viewport, scale, skipFactor, maxPixels) {
+        let rendered = 0;
+        const pixelSize = Math.max(1, Math.floor(scale));
+        
+        // Direct ImageData manipulation
+        if (!this.data) return;
+        
+        for (let i = 0; i < pixels.length && rendered < maxPixels; i += skipFactor) {
+            const pixel = pixels[i];
+            
+            // World coordinates to screen coordinates
+            const screenX = Math.floor((pixel.worldX * scale) - viewport.x);
+            const screenY = Math.floor((pixel.worldY * scale) - viewport.y);
+            
+            // Boundary check
+            if (screenX >= -pixelSize && screenX < this.width + pixelSize && 
+                screenY >= -pixelSize && screenY < this.height + pixelSize) {
+                
+                this.drawPixelFast(screenX, screenY, pixel.color, pixelSize);
+                rendered++;
+            }
+        }
+        
+        // Batch update
+        this.ctx.putImageData(this.imageData, 0, 0);
+        
+        console.log(`Rendered ${rendered} pixels (skip: ${skipFactor})`);
+    }
+    
+    // Ultra-fast pixel drawing (direct ImageData manipulation)
+    drawPixelFast(x, y, colorIndex, size) {
+        const color = this.paletteRGBA[colorIndex];
+        if (!color) return;
+        
+        // Draw according to size
+        for (let dy = 0; dy < size; dy++) {
+            for (let dx = 0; dx < size; dx++) {
+                const px = x + dx;
+                const py = y + dy;
+                
+                if (px >= 0 && px < this.width && py >= 0 && py < this.height) {
+                    const index = (py * this.width + px) * 4;
+                    this.data[index] = color[0];     // R
+                    this.data[index + 1] = color[1]; // G
+                    this.data[index + 2] = color[2]; // B
+                    this.data[index + 3] = color[3]; // A
+                }
+            }
+        }
+    }
+    
+    // Color palette cache creation
+    createPaletteCache() {
+        const cache = [];
+        
+        for (let i = 0; i < CONFIG.PALETTE.length; i++) {
+            const hex = CONFIG.PALETTE[i];
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            cache[i] = [r, g, b, 255];
+        }
+        
+        return cache;
+    }
+    
+    // Get visible pixels
+    getVisiblePixels(viewport, scale) {
+        // Calculate visible range in world coordinates
+        const worldMinX = Math.floor(viewport.x / scale);
+        const worldMinY = Math.floor(viewport.y / scale);
+        const worldMaxX = Math.ceil((viewport.x + viewport.width) / scale);
+        const worldMaxY = Math.ceil((viewport.y + viewport.height) / scale);
+        
+        const visiblePixels = [];
+        
+        // Get pixels within range from PixelStorage
+        for (const [key, color] of this.pixelStorage.pixels) {
+            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+            const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+            const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+            
+            if (worldX >= worldMinX && worldX <= worldMaxX && 
+                worldY >= worldMinY && worldY <= worldMaxY) {
+                visiblePixels.push({
+                    worldX,
+                    worldY,
+                    color,
+                    key
+                });
+            }
+        }
+        
+        return visiblePixels;
+    }
+    
+    // Canvas size adjustment
+    resizeIfNeeded(width, height) {
+        if (this.width !== width || this.height !== height) {
+            this.width = width;
+            this.height = height;
+            
+            // Update physical canvas size
+            const dpr = window.devicePixelRatio || 1;
+            this.canvas.width = width * dpr;
+            this.canvas.height = height * dpr;
+            this.canvas.style.width = width + 'px';
+            this.canvas.style.height = height + 'px';
+            
+            this.ctx.scale(dpr, dpr);
+            
+            // Recreate ImageData
+            this.imageData = this.ctx.createImageData(width, height);
+            this.data = this.imageData.data;
+            
+            console.log(`Canvas resized: ${width}x${height} (DPR: ${dpr})`);
+        }
+    }
+    
+    // Clear canvas
+    clearCanvas() {
+        if (this.data) {
+            // Fast memory clear
+            this.data.fill(0);
+        }
+    }
+    
+    // Region rendering
+    renderRegion(region, viewport, scale, lodLevel) {
+        const regionPixels = this.getPixelsInRegion(region);
+        const skipFactor = Math.pow(2, lodLevel);
+        const maxPixels = 1000; // Maximum pixels per region
+        
+        this.renderPixelsBatch(regionPixels, viewport, scale, skipFactor, maxPixels);
+    }
+    
+    // Get pixels within region
+    getPixelsInRegion(region) {
+        const pixels = [];
+        
+        for (const [key, color] of this.pixelStorage.pixels) {
+            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+            const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+            const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+            
+            if (worldX >= region.x && worldX < region.x + region.width &&
+                worldY >= region.y && worldY < region.y + region.height) {
+                pixels.push({ worldX, worldY, color, key });
+            }
+        }
+        
+        return pixels;
+    }
+    
+    // Viewport change detection
+    detectViewportChange(viewport) {
+        if (!this.lastViewport) {
+            this.viewportChanged = true;
+            this.lastViewport = { ...viewport };
+            return;
+        }
+        
+        const threshold = 10; // Movement of 10+ pixels is considered a change
+        
+        this.viewportChanged = 
+            Math.abs(viewport.x - this.lastViewport.x) > threshold ||
+            Math.abs(viewport.y - this.lastViewport.y) > threshold ||
+            viewport.width !== this.lastViewport.width ||
+            viewport.height !== this.lastViewport.height;
+            
+        if (this.viewportChanged) {
+            this.lastViewport = { ...viewport };
+        }
+    }
+    
+    // Add dirty region
+    addDirtyRegion(x, y, width = 10, height = 10) {
+        this.dirtyRegions.add({
+            x: Math.max(0, x - 5),
+            y: Math.max(0, y - 5),
+            width: width + 10,
+            height: height + 10
+        });
+    }
+    
+    // Maximum pixels per LOD level
+    getMaxPixelsForLOD(lodLevel) {
+        const maxPixels = [5000, 3000, 2000, 1000, 500, 250];
+        return maxPixels[lodLevel] || 100;
+    }
+    
+    // Update statistics
+    updateStats(startTime) {
+        const renderTime = performance.now() - startTime;
+        this.stats.frameCount++;
+        this.stats.averageRenderTime = (this.stats.averageRenderTime + renderTime) / 2;
+        this.stats.lodLevel = this.currentLOD;
+        
+        // FPS calculation (every second)
+        if (this.stats.frameCount % 60 === 0) {
+            this.stats.averageFPS = 1000 / this.stats.averageRenderTime;
+            console.log(`FPS: ${this.stats.averageFPS.toFixed(1)}, Render: ${this.stats.averageRenderTime.toFixed(1)}ms, LOD: ${this.currentLOD}`);
+        }
+    }
+    
+    // Get statistics
+    getStats() {
+        return {
+            ...this.stats,
+            targetFPS: this.targetFPS,
+            dirtyRegions: this.dirtyRegions.size,
+            isOptimal: this.stats.averageFPS >= this.targetFPS * 0.9
+        };
+    }
+    
+    // Cleanup
+    cleanup() {
+        this.dirtyRegions.clear();
+        this.renderQueue = [];
+        this.imageData = null;
+        this.data = null;
+        
+        console.log('UltraFastRenderer cleaned up');
+    }
+}
