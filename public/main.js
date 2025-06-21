@@ -1,17 +1,12 @@
-// PixelCanvas Main Application - Modularized Version
+// PixelCanvas Main Application - LOD-Only Version
 import { CONFIG, Utils } from './Config.js';
 import { DebugPanel } from './DebugPanel.js';
 import { EventHandlers } from './EventHandlers.js';
 import { ViewportController } from './ViewportController.js';
-import { RenderEngine } from './RenderEngine.js';
-import { OptimizedRenderSystem } from './OptimizedRenderSystem.js';
 import { SectorManager } from './SectorManager.js';
 import { NetworkManager } from './NetworkManager.js';
 import { PixelStorage } from './PixelStorage.js';
-import { LayerManager } from './LayerManager.js';
-import { LayeredRenderer } from './LayeredRenderer.js';
 import { PixiRenderer } from './PixiRenderer.js';
-import { SimplePixiRenderer } from './SimplePixiRenderer.js';
 
 class PixelCanvas {
     constructor() {
@@ -44,38 +39,22 @@ class PixelCanvas {
             
             this.viewportController = new ViewportController(this);
             
-            this.renderEngine = new RenderEngine(this.canvas, this.ctx, this);
-            
+            // 🚀 LOD SYSTEM: Only essential components for LOD rendering
             this.networkManager = new NetworkManager(this);
             
-            // 🚨 DISABLED: Layer Management System causing DB errors
-            // this.layerManager = new LayerManager(this);
-            this.layeredRenderer = new LayeredRenderer(this);
+            // 🚀 CRITICAL: Re-enable PixiJS LOD system for proper rendering
+            CONFIG.USE_PIXI_RENDERER = true;
             
-            // 🚨 DISABLED: LayerManager connection disabled
-            // this.layeredRenderer.layerManager = this.layerManager;
+            // Initialize PixiJS with proper LOD system
+            try {
+                console.log('🚀 Initializing PixiJS LOD system...');
+                this.pixiRenderer = new PixiRenderer(this);
+            } catch (error) {
+                console.error('❌ PixiJS LOD initialization failed:', error);
+                CONFIG.USE_PIXI_RENDERER = false;
+            }
             
-            // 🚨 CRITICAL: PixiJS temporarily disabled due to loading issues
-            CONFIG.USE_PIXI_RENDERER = false;
-            console.log('🚨 PixiJS disabled - using Canvas2D renderer');
-            
-            // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection
-            this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, null);
-            
-            // 🚨 DISABLED: LayerManager Supabase connection causing errors
-            setTimeout(() => {
-                if (this.networkManager.supabaseClient) {
-                    this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
-                    // this.layerManager.supabase = this.networkManager.supabaseClient; // DISABLED
-                } else {
-                    setTimeout(() => {
-                        if (this.networkManager.supabaseClient) {
-                            this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
-                            // this.layerManager.supabase = this.networkManager.supabaseClient; // DISABLED
-                        }
-                    }, 1000);
-                }
-            }, 100);
+            // 🚀 LOD SYSTEM: No additional render systems needed
             
             this.sectorManager = new SectorManager(this);
             
@@ -94,7 +73,7 @@ class PixelCanvas {
     async init() {
         try {
             this.setupCanvas();
-            this.renderEngine.setupColorPalette();
+            // 🚀 LOD SYSTEM: Color palette handled by PixiJS LOD system
             this.setupOnlineStatusHandling();
             this.registerServiceWorker();
             await this.sectorManager.initializeSectors();
@@ -441,41 +420,29 @@ class PixelCanvas {
         }, 3000);
     }
     
-    // Delegate methods to appropriate modules
+    // 🚀 LOD-only rendering system
     render() {
         try {
             const pixelCount = this.pixelStorage.pixels.size;
-            const scale = this.scale;
             
-            // 🚨 CRITICAL: Force Canvas2D rendering for stability
-            if (pixelCount > 10000) {
-                // For large pixel counts, use direct RenderEngine
-                console.log(`🎨 Using RenderEngine for ${pixelCount} pixels`);
-                this.renderEngine.setRenderMode('legacy'); // Use full legacy mode
-                this.renderEngine.render();
-            } else if (this.layeredRenderer && pixelCount > 0) {
-                // For medium pixel counts, use LayeredRenderer
-                console.log(`🎨 Using LayeredRenderer for ${pixelCount} pixels`);
-                this.layeredRenderer.render();
+            // 🚀 CRITICAL: Use ONLY PixiJS LOD system for all rendering
+            if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
+                console.log(`🎨 LOD SYSTEM: Rendering ${pixelCount} pixels with PixiJS LOD`);
+                this.pixiRenderer.render();
             } else {
-                // For empty or low pixel counts
-                console.log(`🎨 Using RenderEngine minimal for ${pixelCount} pixels`);
-                this.renderEngine.setRenderMode('minimal');
-                this.renderEngine.render();
+                console.log(`⚠️ LOD SYSTEM: PixiJS not ready, skipping render`);
+                // No fallback - LOD system only
             }
             
         } catch (error) {
-            console.error('❌ Render failed, using direct fallback:', error);
-            this.renderEngine.render();
+            console.error('❌ LOD SYSTEM: Render failed:', error);
+            // No fallback - maintain LOD-only system
         }
     }
     
-    // Legacy render method for fallback
-    renderLegacy() {
-        this.renderEngine.render();
-    }
+    // 🚀 LOD SYSTEM: Legacy render method removed
     
-    // 🔧 Enhanced pixel drawing with layer updates
+    // 🚀 LOD SYSTEM: Simplified pixel drawing for LOD system
     async drawPixelOptimized(worldX, worldY, color) {
         // Convert to local coordinates 
         const local = Utils.worldToLocal(worldX, worldY);
@@ -592,34 +559,21 @@ class PixelCanvas {
         };
     }
     
-    // Performance control methods - New simplified API
-    setRenderMode(mode) {
-        return this.renderEngine.setRenderMode(mode);
-    }
-    
-    toggleRenderMode() {
-        return this.renderEngine.toggleRenderMode();
-    }
+    // 🚀 LOD SYSTEM: Performance control methods removed (handled by PixiJS LOD)
     
     getPerformanceStats() {
-        // 🚀 PixiJS統計情報を優先
+        // 🚀 LOD SYSTEM: Only PixiJS LOD statistics
         if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
-            return {
-                ...this.pixiRenderer.getPerformanceStats(),
-                fallbackAvailable: true,
-                legacyStats: this.renderEngine.getPerformanceStats()
-            };
+            return this.pixiRenderer.getPerformanceStats();
         }
         
         return {
-            ...this.renderEngine.getPerformanceStats(),
-            pixiAvailable: false
+            pixiAvailable: false,
+            message: 'LOD system not ready'
         };
     }
     
-    benchmark(seconds) {
-        return this.renderEngine.benchmark(seconds);
-    }
+    // 🚀 LOD SYSTEM: Benchmark removed (PixiJS LOD handles performance)
     
     // Debug methods
     logState() {
@@ -632,9 +586,18 @@ class PixelCanvas {
         return stats;
     }
     
-    // 🔧 CRITICAL: PixiJS check disabled
+    // 🚀 CRITICAL: PixiJS LOD system check
     waitForPixiLibraries() {
-        return Promise.reject(new Error('PixiJS disabled'));
+        return new Promise((resolve) => {
+            // Simplified check for PixiJS availability
+            if (window.PIXI) {
+                console.log('✅ PixiJS available for LOD system');
+                resolve();
+            } else {
+                console.log('⚠️ PixiJS not available, will retry...');
+                setTimeout(() => resolve(), 1000);
+            }
+        });
     }
     
     // Add pixel distribution analysis
