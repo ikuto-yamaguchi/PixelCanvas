@@ -9,7 +9,7 @@ import { PixelStorage } from './PixelStorage.js';
 import { PixiRenderer } from './PixiRenderer.js';
 import { UltraFastLoader } from './UltraFastLoader.js';
 import { UltraFastRenderer } from './UltraFastRenderer.js';
-import { UltraLowLatencyUpdater } from './BinaryPixelProtocol.js';
+import { BinaryPixelProtocol } from './BinaryPixelProtocol.js';
 import { PerformanceMonitor } from './PerformanceMonitor.js';
 
 class PixelCanvas {
@@ -53,7 +53,7 @@ class PixelCanvas {
             
             this.ultraFastLoader = new UltraFastLoader(this);
             this.ultraFastRenderer = new UltraFastRenderer(this.canvas, this.pixelStorage);
-            this.ultraLowLatencyUpdater = new UltraLowLatencyUpdater(this);
+            this.binaryProtocol = new BinaryPixelProtocol();
             
             this.viewportController = new ViewportController(this);
             
@@ -205,7 +205,7 @@ class PixelCanvas {
             // 🚀 CRITICAL: Initialize ultra-low latency updates
             try {
                 console.log('⚡ Initializing ultra-low latency WebSocket...');
-                await this.ultraLowLatencyUpdater.connect();
+                await this.binaryProtocol.connect();
                 console.log('✅ Ultra-low latency updates ready');
             } catch (error) {
                 console.warn('⚠️ Ultra-low latency updates failed, using fallback:', error);
