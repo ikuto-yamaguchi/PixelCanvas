@@ -259,7 +259,7 @@ export class PixelStorage {
         }
         
         // Force a complete re-render to ensure pixel is drawn
-        this.pixelCanvas.render();
+        this.pixelCanvas.throttledRender();
         
         // Create pixel object for network transmission
         const pixel = { 
@@ -310,7 +310,7 @@ export class PixelStorage {
         }, 1000);
         
         // Re-render to show pixels
-        this.pixelCanvas.render();
+        this.pixelCanvas.throttledRender();
     }
     
     getStats() {

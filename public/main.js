@@ -30,6 +30,11 @@ class PixelCanvas {
         this.logicalWidth = 0;
         this.logicalHeight = 0;
         
+        // 🚨 EMERGENCY: Ultra-aggressive render throttling
+        this.lastRenderTime = 0;
+        this.renderThrottle = 100; // 10fps maximum
+        this.pendingRender = false;
+        
         // Initialize debug panel first to catch all errors
         this.debugPanel = DebugPanel.getInstance();
         
@@ -124,7 +129,7 @@ class PixelCanvas {
         this.canvas.style.height = rect.height + 'px';
         
         this.ctx.scale(dpr, dpr);
-        this.render();
+        this.throttledRender();
     }
     
     setupOnlineStatusHandling() {
@@ -200,14 +205,14 @@ class PixelCanvas {
                 this.forceViewportToSectorZero();
                 
                 // Multiple renders to ensure display with LOD optimization
-                this.render();
+                this.throttledRender();
                 setTimeout(() => {
                     console.log('🎨 Second render with LOD system...');
-                    this.render();
+                    this.throttledRender();
                 }, 200);
                 setTimeout(() => {
                     console.log('🎨 Final render to ensure all pixels visible...');
-                    this.render();
+                    this.throttledRender();
                 }, 1000);
             }
             
@@ -426,23 +431,106 @@ class PixelCanvas {
         }, 3000);
     }
     
-    // 🚀 LOD-only rendering system
+    // 🚀 EMERGENCY: Ultra-lightweight Canvas2D rendering to fix performance
     render() {
         try {
             const pixelCount = this.pixelStorage.pixels.size;
             
-            // 🚀 CRITICAL: Use ONLY PixiJS LOD system for all rendering
-            if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
-                console.log(`🎨 LOD SYSTEM: Rendering ${pixelCount} pixels with PixiJS LOD`);
-                this.pixiRenderer.render();
-            } else {
-                console.log(`⚠️ LOD SYSTEM: PixiJS not ready, skipping render`);
-                // No fallback - LOD system only
-            }
+            // 🚨 CRITICAL FIX: Switch to lightweight Canvas2D for performance
+            console.log(`🎨 EMERGENCY: Rendering ${pixelCount} pixels with ultra-light Canvas2D`);
+            this.renderUltraLight();
             
         } catch (error) {
             console.error('❌ LOD SYSTEM: Render failed:', error);
-            // No fallback - maintain LOD-only system
+        }
+    }
+    
+    // 🚨 EMERGENCY: Ultra-lightweight Canvas2D renderer
+    renderUltraLight() {
+        const ctx = this.ctx;
+        const pixelStorage = this.pixelStorage;
+        
+        // Clear canvas
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        if (pixelStorage.pixels.size === 0) return;
+        
+        // Ultra-aggressive LOD based on scale
+        let skipFactor, maxPixels;
+        if (this.scale > 4.0) {
+            skipFactor = 1; maxPixels = 2000;
+        } else if (this.scale > 2.0) {
+            skipFactor = 2; maxPixels = 1000;
+        } else if (this.scale > 1.0) {
+            skipFactor = 4; maxPixels = 500;
+        } else if (this.scale > 0.5) {
+            skipFactor = 8; maxPixels = 250;
+        } else {
+            skipFactor = 16; maxPixels = 100;
+        }
+        
+        let rendered = 0;
+        let skipped = 0;
+        
+        // Calculate visible area
+        const canvasWidth = this.logicalWidth || 800;
+        const canvasHeight = this.logicalHeight || 600;
+        const visibleMinX = -this.offsetX / (CONFIG.PIXEL_SIZE * this.scale);
+        const visibleMinY = -this.offsetY / (CONFIG.PIXEL_SIZE * this.scale);
+        const visibleMaxX = visibleMinX + canvasWidth / (CONFIG.PIXEL_SIZE * this.scale);
+        const visibleMaxY = visibleMinY + canvasHeight / (CONFIG.PIXEL_SIZE * this.scale);
+        
+        for (const [key, color] of pixelStorage.pixels) {
+            if (rendered >= maxPixels) break;
+            
+            // LOD skip
+            if (skipped++ % skipFactor !== 0) continue;
+            
+            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+            const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+            const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+            
+            // Aggressive culling
+            if (worldX < visibleMinX - 20 || worldX > visibleMaxX + 20 ||
+                worldY < visibleMinY - 20 || worldY > visibleMaxY + 20) {
+                continue;
+            }
+            
+            // Convert to screen coordinates
+            const screenX = worldX * CONFIG.PIXEL_SIZE * this.scale + this.offsetX;
+            const screenY = worldY * CONFIG.PIXEL_SIZE * this.scale + this.offsetY;
+            
+            // Skip if outside screen
+            if (screenX < -5 || screenX > canvasWidth + 5 || 
+                screenY < -5 || screenY > canvasHeight + 5) {
+                continue;
+            }
+            
+            // Draw pixel
+            ctx.fillStyle = CONFIG.PALETTE[color] || '#ffffff';
+            const pixelSize = Math.max(1, CONFIG.PIXEL_SIZE * this.scale);
+            ctx.fillRect(Math.floor(screenX), Math.floor(screenY), 
+                        Math.ceil(pixelSize), Math.ceil(pixelSize));
+            
+            rendered++;
+        }
+        
+        console.log(`✅ Ultra-light rendered ${rendered} pixels (skip: ${skipFactor}, scale: ${this.scale.toFixed(3)})`);
+    }
+    
+    // 🚨 EMERGENCY: Throttled render to prevent browser freeze
+    throttledRender() {
+        if (this.pendingRender) return;
+        
+        const now = performance.now();
+        if (now - this.lastRenderTime >= this.renderThrottle) {
+            this.pendingRender = true;
+            requestAnimationFrame(() => {
+                this.render();
+                this.lastRenderTime = performance.now();
+                this.pendingRender = false;
+            });
         }
     }
     

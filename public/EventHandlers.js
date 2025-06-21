@@ -23,10 +23,11 @@ export class EventHandlers {
             gestureEndTime: 0
         };
         
-        // PERFORMANCE FIX: Throttle rendering to prevent excessive calls
+        // 🚨 EMERGENCY: Ultra-aggressive throttle to prevent freezing
         this.lastRenderTime = 0;
-        this.renderThrottle = 16; // ~60 FPS limit
+        this.renderThrottle = 100; // 🚨 CRITICAL: 10 FPS limit to prevent browser freeze
         this.lastTouchMoveTime = 0; // Touch move throttling
+        this.pendingRender = false;
         
         // Mouse state
         this.mouseState = {
@@ -40,12 +41,18 @@ export class EventHandlers {
         this.setupEventListeners();
     }
     
-    // PERFORMANCE FIX: Throttled render method
+    // 🚨 EMERGENCY: Ultra-throttled render method with RAF
     throttledRender() {
+        if (this.pendingRender) return;
+        
         const now = performance.now();
         if (now - this.lastRenderTime >= this.renderThrottle) {
-            this.pixelCanvas.render();
-            this.lastRenderTime = now;
+            this.pendingRender = true;
+            requestAnimationFrame(() => {
+                this.pixelCanvas.render();
+                this.lastRenderTime = performance.now();
+                this.pendingRender = false;
+            });
         }
     }
     
@@ -62,7 +69,7 @@ export class EventHandlers {
             gridToggle.addEventListener('click', () => {
                 this.pixelCanvas.showGrid = !this.pixelCanvas.showGrid;
                 gridToggle.classList.toggle('active', this.pixelCanvas.showGrid);
-                this.pixelCanvas.render();
+                this.throttledRender();
             });
         }
     }
