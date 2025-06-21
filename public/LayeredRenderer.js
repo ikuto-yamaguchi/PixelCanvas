@@ -37,31 +37,18 @@ export class LayeredRenderer {
             const zoomLevel = this.pixelCanvas.scale;
             const bounds = this.calculateViewportBounds();
             
-            // 最適レイヤー決定
-            const optimalLayer = this.layerManager.getOptimalLayer(zoomLevel);
-            
-            // レイヤー切り替えチェック
-            const layerChanged = this.layerManager.switchToLayer(optimalLayer);
-            
-            // キャッシュチェック
-            if (!layerChanged && this.isCacheValid(optimalLayer, zoomLevel, bounds)) {
-                return; // キャッシュヒット
-            }
+            // 🚨 DISABLED: LayerManager operations disabled
+            // const optimalLayer = this.layerManager.getOptimalLayer(zoomLevel);
+            // const layerChanged = this.layerManager.switchToLayer(optimalLayer);
+            // Skip cache check since LayerManager is disabled
             
             // 画面クリア
             this.clearCanvas();
             
-            // レイヤーデータ読み込み（軽量）
-            const layerData = await this.layerManager.loadLayerData(optimalLayer, bounds);
-            
-            // レイヤーデータが空の場合は従来レンダリング
-            if (layerData.length === 0) {
-                console.log('📊 No layer data, using pixel storage rendering');
-                this.renderFromPixelStorage(bounds);
-            } else {
-                // レイヤー別レンダリング実行
-                await this.renderLayer(optimalLayer, layerData, bounds);
-            }
+            // 🚨 DISABLED: LayerManager completely disabled to prevent DB errors
+            // Always use PixelStorage direct rendering
+            console.log('📊 LayerManager disabled, using pixel storage rendering');
+            this.renderFromPixelStorage(bounds);
             
             // 🚨 DISABLED: Grid rendering completely disabled
             // if (this.pixelCanvas.showGrid) {

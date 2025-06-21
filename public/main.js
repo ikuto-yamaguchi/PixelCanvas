@@ -48,12 +48,12 @@ class PixelCanvas {
             
             this.networkManager = new NetworkManager(this);
             
-            // Initialize Layer Management System
-            this.layerManager = new LayerManager(this);
+            // 🚨 DISABLED: Layer Management System causing DB errors
+            // this.layerManager = new LayerManager(this);
             this.layeredRenderer = new LayeredRenderer(this);
             
-            // Connect LayeredRenderer to LayerManager
-            this.layeredRenderer.layerManager = this.layerManager;
+            // 🚨 DISABLED: LayerManager connection disabled
+            // this.layeredRenderer.layerManager = this.layerManager;
             
             // 🚨 CRITICAL: PixiJS temporarily disabled due to loading issues
             CONFIG.USE_PIXI_RENDERER = false;
@@ -62,16 +62,16 @@ class PixelCanvas {
             // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection
             this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, null);
             
-            // Supabaseクライアントを後で設定（Layer SystemとOptimized Rendererの両方に）
+            // 🚨 DISABLED: LayerManager Supabase connection causing errors
             setTimeout(() => {
                 if (this.networkManager.supabaseClient) {
                     this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
-                    this.layerManager.supabase = this.networkManager.supabaseClient;
+                    // this.layerManager.supabase = this.networkManager.supabaseClient; // DISABLED
                 } else {
                     setTimeout(() => {
                         if (this.networkManager.supabaseClient) {
                             this.optimizedRenderer.updateSupabaseClient(this.networkManager.supabaseClient);
-                            this.layerManager.supabase = this.networkManager.supabaseClient;
+                            // this.layerManager.supabase = this.networkManager.supabaseClient; // DISABLED
                         }
                     }, 1000);
                 }
@@ -489,21 +489,21 @@ class PixelCanvas {
             color
         );
         
-        // 🔧 NEW: Update upper layers for performance
-        if (this.layerManager && this.layerManager.supabase) {
-            try {
-                await this.layerManager.updateUpperLayers(
-                    local.sectorX,
-                    local.sectorY,
-                    local.localX,
-                    local.localY,
-                    color
-                );
-                console.log('🔧 Upper layers updated');
-            } catch (error) {
-                console.error('⚠️ Layer update failed:', error);
-            }
-        }
+        // 🚨 DISABLED: LayerManager update causing DB errors
+        // if (this.layerManager && this.layerManager.supabase) {
+        //     try {
+        //         await this.layerManager.updateUpperLayers(
+        //             local.sectorX,
+        //             local.sectorY,
+        //             local.localX,
+        //             local.localY,
+        //             color
+        //         );
+        //         console.log('🔧 Upper layers updated');
+        //     } catch (error) {
+        //         console.error('⚠️ Layer update failed:', error);
+        //     }
+        // }
         
         return result;
     }
