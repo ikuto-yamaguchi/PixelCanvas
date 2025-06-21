@@ -68,8 +68,8 @@ export class LayeredRenderer {
                 this.renderGrid(optimalLayer, bounds);
             }
             
-            // 🔧 FIXED: セクター境界線を常に表示（アクティブ/非アクティブの視覚化）
-            this.renderSectorInfo(bounds);
+            // 🚨 DISABLED: Sector info rendering to prevent shadows
+            // this.renderSectorInfo(bounds);
             
             // キャッシュ更新
             this.updateCache(optimalLayer, zoomLevel, bounds);
@@ -321,9 +321,12 @@ export class LayeredRenderer {
     }
     
     /**
-     * セクター情報描画 - Fixed coordinate transformation
+     * セクター情報描画 - 🚨 DISABLED to prevent visual artifacts
      */
     renderSectorInfo(bounds) {
+        // 🚨 CRITICAL: Completely disabled to prevent shadows
+        return;
+        
         // セクター境界線描画 - アクティブ/非アクティブで色分け
         this.ctx.lineWidth = 2;
         

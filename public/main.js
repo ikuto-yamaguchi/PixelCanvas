@@ -160,9 +160,11 @@ class PixelCanvas {
     }
     
     registerServiceWorker() {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(console.error);
-        }
+        // 🚨 DISABLED: Service Worker causing cache errors
+        console.log('🚨 Service Worker disabled to prevent cache errors');
+        // if ('serviceWorker' in navigator) {
+        //     navigator.serviceWorker.register('sw.js').catch(console.error);
+        // }
     }
     
     async loadInitialData() {
@@ -761,7 +763,7 @@ class PixelCanvas {
     
     // 🚨 EMERGENCY: 強制的にビューポートをセクター(0,0)に設定
     forceViewportToSectorZero() {
-        console.log('🎯 EMERGENCY: Forcing viewport to sector (0,0)...');
+        console.log('🚨 CRITICAL: Forcing viewport to sector (0,0) with maximum visibility...');
         
         // セクター(0,0)の中心を計算
         const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE; // 256 * 4 = 1024
@@ -778,10 +780,10 @@ class PixelCanvas {
         // セクター(0,0)は ワールド座標 (0,0) から (255,255) まで
         // その中心は (127.5, 127.5) * PIXEL_SIZE * scale = (510, 510) (scale=1の場合)
         
-        // 🚨 CRITICAL: Set appropriate scale to show full sector
-        // Scale calculation: fit 256x256 pixels (each 4x4) into viewport
-        const desiredScale = Math.min(canvasWidth / sectorSize, canvasHeight / sectorSize) * 0.9; // 90% to fill more screen
-        this.scale = Math.max(0.3, Math.min(2.0, desiredScale)); // Clamp between 0.3 and 2.0
+        // 🚨 CRITICAL: Fixed scale calculation for maximum visibility
+        // Calculate scale to show entire sector (256x256 world pixels = 1024x1024 screen pixels at scale 1)
+        const maxScale = Math.min(canvasWidth / sectorSize, canvasHeight / sectorSize) * 0.8;
+        this.scale = Math.max(0.5, Math.min(3.0, maxScale)); // Better range for visibility
         
         // オフセットを設定してセクター中心を画面中心に
         this.offsetX = screenCenterX - sectorCenterX * this.scale;

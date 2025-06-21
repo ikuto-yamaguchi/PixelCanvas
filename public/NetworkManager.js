@@ -533,19 +533,26 @@ export class NetworkManager {
                 return;
             }
             
-            // 🚨 CRITICAL: Load ALL pixels from sector (0,0)
-            console.log('📥 Loading ALL pixels from sector (0,0)...');
-            const { data: pixels, error } = await this.supabaseClient
-                .from('pixels')
-                .select('sector_x, sector_y, local_x, local_y, color')
-                .eq('sector_x', 0)
-                .eq('sector_y', 0)
-                .limit(100000); // Ensure we get all 65,536 pixels
+            // 🚨 CRITICAL: Use direct REST API to bypass client limitations
+            console.log('📥 Loading ALL pixels from sector (0,0) via REST API...');
             
-            if (error) {
-                console.error('❌ Error loading pixels:', error);
-                return;
+            const restResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=100000`, {
+                headers: {
+                    'apikey': CONFIG.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                    'Range': '0-99999',
+                    'Prefer': 'count=exact'
+                }
+            });
+            
+            if (!restResponse.ok) {
+                throw new Error(`REST API failed: ${restResponse.status} ${restResponse.statusText}`);
             }
+            
+            const pixels = await restResponse.json();
+            const error = null; // No error for successful REST response
+            
+            // Error handled by REST response check above
             
             if (!pixels || pixels.length === 0) {
                 console.warn('⚠️ No pixels returned from query');

@@ -49,8 +49,8 @@ export class RenderEngine {
             this.renderPixelsLegacy();
         }
         
-        // 🔧 FIXED: セクター境界線描画を復活（パフォーマンス最適化済み）
-        this.renderActiveSectorBounds();
+        // 🚨 DISABLED: Sector bounds rendering to prevent shadows
+        // this.renderActiveSectorBounds();
         
         // Update performance stats
         this.updatePerformanceStats(startTime);
@@ -171,11 +171,9 @@ export class RenderEngine {
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
-            // 🚨 EMERGENCY: 全ピクセル強制描画（境界チェック大幅緩和）
-            if (this.isPixelInBounds(world.x, world.y, visibleBounds) || pixelsRendered < 70000) {
-                this.renderPixel(world.x, world.y, color);
-                pixelsRendered++;
-            }
+            // 🚨 CRITICAL: Force render ALL pixels without bounds checking
+            this.renderPixel(world.x, world.y, color);
+            pixelsRendered++;
         }
         
         console.log(`✅ LEGACY RENDER - Actually rendered: ${pixelsRendered} pixels`);
@@ -203,24 +201,15 @@ export class RenderEngine {
             const [sectorX, sectorY, localX, localY] = Utils.parsePixelKey(key);
             const world = Utils.localToWorld(sectorX, sectorY, localX, localY);
             
-            // 🚨 EMERGENCY: 全ピクセル強制描画（境界チェック大幅緩和）
-            if (this.isPixelInBounds(world.x, world.y, bounds) || pixelsRendered < 70000) {
-                this.renderPixel(world.x, world.y, color);
-                pixelsRendered++;
-            }
+            // 🚨 CRITICAL: Force render ALL pixels without bounds checking
+            this.renderPixel(world.x, world.y, color);
+            pixelsRendered++;
         }
         
         console.log(`✅ MINIMAL RENDER - Actually rendered: ${pixelsRendered} pixels`);
         this.performanceStats.pixelsRendered = pixelsRendered;
         
-        // Show user that we're in emergency mode
-        if (pixelsRendered >= maxPixels) {
-            this.ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-            this.ctx.fillRect(0, 0, this.canvas.width, 30);
-            this.ctx.fillStyle = 'white';
-            this.ctx.font = '14px monospace';
-            this.ctx.fillText(`⚠️ EMERGENCY MODE: ${pixelsRendered}/${pixels.size} pixels shown`, 10, 20);
-        }
+        // 🚨 REMOVED: Emergency mode overlay removed to prevent shadows
     }
     
     renderPixel(worldX, worldY, colorIndex) {
@@ -240,6 +229,9 @@ export class RenderEngine {
     }
     
     renderActiveSectorBounds() {
+        // 🚨 CRITICAL: Completely disabled to prevent any visual artifacts
+        return;
+        
         const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE * this.pixelCanvas.scale;
         
         // Only show visual bounds when sectors are large enough to see
