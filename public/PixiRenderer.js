@@ -248,11 +248,34 @@ export class PixiRenderer {
                 .filter(child => child.userData && child.userData.isPixel)
                 .forEach(pixel => this.viewport.removeChild(pixel));
             
+            // 🚀 LOD SYSTEM: Calculate visible bounds and pixel density
+            const visibleBounds = this.getVisibleBounds();
+            const scale = this.viewport.scale.x;
+            
+            // Adaptive rendering based on zoom level
+            let maxPixels, skipFactor;
+            if (scale > 2.0) {
+                // High zoom - render all visible pixels
+                maxPixels = 10000;
+                skipFactor = 1;
+            } else if (scale > 0.5) {
+                // Medium zoom - render every 2nd pixel
+                maxPixels = 5000;
+                skipFactor = 2;
+            } else {
+                // Low zoom - render every 4th pixel for performance
+                maxPixels = 2500;
+                skipFactor = 4;
+            }
+            
             let rendered = 0;
-            const maxPixels = 1000; // Limit for performance
+            let skipped = 0;
             
             for (const [key, color] of pixelStorage.pixels) {
                 if (rendered >= maxPixels) break;
+                
+                // Skip pixels based on LOD level
+                if (skipped++ % skipFactor !== 0) continue;
                 
                 const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
                 
@@ -260,10 +283,19 @@ export class PixiRenderer {
                 const worldX = sectorX * CONFIG.GRID_SIZE + localX;
                 const worldY = sectorY * CONFIG.GRID_SIZE + localY;
                 
-                // Create pixel sprite
+                // Culling: Skip pixels outside visible area
+                if (worldX < visibleBounds.x - 10 || worldX > visibleBounds.x + visibleBounds.width + 10 ||
+                    worldY < visibleBounds.y - 10 || worldY > visibleBounds.y + visibleBounds.height + 10) {
+                    continue;
+                }
+                
+                // Create pixel sprite with LOD-appropriate size
                 const graphics = new PIXI.Graphics();
                 graphics.beginFill(parseInt(CONFIG.PALETTE[color].replace('#', '0x')));
-                graphics.drawRect(0, 0, 1, 1); // 1x1 pixel
+                
+                // Scale pixel size based on LOD
+                const pixelSize = Math.max(1, skipFactor / 2);
+                graphics.drawRect(0, 0, pixelSize, pixelSize);
                 graphics.endFill();
                 
                 graphics.x = worldX;
@@ -274,7 +306,7 @@ export class PixiRenderer {
                 rendered++;
             }
             
-            console.log(`✅ Rendered ${rendered} pixels with PixiJS`);
+            console.log(`✅ Rendered ${rendered} pixels with PixiJS (LOD skip factor: ${skipFactor}, scale: ${scale.toFixed(3)})`);
             
         } catch (error) {
             console.error('❌ PixiJS pixel rendering failed:', error);
@@ -316,6 +348,23 @@ export class PixiRenderer {
             this.lastScale = scale;
             this.throttledLoadSectors();
         }
+    }
+    
+    // 🚀 CRITICAL: Get visible bounds for culling
+    getVisibleBounds() {
+        if (!this.viewport) {
+            return { x: 0, y: 0, width: 800, height: 600 };
+        }
+        
+        const scale = this.viewport.scale.x;
+        const bounds = {
+            x: -this.viewport.x / scale,
+            y: -this.viewport.y / scale,
+            width: this.app.screen.width / scale,
+            height: this.app.screen.height / scale
+        };
+        
+        return bounds;
     }
     
     calculateLOD(scale) {

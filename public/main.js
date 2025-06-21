@@ -199,10 +199,16 @@ class PixelCanvas {
                 console.log(`🎯 Loaded ${this.pixelStorage.pixels.size} pixels, forcing viewport to (0,0)`);
                 this.forceViewportToSectorZero();
                 
-                // Multiple renders to ensure display
+                // Multiple renders to ensure display with LOD optimization
                 this.render();
-                setTimeout(() => this.render(), 100);
-                setTimeout(() => this.render(), 500);
+                setTimeout(() => {
+                    console.log('🎨 Second render with LOD system...');
+                    this.render();
+                }, 200);
+                setTimeout(() => {
+                    console.log('🎨 Final render to ensure all pixels visible...');
+                    this.render();
+                }, 1000);
             }
             
         } catch (error) {

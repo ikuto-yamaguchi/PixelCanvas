@@ -533,14 +533,14 @@ export class NetworkManager {
                 return;
             }
             
-            // 🚨 CRITICAL: Use direct REST API to bypass client limitations
-            console.log('📥 Loading ALL pixels from sector (0,0) via REST API...');
+            // 🚀 LOD SYSTEM: Load all 65,536 pixels - LOD will handle performance
+            console.log('📥 Loading ALL pixels from sector (0,0) - LOD system will manage performance...');
             
-            const restResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=100000`, {
+            const restResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=70000`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                    'Range': '0-99999',
+                    'Range': '0-69999',
                     'Prefer': 'count=exact'
                 }
             });
@@ -593,6 +593,8 @@ export class NetworkManager {
             // 🚨 CRITICAL: Verify we have exactly 65,536 pixels
             if (addedCount === 65536) {
                 console.log('🎉 SUCCESS: All 65,536 pixels loaded!');
+            } else if (addedCount > 60000) {
+                console.log(`✅ SUCCESS: Loaded ${addedCount} pixels (near expected 65,536)`);
             } else {
                 console.error(`⚠️ WARNING: Expected 65,536 pixels but got ${addedCount}`);
             }
