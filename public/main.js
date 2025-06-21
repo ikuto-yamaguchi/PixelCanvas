@@ -25,7 +25,7 @@ class PixelCanvas {
         this.scale = CONFIG.DEFAULT_SCALE;
         this.offsetX = 0;
         this.offsetY = 0;
-        this.showGrid = true;
+        this.showGrid = false; // 🚨 DISABLED: No grid lines
         this.activeSectors = new Set(); // Initialize empty, will be populated from database
         this.sectorPixelCounts = new Map(); // Track pixel count per sector
         this.isExpansionRunning = false;
@@ -252,12 +252,12 @@ class PixelCanvas {
             return;
         }
         
-        // Check if within active sectors
-        if (!this.sectorManager.isWithinActiveSectors(worldX, worldY)) {
-            console.error('🚫 Click outside active sectors:', {worldX, worldY, activeSectors: Array.from(this.activeSectors)});
-            this.showOutOfBoundsWarning();
-            return;
-        }
+        // 🚨 DISABLED: Allow clicking anywhere in sector (0,0)
+        // if (!this.sectorManager.isWithinActiveSectors(worldX, worldY)) {
+        //     console.error('🚫 Click outside active sectors:', {worldX, worldY, activeSectors: Array.from(this.activeSectors)});
+        //     this.showOutOfBoundsWarning();
+        //     return;
+        // }
         
         // Check if pixel already exists
         if (this.pixelStorage.hasPixel(local.sectorX, local.sectorY, local.localX, local.localY)) {

@@ -31,14 +31,14 @@ export class RenderEngine {
         
         // Clear with canvas background color
         this.ctx.fillStyle = getComputedStyle(document.documentElement)
-            .getPropertyValue('--color-canvas-bg').trim() || '#404040';
+            .getPropertyValue('--color-canvas-bg').trim() || '#000000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
         
-        // Render grid if enabled
-        if (this.pixelCanvas.showGrid) {
-            this.renderGrid();
-        }
+        // 🚨 DISABLED: Grid rendering completely disabled
+        // if (this.pixelCanvas.showGrid) {
+        //     this.renderGrid();
+        // }
         
         // Emergency minimal rendering to prevent freezing
         if (this.renderMode === 'minimal') {
@@ -270,13 +270,12 @@ export class RenderEngine {
                     const isActiveFromClient = this.pixelCanvas.activeSectors.has(sectorKey);
                     const isActive = isActiveFromDB || isActiveFromClient;
                     
-                    if (isActive && this.pixelCanvas.showGrid) {
-                        // Active sector - can draw here (green border) - only when grid is shown
-                        this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
-                    } else if (!isActive) {
-                        // Inactive sector - LOCKED (red border, dark overlay) - always show
-                        this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
-                    }
+                    // 🚨 DISABLED: All sector bounds rendering disabled
+                    // if (isActive && this.pixelCanvas.showGrid) {
+                    //     this.renderActiveSectorBounds_Active(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
+                    // } else if (!isActive) {
+                    //     this.renderActiveSectorBounds_Inactive(screenX, screenY, sectorSize, sectorX, sectorY, actualPixelCount);
+                    // }
                 }
             }
         }

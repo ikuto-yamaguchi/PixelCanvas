@@ -63,10 +63,10 @@ export class LayeredRenderer {
                 await this.renderLayer(optimalLayer, layerData, bounds);
             }
             
-            // グリッド描画
-            if (this.pixelCanvas.showGrid) {
-                this.renderGrid(optimalLayer, bounds);
-            }
+            // 🚨 DISABLED: Grid rendering completely disabled
+            // if (this.pixelCanvas.showGrid) {
+            //     this.renderGrid(optimalLayer, bounds);
+            // }
             
             // 🚨 DISABLED: Sector info rendering to prevent shadows
             // this.renderSectorInfo(bounds);
