@@ -49,7 +49,11 @@ class PixelCanvas {
             // 🚀 CRITICAL: Initialize Ultra Fast Systems
             this.performanceMonitor = new PerformanceMonitor();
             this.performanceMonitor.startMonitoring();
-            this.performanceMonitor.checkMobileOptimization();
+            // Check for mobile optimizations
+            const mobileOpts = this.performanceMonitor.getMobileOptimizations();
+            if (mobileOpts) {
+                console.log('📱 Mobile device detected, applying optimizations:', mobileOpts);
+            }
             
             this.ultraFastLoader = new UltraFastLoader(this);
             this.ultraFastRenderer = new UltraFastRenderer(this.canvas, this.pixelStorage);
