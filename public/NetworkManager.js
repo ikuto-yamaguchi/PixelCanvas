@@ -533,12 +533,14 @@ export class NetworkManager {
                 return;
             }
             
-            // 🚨 SIMPLIFIED: Load all pixels at once for debugging
-            console.log('📥 Loading all pixels...');
+            // 🚨 CRITICAL: Load ALL pixels from sector (0,0)
+            console.log('📥 Loading ALL pixels from sector (0,0)...');
             const { data: pixels, error } = await this.supabaseClient
                 .from('pixels')
                 .select('sector_x, sector_y, local_x, local_y, color')
-                .limit(70000); // Increased limit to handle all pixels
+                .eq('sector_x', 0)
+                .eq('sector_y', 0)
+                .limit(100000); // Ensure we get all 65,536 pixels
             
             if (error) {
                 console.error('❌ Error loading pixels:', error);
@@ -580,6 +582,13 @@ export class NetworkManager {
             
             console.log(`✅ Added ${addedCount} pixels to PixelStorage`);
             console.log(`📊 PixelStorage now contains ${this.pixelCanvas.pixelStorage.pixels.size} pixels`);
+            
+            // 🚨 CRITICAL: Verify we have exactly 65,536 pixels
+            if (addedCount === 65536) {
+                console.log('🎉 SUCCESS: All 65,536 pixels loaded!');
+            } else {
+                console.error(`⚠️ WARNING: Expected 65,536 pixels but got ${addedCount}`);
+            }
             
             // ピクセル数カウント表示更新
             if (this.pixelCanvas.updateStockDisplay) {

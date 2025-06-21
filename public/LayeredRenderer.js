@@ -353,17 +353,14 @@ export class LayeredRenderer {
                     if (isActive) {
                         // Active sector - green border
                         this.ctx.strokeStyle = 'rgba(76, 175, 80, 0.8)';
-                        this.ctx.fillStyle = 'rgba(76, 175, 80, 0.1)';
+                        // 🚨 REMOVED: No fill for active sectors
                     } else {
-                        // Inactive sector - red border with dark overlay
+                        // Inactive sector - red border only
                         this.ctx.strokeStyle = 'rgba(244, 67, 54, 0.8)';
-                        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                        // 🚨 REMOVED: No dark overlay for inactive sectors
                     }
                     
-                    // Draw filled rectangle for inactive sectors
-                    if (!isActive) {
-                        this.ctx.fillRect(screenX, screenY, size, size);
-                    }
+                    // 🚨 REMOVED: No filled rectangles to avoid shadows
                     
                     // Draw border
                     this.ctx.strokeRect(screenX, screenY, size, size);

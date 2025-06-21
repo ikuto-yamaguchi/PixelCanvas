@@ -55,26 +55,9 @@ class PixelCanvas {
             // Connect LayeredRenderer to LayerManager
             this.layeredRenderer.layerManager = this.layerManager;
             
-            // 🚀 FIXED: Wait for ALL PixiJS libraries before initializing
-            if (CONFIG.USE_PIXI_RENDERER) {
-                this.waitForPixiLibraries().then(() => {
-                    try {
-                        console.log('🔧 All PixiJS libraries ready, initializing renderer...');
-                        this.pixiRenderer = new PixiRenderer(this);
-                    } catch (error) {
-                        console.error('🔧 PixiJS renderer failed, trying fallback:', error);
-                        try {
-                            this.pixiRenderer = new SimplePixiRenderer(this);
-                        } catch (fallbackError) {
-                            console.error('🔧 All PixiJS renderers failed:', fallbackError);
-                            CONFIG.USE_PIXI_RENDERER = false;
-                        }
-                    }
-                }).catch(error => {
-                    console.error('🔧 PixiJS libraries failed to load:', error);
-                    CONFIG.USE_PIXI_RENDERER = false;
-                });
-            }
+            // 🚨 CRITICAL: PixiJS temporarily disabled due to loading issues
+            CONFIG.USE_PIXI_RENDERER = false;
+            console.log('🚨 PixiJS disabled - using Canvas2D renderer');
             
             // 🚀 NEW: Initialize Optimized Render System with delayed Supabase connection
             this.optimizedRenderer = new OptimizedRenderSystem(this.canvas, this.ctx, null);
@@ -124,9 +107,18 @@ class PixelCanvas {
             console.log('🧪 Adding manual test pixels...');
             this.addTestPixels();
             
-            // 🚨 EMERGENCY: 強制的にセクター(0,0)を表示
-            this.forceViewportToSectorZero();
-            this.viewportController.centerViewportOnActiveSectors();
+            // 🚨 CRITICAL: Force display sector (0,0) after everything is loaded
+            setTimeout(() => {
+                console.log('🎯 FORCE: Setting viewport to sector (0,0)...');
+                this.forceViewportToSectorZero();
+                this.render();
+                
+                // Double render to ensure pixels are displayed
+                setTimeout(() => {
+                    console.log('🎯 FORCE: Secondary render...');
+                    this.render();
+                }, 500);
+            }, 1000);
             
         } catch (error) {
             console.error('Init error:', error);
@@ -221,9 +213,15 @@ class PixelCanvas {
             
             console.log('✅ Initial data loading completed');
             
-            // 🚨 EMERGENCY: 確実にセクター(0,0)を表示
+            // 🚨 CRITICAL: Force display sector (0,0) with loaded pixels
             if (this.pixelStorage.pixels.size > 0) {
+                console.log(`🎯 Loaded ${this.pixelStorage.pixels.size} pixels, forcing viewport to (0,0)`);
                 this.forceViewportToSectorZero();
+                
+                // Multiple renders to ensure display
+                this.render();
+                setTimeout(() => this.render(), 100);
+                setTimeout(() => this.render(), 500);
             }
             
         } catch (error) {
@@ -444,41 +442,28 @@ class PixelCanvas {
     // Delegate methods to appropriate modules
     render() {
         try {
-            // 🔧 Smart renderer selection based on pixel count and zoom level
             const pixelCount = this.pixelStorage.pixels.size;
             const scale = this.scale;
             
-            // 🚨 DEBUGGING: Detailed pixel count information
-            console.log(`🔍 RENDER DEBUG - PixelStorage size: ${pixelCount}`);
-            console.log(`🔍 RENDER DEBUG - Legacy pixels fallback: ${this.pixels ? this.pixels.size : 'undefined'}`);
-            console.log(`🔍 RENDER DEBUG - Scale: ${scale.toFixed(2)}, USE_PIXI: ${CONFIG.USE_PIXI_RENDERER}`);
-            console.log(`🔍 RENDER DEBUG - PixiJS initialized: ${this.pixiRenderer?.isInitialized || false}`);
-            
-            // 🚀 PixiJS Performance Renderer (Re-enabled with proper conditions)
-            if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized && pixelCount > 500) {
-                console.log(`🎨 Using PixiJS Renderer (${pixelCount} pixels, scale: ${scale.toFixed(2)})`);
-                this.pixiRenderer.render();
-                return;
-            }
-            
-            // 🔧 LayeredRenderer (Primary for medium loads)
-            if (this.layeredRenderer && pixelCount > 0) {
-                console.log(`🎨 Using LayeredRenderer (${pixelCount} pixels, scale: ${scale.toFixed(2)})`);
+            // 🚨 CRITICAL: Force Canvas2D rendering for stability
+            if (pixelCount > 10000) {
+                // For large pixel counts, use direct RenderEngine
+                console.log(`🎨 Using RenderEngine for ${pixelCount} pixels`);
+                this.renderEngine.setRenderMode('legacy'); // Use full legacy mode
+                this.renderEngine.render();
+            } else if (this.layeredRenderer && pixelCount > 0) {
+                // For medium pixel counts, use LayeredRenderer
+                console.log(`🎨 Using LayeredRenderer for ${pixelCount} pixels`);
                 this.layeredRenderer.render();
-                return;
-            }
-            
-            // Legacy rendering (fallback for empty areas or low pixel counts)
-            console.log(`🎨 Using RenderEngine fallback (${pixelCount} pixels, scale: ${scale.toFixed(2)})`);
-            this.renderEngine.render();
-            
-            // Show pixel distribution info when in empty areas
-            if (pixelCount === 0) {
-                this.showPixelDistributionHint();
+            } else {
+                // For empty or low pixel counts
+                console.log(`🎨 Using RenderEngine minimal for ${pixelCount} pixels`);
+                this.renderEngine.setRenderMode('minimal');
+                this.renderEngine.render();
             }
             
         } catch (error) {
-            console.error('❌ Render failed, using legacy fallback:', error);
+            console.error('❌ Render failed, using direct fallback:', error);
             this.renderEngine.render();
         }
     }
@@ -645,49 +630,9 @@ class PixelCanvas {
         return stats;
     }
     
-    // 🔧 CRITICAL: Wait for all PixiJS libraries to load
+    // 🔧 CRITICAL: PixiJS check disabled
     waitForPixiLibraries() {
-        return new Promise((resolve, reject) => {
-            const maxAttempts = 50; // 5 seconds total
-            let attempts = 0;
-            
-            const checkLibraries = () => {
-                attempts++;
-                
-                const pixiReady = !!window.PIXI;
-                const tilemapReady = !!(window.PIXI && window.PIXI.tilemap);
-                const viewportReady = !!(
-                    (window.PIXI && window.PIXI.Viewport) ||
-                    window.Viewport
-                );
-                
-                console.log(`🔧 PixiJS library check ${attempts}/${maxAttempts}:`, {
-                    PIXI: pixiReady,
-                    tilemap: tilemapReady, 
-                    viewport: viewportReady
-                });
-                
-                if (pixiReady && tilemapReady && viewportReady) {
-                    // Ensure viewport is attached to PIXI
-                    if (window.Viewport && window.PIXI && !window.PIXI.Viewport) {
-                        window.PIXI.Viewport = window.Viewport;
-                    }
-                    
-                    console.log('✅ All PixiJS libraries ready!');
-                    resolve();
-                    return;
-                }
-                
-                if (attempts >= maxAttempts) {
-                    reject(new Error(`PixiJS libraries not ready after ${maxAttempts} attempts`));
-                    return;
-                }
-                
-                setTimeout(checkLibraries, 100);
-            };
-            
-            checkLibraries();
-        });
+        return Promise.reject(new Error('PixiJS disabled'));
     }
     
     // Add pixel distribution analysis
@@ -833,8 +778,10 @@ class PixelCanvas {
         // セクター(0,0)は ワールド座標 (0,0) から (255,255) まで
         // その中心は (127.5, 127.5) * PIXEL_SIZE * scale = (510, 510) (scale=1の場合)
         
-        // 適切なスケールを設定（全セクターが見えるように）
-        this.scale = Math.min(canvasWidth / sectorSize, canvasHeight / sectorSize) * 0.8; // 80%のマージン
+        // 🚨 CRITICAL: Set appropriate scale to show full sector
+        // Scale calculation: fit 256x256 pixels (each 4x4) into viewport
+        const desiredScale = Math.min(canvasWidth / sectorSize, canvasHeight / sectorSize) * 0.9; // 90% to fill more screen
+        this.scale = Math.max(0.3, Math.min(2.0, desiredScale)); // Clamp between 0.3 and 2.0
         
         // オフセットを設定してセクター中心を画面中心に
         this.offsetX = screenCenterX - sectorCenterX * this.scale;
