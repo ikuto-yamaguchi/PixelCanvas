@@ -7,6 +7,10 @@ import { SectorManager } from './SectorManager.js';
 import { NetworkManager } from './NetworkManager.js';
 import { PixelStorage } from './PixelStorage.js';
 import { PixiRenderer } from './PixiRenderer.js';
+import { UltraFastLoader } from './UltraFastLoader.js';
+import { UltraFastRenderer } from './UltraFastRenderer.js';
+import { UltraLowLatencyUpdater } from './BinaryPixelProtocol.js';
+import { PerformanceMonitor } from './PerformanceMonitor.js';
 
 class PixelCanvas {
     constructor() {
@@ -41,6 +45,15 @@ class PixelCanvas {
         try {
             // Initialize modules
             this.pixelStorage = new PixelStorage(this);
+            
+            // 🚀 CRITICAL: Initialize Ultra Fast Systems
+            this.performanceMonitor = new PerformanceMonitor();
+            this.performanceMonitor.startMonitoring();
+            this.performanceMonitor.checkMobileOptimization();
+            
+            this.ultraFastLoader = new UltraFastLoader(this);
+            this.ultraFastRenderer = new UltraFastRenderer(this.canvas, this.pixelStorage);
+            this.ultraLowLatencyUpdater = new UltraLowLatencyUpdater(this);
             
             this.viewportController = new ViewportController(this);
             
@@ -154,75 +167,63 @@ class PixelCanvas {
     async loadInitialData() {
         
         try {
-            console.log('🚀 Starting initial data loading...');
+            console.log('🚀 Starting ULTRA FAST loading system...');
             
-            // 🚨 DEBUGGING: Check PixelStorage before loading
-            console.log(`📊 PixelStorage before loading: ${this.pixelStorage.pixels.size} pixels`);
+            // 🚀 CRITICAL: Use UltraFastLoader instead of NetworkManager
+            const loadStartTime = performance.now();
             
-            // 🚨 CRITICAL: Ensure NetworkManager is properly initialized
-            console.log('🔧 NetworkManager status:', !!this.networkManager);
-            console.log('🔧 Supabase client status:', !!this.networkManager?.supabaseClient);
+            // Start progressive loading (0.5s → 3s → 10s)
+            await this.ultraFastLoader.startProgressiveLoad();
             
-            // Wait a moment for Supabase to initialize if needed
-            if (!this.networkManager.supabaseClient) {
-                console.log('⏳ Waiting for Supabase client...');
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                console.log('🔧 Supabase client after wait:', !!this.networkManager?.supabaseClient);
-            }
-            
-            // Await pixel loading to ensure completion
-            console.log('📥 Loading pixels from Supabase...');
-            await this.networkManager.loadPixelsFromSupabase();
-            
-            // 🚨 DEBUGGING: Check PixelStorage after loading
-            console.log(`📊 PixelStorage after loading: ${this.pixelStorage.pixels.size} pixels`);
+            const totalLoadTime = performance.now() - loadStartTime;
+            console.log(`🎉 ULTRA FAST loading completed in ${totalLoadTime.toFixed(0)}ms`);
             
             // 🚨 CRITICAL: Update display immediately
             if (this.pixelStorage.pixels.size > 0) {
-                console.log('📊 Updating pixel count display...');
+                console.log(`📊 Loaded ${this.pixelStorage.pixels.size} pixels, updating display...`);
                 this.pixelStorage.updateStockDisplay();
-            }
-            
-            // Force render to show loaded pixels
-            console.log('🎨 Forcing render after pixel loading...');
-            this.render();
-            
-            // Additional render after a short delay
-            setTimeout(() => {
-                console.log('🎨 Secondary render for good measure...');
-                this.render();
-            }, 500);
-            
-            // Load sector counts (for reference only, we use real-time counting) 
-            console.log('📊 Loading sector counts...');
-            await this.networkManager.loadSectorCounts();
-            
-            console.log('✅ Initial data loading completed');
-            
-            // 🚨 CRITICAL: Force display sector (0,0) with loaded pixels
-            if (this.pixelStorage.pixels.size > 0) {
-                console.log(`🎯 Loaded ${this.pixelStorage.pixels.size} pixels, forcing viewport to (0,0)`);
+                
+                // Force viewport to sector (0,0)
                 this.forceViewportToSectorZero();
                 
-                // Multiple renders to ensure display with LOD optimization
+                // Multiple renders for progressive enhancement
                 this.throttledRender();
-                setTimeout(() => {
-                    console.log('🎨 Second render with LOD system...');
-                    this.throttledRender();
-                }, 200);
-                setTimeout(() => {
-                    console.log('🎨 Final render to ensure all pixels visible...');
-                    this.throttledRender();
-                }, 1000);
+                setTimeout(() => this.throttledRender(), 100);
+                setTimeout(() => this.throttledRender(), 500);
             }
             
-        } catch (error) {
-            console.error('❌ Initial data loading failed:', error);
-            console.error('❌ Error details:', error.message, error.stack);
+            // Background: Load sector counts (low priority)
+            setTimeout(async () => {
+                try {
+                    console.log('📊 Loading sector counts in background...');
+                    await this.networkManager.loadSectorCounts();
+                } catch (error) {
+                    console.warn('Background sector loading failed:', error);
+                }
+            }, 2000);
             
-            // 🚨 EMERGENCY: Force render even on error
-            console.log('🚨 Forcing render despite loading error...');
-            this.render();
+            // 🚀 CRITICAL: Initialize ultra-low latency updates
+            try {
+                console.log('⚡ Initializing ultra-low latency WebSocket...');
+                await this.ultraLowLatencyUpdater.connect();
+                console.log('✅ Ultra-low latency updates ready');
+            } catch (error) {
+                console.warn('⚠️ Ultra-low latency updates failed, using fallback:', error);
+            }
+            
+            console.log('✅ Ultra fast initial data loading completed successfully');
+            
+        } catch (error) {
+            console.error('❌ Ultra fast loading failed:', error);
+            
+            // 🚨 FALLBACK: Try legacy loading
+            console.log('🔄 Falling back to legacy loading...');
+            try {
+                await this.networkManager.loadPixelsFromSupabase();
+                this.throttledRender();
+            } catch (fallbackError) {
+                console.error('❌ Fallback loading also failed:', fallbackError);
+            }
         }
     }
     
@@ -431,17 +432,29 @@ class PixelCanvas {
         }, 3000);
     }
     
-    // 🚀 EMERGENCY: Ultra-lightweight Canvas2D rendering to fix performance
+    // 🚀 ULTRA FAST: Ultra-lightweight rendering with intelligent LOD
     render() {
         try {
             const pixelCount = this.pixelStorage.pixels.size;
             
-            // 🚨 CRITICAL FIX: Switch to lightweight Canvas2D for performance
-            console.log(`🎨 EMERGENCY: Rendering ${pixelCount} pixels with ultra-light Canvas2D`);
-            this.renderUltraLight();
+            // 🚀 CRITICAL: Use UltraFastRenderer for maximum performance
+            if (this.ultraFastRenderer) {
+                const viewport = {
+                    x: -this.offsetX,
+                    y: -this.offsetY,
+                    width: this.logicalWidth || 800,
+                    height: this.logicalHeight || 600
+                };
+                
+                this.ultraFastRenderer.render(viewport, this.scale);
+            } else {
+                // Fallback to ultra-light rendering
+                console.log(`🎨 FALLBACK: Rendering ${pixelCount} pixels with ultra-light Canvas2D`);
+                this.renderUltraLight();
+            }
             
         } catch (error) {
-            console.error('❌ LOD SYSTEM: Render failed:', error);
+            console.error('❌ RENDER SYSTEM: Render failed:', error);
         }
     }
     
