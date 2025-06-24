@@ -81,6 +81,13 @@
     <!-- 🔧 ENHANCED: Reliable library loading with fallbacks -->
     <script src="idb.js"></script>
     
+    <!-- 🐛 ERROR LOGGER: Must load before other scripts -->
+    <script type="module">
+        import { ErrorLogger } from './ErrorLogger.js';
+        window.errorLogger = new ErrorLogger();
+        console.log('🐛 Error Logger initialized');
+    </script>
+    
     <!-- 🔧 CRITICAL: Enhanced Supabase loading with verification -->
     <script>
         // Supabase loading with retry and verification
