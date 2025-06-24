@@ -58,11 +58,11 @@ export class LayeredRenderer {
             // 🚨 DISABLED: Sector info rendering to prevent shadows
             // this.renderSectorInfo(bounds);
             
-            // キャッシュ更新
-            this.updateCache(optimalLayer, zoomLevel, bounds);
+            // 🚨 DISABLED: Cache update disabled due to LayerManager being disabled
+            // this.updateCache(optimalLayer, zoomLevel, bounds);
             
             const renderTime = performance.now() - startTime;
-            console.log(`🎯 Layer ${optimalLayer.name} rendered in ${renderTime.toFixed(1)}ms`);
+            console.log(`🎯 Layer rendering completed in ${renderTime.toFixed(1)}ms`);
             
         } catch (error) {
             console.error('❌ Layered render failed:', error);

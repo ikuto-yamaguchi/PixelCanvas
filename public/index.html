@@ -88,6 +88,13 @@
         console.log('🐛 Error Logger initialized');
     </script>
     
+    <!-- 🌐 FETCH HELPER: Load before NetworkManager -->
+    <script type="module">
+        import { FetchHelper } from './FetchHelper.js';
+        window.FetchHelper = FetchHelper;
+        console.log('🌐 Fetch Helper initialized');
+    </script>
+    
     <!-- 🔧 CRITICAL: Enhanced Supabase loading with verification -->
     <script>
         // Supabase loading with retry and verification

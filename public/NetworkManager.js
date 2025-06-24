@@ -108,8 +108,11 @@ export class NetworkManager {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'Prefer': 'return=minimal'
                 },
+                mode: 'cors',
+                credentials: 'omit',
                 body: JSON.stringify(pixelData)
             });
             
@@ -545,10 +548,15 @@ export class NetworkManager {
                 console.log(`📥 Loading batch ${Math.floor(offset/batchSize) + 1}/${Math.ceil(totalExpected/batchSize)} (offset: ${offset})`);
                 
                 const restResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=${batchSize}&offset=${offset}`, {
+                    method: 'GET',
                     headers: {
                         'apikey': CONFIG.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
-                    }
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
                 });
                 
                 if (!restResponse.ok) {

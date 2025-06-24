@@ -88,13 +88,17 @@ export class BinaryPixelProtocol {
     // Ultra-fast WebSocket connection
     async connect() {
         try {
-            // Supabase Realtime endpoint (binary compatible)
-            const wsUrl = `wss://lgvjdefkyeuvquzckkvb.supabase.co/realtime/v1/websocket?apikey=${CONFIG.SUPABASE_ANON_KEY}&vsn=1.0.0`;
+            // 🚨 DISABLED: WebSocket temporarily disabled due to connection issues
+            console.log('⚠️ WebSocket disabled - using HTTP polling fallback');
+            return Promise.resolve();
             
-            console.log('Connecting to ultra-fast WebSocket...');
-            this.ws = new WebSocket(wsUrl);
-            this.ws.binaryType = 'arraybuffer';
+            // Old WebSocket code disabled:
+            // const wsUrl = `wss://lgvjdefkyeuvquzckkvb.supabase.co/realtime/v1/websocket?apikey=${CONFIG.SUPABASE_ANON_KEY}&vsn=1.0.0`;
+            // this.ws = new WebSocket(wsUrl);
+            // this.ws.binaryType = 'arraybuffer';
             
+            // Disabled WebSocket connection logic
+            /*
             return new Promise((resolve, reject) => {
                 this.ws.onopen = () => {
                     console.log('Ultra-fast WebSocket connected');
@@ -120,6 +124,7 @@ export class BinaryPixelProtocol {
                     }
                 }, 5000);
             });
+            */
             
         } catch (error) {
             console.error('Failed to connect to WebSocket:', error);
