@@ -146,7 +146,8 @@ export class ErrorLogger {
                 <h2 style="margin: 0; color: #ff4444;">Error Log (${this.errors.length})</h2>
                 <div>
                     <button id="copyAllErrors" style="margin-right: 10px; padding: 5px 10px; background: #4CAF50; border: none; color: white; cursor: pointer;">📋 Copy All</button>
-                    <button id="clearErrors" style="margin-right: 10px; padding: 5px 10px; background: #f44336; border: none; color: white; cursor: pointer;">🗑️ Clear</button>
+                    <button id="clearOldErrors" style="margin-right: 10px; padding: 5px 10px; background: #ff9800; border: none; color: white; cursor: pointer;">🧹 Clear Old</button>
+                    <button id="clearErrors" style="margin-right: 10px; padding: 5px 10px; background: #f44336; border: none; color: white; cursor: pointer;">🗑️ Clear All</button>
                     <button id="closeErrorPanel" style="padding: 5px 10px; background: #666; border: none; color: white; cursor: pointer;">✕ Close</button>
                 </div>
             </div>
@@ -164,6 +165,7 @@ export class ErrorLogger {
 
         // イベントリスナー設定
         document.getElementById('copyAllErrors').addEventListener('click', () => this.copyAllErrors());
+        document.getElementById('clearOldErrors').addEventListener('click', () => this.clearOldErrors());
         document.getElementById('clearErrors').addEventListener('click', () => this.clearErrors());
         document.getElementById('closeErrorPanel').addEventListener('click', () => this.toggleUI());
     }
@@ -278,6 +280,19 @@ ${'-'.repeat(80)}
         }).join('\n');
 
         return header + errorDetails;
+    }
+
+    clearOldErrors() {
+        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+        const oldCount = this.errors.length;
+        this.errors = this.errors.filter(error => {
+            const errorTime = new Date(error.timestamp).getTime();
+            return errorTime > oneHourAgo;
+        });
+        const removedCount = oldCount - this.errors.length;
+        this.saveToStorage();
+        this.updateUI();
+        this.showToast(`🧹 Removed ${removedCount} old errors`);
     }
 
     clearErrors() {

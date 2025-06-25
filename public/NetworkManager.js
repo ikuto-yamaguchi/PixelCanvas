@@ -547,17 +547,34 @@ export class NetworkManager {
             for (let offset = 0; offset < totalExpected; offset += batchSize) {
                 console.log(`📥 Loading batch ${Math.floor(offset/batchSize) + 1}/${Math.ceil(totalExpected/batchSize)} (offset: ${offset})`);
                 
-                const restResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=${batchSize}&offset=${offset}`, {
-                    method: 'GET',
-                    headers: {
-                        'apikey': CONFIG.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    mode: 'cors',
-                    credentials: 'omit'
-                });
+                let restResponse;
+                try {
+                    const url = `${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=${batchSize}&offset=${offset}`;
+                    console.log(`🌐 Attempting fetch to: ${url}`);
+                    
+                    restResponse = await fetch(url, {
+                        method: 'GET',
+                        headers: {
+                            'apikey': CONFIG.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        mode: 'cors',
+                        credentials: 'omit'
+                    });
+                    
+                    console.log(`📊 Fetch response status: ${restResponse.status}`);
+                } catch (fetchError) {
+                    console.error(`🚨 Fetch error details:`, {
+                        message: fetchError.message,
+                        name: fetchError.name,
+                        stack: fetchError.stack,
+                        url: CONFIG.SUPABASE_URL,
+                        apiKey: CONFIG.SUPABASE_ANON_KEY ? 'Present' : 'Missing'
+                    });
+                    throw fetchError;
+                }
                 
                 if (!restResponse.ok) {
                     console.error(`❌ Batch ${Math.floor(offset/batchSize) + 1} failed: ${restResponse.status}`);

@@ -145,7 +145,7 @@ export class PixiRenderer {
             // 🚨 CRITICAL FIX: Use basic PIXI Container with mock getVisibleBounds
             this.viewport = new PIXI.Container();
             
-            // 🚨 CRITICAL: Add mock getVisibleBounds method to prevent errors
+            // 🚨 CRITICAL: Add mock methods to prevent errors
             this.viewport.getVisibleBounds = () => {
                 return {
                     x: -this.viewport.x / this.viewport.scale.x,
@@ -153,6 +153,12 @@ export class PixiRenderer {
                     width: this.app.screen.width / this.viewport.scale.x,
                     height: this.app.screen.height / this.viewport.scale.y
                 };
+            };
+            
+            // 🚨 CRITICAL: Add mock resize method
+            this.viewport.resize = (width, height) => {
+                // Mock resize - PIXI Container doesn't need resizing
+                console.log(`🔧 Mock viewport resize: ${width}x${height}`);
             };
             
             // Set initial position to show sector (0,0) where most pixels are
