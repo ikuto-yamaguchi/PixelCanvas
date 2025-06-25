@@ -1,5 +1,7 @@
 // SupabaseTest.js - Supabase接続テスト用ユーティリティ
 
+import { CONFIG } from './Config.js';
+
 export class SupabaseTest {
     static async testConnection() {
         console.log('🧪 Testing Supabase connection...');
