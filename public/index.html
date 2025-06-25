@@ -41,9 +41,6 @@
                     <path d="M2 2h6v6H2V2zm10 0h6v6h-6V2zM2 12h6v6H2v-6zm10 0h6v6h-6v-6z" stroke="currentColor" stroke-width="1"/>
                 </svg>
             </button>
-            <button onclick="forceLoadPixels()" style="font-size:10px; padding:2px 4px; background:#ff4444; color:white; border:none; border-radius:3px; margin:0 2px;">🚨 Force DB</button>
-            <button onclick="clearTestPixels()" style="font-size:10px; padding:2px 4px; background:#44ff44; color:white; border:none; border-radius:3px; margin:0 2px;">🧹 Clear</button>
-            <button onclick="forceTestRender()" style="font-size:10px; padding:2px 4px; background:#9C27B0; color:white; border:none; border-radius:3px; margin:0 2px;">🧪 Test Render</button>
             <div class="pixel-count" id="pixelCount">0px</div>
             <div class="cooldown-indicator" id="cooldownIndicator"></div>
             <span class="status-indicator" id="status"></span>
@@ -82,12 +79,6 @@
     <!-- 🔧 ENHANCED: Reliable library loading with fallbacks -->
     <script src="idb.js"></script>
     
-    <!-- 🐛 ERROR LOGGER: Must load before other scripts -->
-    <script type="module">
-        import { ErrorLogger } from './ErrorLogger.js';
-        window.errorLogger = new ErrorLogger();
-        console.log('🐛 Error Logger initialized');
-    </script>
     
     <!-- 🌐 FETCH HELPER: Load before NetworkManager -->
     <script type="module">
@@ -96,28 +87,6 @@
         console.log('🌐 Fetch Helper initialized');
     </script>
     
-    <!-- 🧪 SUPABASE TEST: Debug connection issues -->
-    <script type="module">
-        import { SupabaseTest } from './SupabaseTest.js';
-        window.SupabaseTest = SupabaseTest;
-        console.log('🧪 Supabase Test initialized');
-    </script>
-    
-    <!-- 🔍 DIAGNOSTIC PANEL: Comprehensive debugging -->
-    <script type="module">
-        import { DiagnosticPanel } from './DiagnosticPanel.js';
-        window.diagnosticPanel = new DiagnosticPanel();
-        console.log('🔍 Diagnostic Panel initialized');
-        
-        // 強制テストレンダリング機能
-        window.forceTestRender = DiagnosticPanel.forceTestRender;
-    </script>
-    
-    <!-- 📱 MOBILE VIEWPORT FIX -->
-    <script type="module">
-        import { createFixViewportButton } from './forceViewportFix.js';
-        console.log('📱 Mobile viewport fix loaded');
-    </script>
     
     <!-- 🔧 CRITICAL: Enhanced Supabase loading with verification -->
     <script>
@@ -233,33 +202,6 @@
             }, 1000);
         });
         
-        // Force load pixels from database
-        async function forceLoadPixels() {
-            console.log('🚨 MANUAL: Force load pixels button clicked');
-            if (pixelCanvasInstance && pixelCanvasInstance.forceLoadSupabasePixels) {
-                try {
-                    await pixelCanvasInstance.forceLoadSupabasePixels();
-                    console.log('✅ MANUAL: Force load completed');
-                } catch (error) {
-                    console.error('❌ MANUAL: Force load failed:', error);
-                }
-            } else {
-                console.error('❌ MANUAL: PixelCanvas instance not available');
-            }
-        }
-        
-        // Clear all pixels
-        function clearTestPixels() {
-            console.log('🧹 MANUAL: Clear pixels button clicked');
-            if (pixelCanvasInstance && pixelCanvasInstance.pixelStorage) {
-                pixelCanvasInstance.pixelStorage.pixels.clear();
-                pixelCanvasInstance.pixelStorage.updateStockDisplay();
-                pixelCanvasInstance.render();
-                console.log('✅ MANUAL: Pixels cleared');
-            } else {
-                console.error('❌ MANUAL: PixelCanvas instance not available');
-            }
-        }
     </script>
 </body>
 </html>
