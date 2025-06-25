@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelCanvas Diagnostic Test</title>
+    <style>
+        body { 
+            font-family: monospace; 
+            background: #1a1a1a; 
+            color: white; 
+            padding: 20px; 
+        }
+        .status { 
+            margin: 10px 0; 
+            padding: 10px; 
+            background: #333; 
+            border-radius: 5px; 
+        }
+        .success { background: #2d5a2d; }
+        .error { background: #5a2d2d; }
+        .warning { background: #5a5a2d; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 PixelCanvas 診断テスト</h1>
+    
+    <div id="status" class="status">
+        <h3>🚀 初期化中...</h3>
+        <div id="progress"></div>
+    </div>
+    
+    <div style="margin: 20px 0;">
+        <button onclick="testPixelLoading()">🧪 ピクセル読み込みテスト</button>
+        <button onclick="testSupabaseConnection()">🌐 Supabase接続テスト</button>
+        <button onclick="testRenderSystem()">🎨 レンダリングテスト</button>
+        <button onclick="showFullDiagnostic()">📊 完全診断</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <!-- Load essential dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="module">
+        import { CONFIG } from './Config.js';
+        import { NetworkManager } from './NetworkManager.js';
+        import { PixelStorage } from './PixelStorage.js';
+        import { SupabaseTest } from './SupabaseTest.js';
+        
+        window.CONFIG = CONFIG;
+        
+        // Initialize basic systems for testing
+        const mockPixelCanvas = {
+            pixelStorage: new PixelStorage({ deviceId: 'test' }),
+            activeSectors: new Set(['0,0']),
+            sectorPixelCounts: new Map(),
+            debugPanel: { log: console.log }
+        };
+        
+        const networkManager = new NetworkManager(mockPixelCanvas);
+        
+        window.testPixelLoading = async function() {
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+            
+            status.innerHTML = '<h3>🔄 ピクセル読み込みテスト実行中...</h3>';
+            status.className = 'status warning';
+            
+            try {
+                console.log('🧪 Starting pixel loading test...');
+                
+                // Test direct Supabase connection
+                const testUrl = `${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=count&limit=1`;
+                const response = await fetch(testUrl, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('📊 Supabase response:', data);
+                
+                // Test pixel loading
+                await networkManager.loadPixelsFromSupabase();
+                
+                const pixelCount = mockPixelCanvas.pixelStorage.pixels.size;
+                console.log(`📦 Loaded ${pixelCount} pixels`);
+                
+                status.innerHTML = `<h3>✅ テスト完了</h3><p>読み込んだピクセル数: ${pixelCount}</p>`;
+                status.className = 'status success';
+                
+                // Show sample pixels
+                const samplePixels = Array.from(mockPixelCanvas.pixelStorage.pixels.entries()).slice(0, 10);
+                results.innerHTML = `
+                    <h4>📋 サンプルピクセル (最初の10個):</h4>
+                    <pre>${JSON.stringify(samplePixels, null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                console.error('❌ Test failed:', error);
+                status.innerHTML = `<h3>❌ テスト失敗</h3><p>${error.message}</p>`;
+                status.className = 'status error';
+                
+                results.innerHTML = `
+                    <h4>🚨 エラー詳細:</h4>
+                    <pre>${error.stack}</pre>
+                `;
+            }
+        };
+        
+        window.testSupabaseConnection = async function() {
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+            
+            status.innerHTML = '<h3>🔄 Supabase接続テスト実行中...</h3>';
+            status.className = 'status warning';
+            
+            try {
+                const connectionOk = await SupabaseTest.testConnection();
+                if (connectionOk) {
+                    const pixels = await SupabaseTest.testPixelQuery();
+                    
+                    status.innerHTML = `<h3>✅ 接続成功</h3><p>サンプルピクセル数: ${pixels?.length || 0}</p>`;
+                    status.className = 'status success';
+                    
+                    results.innerHTML = `
+                        <h4>📋 サンプルピクセルデータ:</h4>
+                        <pre>${JSON.stringify(pixels?.slice(0, 5), null, 2)}</pre>
+                    `;
+                } else {
+                    throw new Error('Supabase connection failed');
+                }
+            } catch (error) {
+                status.innerHTML = `<h3>❌ 接続失敗</h3><p>${error.message}</p>`;
+                status.className = 'status error';
+            }
+        };
+        
+        window.testRenderSystem = async function() {
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+            
+            status.innerHTML = '<h3>🔄 レンダリングテスト実行中...</h3>';
+            status.className = 'status warning';
+            
+            // Create test canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = 400;
+            canvas.height = 300;
+            canvas.style.border = '1px solid white';
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Test rendering
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw test pixels
+            const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00'];
+            for (let i = 0; i < 4; i++) {
+                ctx.fillStyle = colors[i];
+                ctx.fillRect(50 + i * 30, 50, 20, 20);
+            }
+            
+            status.innerHTML = '<h3>✅ レンダリングテスト完了</h3>';
+            status.className = 'status success';
+            
+            results.innerHTML = '';
+            results.appendChild(canvas);
+        };
+        
+        window.showFullDiagnostic = async function() {
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+            
+            status.innerHTML = '<h3>🔄 完全診断実行中...</h3>';
+            status.className = 'status warning';
+            
+            const diagnostic = {
+                timestamp: new Date().toISOString(),
+                supabaseAvailable: !!window.supabase,
+                configLoaded: !!window.CONFIG,
+                pixelStorageSize: mockPixelCanvas.pixelStorage.pixels.size,
+                activeSectors: Array.from(mockPixelCanvas.activeSectors),
+                browserInfo: {
+                    userAgent: navigator.userAgent,
+                    onLine: navigator.onLine,
+                    language: navigator.language
+                }
+            };
+            
+            status.innerHTML = '<h3>📊 診断完了</h3>';
+            status.className = 'status success';
+            
+            results.innerHTML = `
+                <h4>🔍 完全診断結果:</h4>
+                <pre>${JSON.stringify(diagnostic, null, 2)}</pre>
+            `;
+        };
+        
+        // Auto-run basic diagnostic on load
+        window.addEventListener('load', () => {
+            setTimeout(showFullDiagnostic, 1000);
+        });
+        
+        console.log('🧪 Diagnostic test page loaded');
+    </script>
+</body>
+</html>

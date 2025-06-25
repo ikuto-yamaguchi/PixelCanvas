@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Pixel Loading Fix Test</title>
+    <style>
+        body { 
+            background: #1a1a1a; 
+            color: white; 
+            font-family: monospace; 
+            padding: 20px; 
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            border-radius: 5px;
+        }
+        .success { border-color: #4CAF50; background: rgba(76, 175, 80, 0.1); }
+        .error { border-color: #f44336; background: rgba(244, 67, 54, 0.1); }
+        .progress { border-color: #2196F3; background: rgba(33, 150, 243, 0.1); }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #console {
+            background: #000;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 PixelCanvas 修正テスト</h1>
+    
+    <div class="test-section progress" id="status">
+        <h3>🚀 初期化中...</h3>
+        <p>依存関係の読み込み待機中...</p>
+    </div>
+    
+    <div style="margin: 20px 0;">
+        <button onclick="testNetworkManagerLoading()">🧪 NetworkManager読み込みテスト</button>
+        <button onclick="testRenderingSystem()">🎨 レンダリングテスト</button>
+        <button onclick="clearConsole()">🧹 コンソールクリア</button>
+    </div>
+    
+    <div class="test-section">
+        <h4>📄 コンソール出力:</h4>
+        <div id="console"></div>
+    </div>
+    
+    <!-- Load Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script type="module">
+        import { CONFIG } from './Config.js';
+        import { NetworkManager } from './NetworkManager.js';
+        import { PixelStorage } from './PixelStorage.js';
+        
+        // Console capture
+        const consoleDiv = document.getElementById('console');
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        function addToConsole(type, ...args) {
+            const timestamp = new Date().toLocaleTimeString();
+            const line = `[${timestamp}] ${type}: ${args.join(' ')}\n`;
+            consoleDiv.textContent += line;
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        console.log = (...args) => {
+            originalLog.apply(console, args);
+            addToConsole('LOG', ...args);
+        };
+        
+        console.error = (...args) => {
+            originalError.apply(console, args);
+            addToConsole('ERROR', ...args);
+        };
+        
+        console.warn = (...args) => {
+            originalWarn.apply(console, args);
+            addToConsole('WARN', ...args);
+        };
+        
+        let mockPixelCanvas = null;
+        let networkManager = null;
+        
+        window.clearConsole = function() {
+            consoleDiv.textContent = '';
+        };
+        
+        // Initialize test environment
+        async function initializeTest() {
+            const status = document.getElementById('status');
+            
+            try {
+                status.innerHTML = '<h3>🔧 テスト環境初期化中...</h3>';
+                
+                // Wait for Supabase
+                let retries = 0;
+                while (!window.supabase && retries < 10) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    retries++;
+                }
+                
+                if (!window.supabase) {
+                    throw new Error('Supabase failed to load');
+                }
+                
+                console.log('✅ Supabase loaded successfully');
+                
+                // Create mock PixelCanvas
+                mockPixelCanvas = {
+                    pixelStorage: new PixelStorage({ deviceId: 'test-fix' }),
+                    activeSectors: new Set(['0,0']),
+                    sectorPixelCounts: new Map(),
+                    debugPanel: { log: console.log },
+                    deviceId: 'test-fix-device',
+                    render: () => console.log('🎨 Mock render called'),
+                    updateStockDisplay: () => console.log('📊 Mock updateStockDisplay called')
+                };
+                
+                console.log('🔧 Mock PixelCanvas created');
+                
+                // Create NetworkManager
+                networkManager = new NetworkManager(mockPixelCanvas);
+                console.log('🔧 NetworkManager created');
+                
+                // Wait for initialization
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                status.innerHTML = '<h3>✅ テスト環境準備完了</h3><p>テストボタンを使用してください</p>';
+                status.className = 'test-section success';
+                
+            } catch (error) {
+                console.error('❌ Test initialization failed:', error);
+                status.innerHTML = `<h3>❌ 初期化失敗</h3><p>${error.message}</p>`;
+                status.className = 'test-section error';
+            }
+        }
+        
+        window.testNetworkManagerLoading = async function() {
+            const status = document.getElementById('status');
+            
+            if (!networkManager) {
+                status.innerHTML = '<h3>❌ NetworkManagerが初期化されていません</h3>';
+                status.className = 'test-section error';
+                return;
+            }
+            
+            try {
+                status.innerHTML = '<h3>🔄 NetworkManager読み込みテスト実行中...</h3>';
+                status.className = 'test-section progress';
+                
+                console.log('🚀 Starting NetworkManager pixel loading test...');
+                console.log('🔧 Initial pixel count:', mockPixelCanvas.pixelStorage.pixels.size);
+                
+                // Test the fixed loadPixelsFromSupabase method
+                await networkManager.loadPixelsFromSupabase();
+                
+                const finalCount = mockPixelCanvas.pixelStorage.pixels.size;
+                console.log('📊 Final pixel count:', finalCount);
+                
+                if (finalCount > 0) {
+                    status.innerHTML = `<h3>✅ テスト成功!</h3><p>読み込まれたピクセル数: ${finalCount}</p>`;
+                    status.className = 'test-section success';
+                    
+                    // Show sample pixels
+                    const samplePixels = Array.from(mockPixelCanvas.pixelStorage.pixels.entries()).slice(0, 5);
+                    console.log('📋 Sample pixels:', samplePixels);
+                } else {
+                    throw new Error('No pixels were loaded');
+                }
+                
+            } catch (error) {
+                console.error('❌ NetworkManager test failed:', error);
+                status.innerHTML = `<h3>❌ テスト失敗</h3><p>${error.message}</p>`;
+                status.className = 'test-section error';
+            }
+        };
+        
+        window.testRenderingSystem = async function() {
+            const status = document.getElementById('status');
+            
+            if (!mockPixelCanvas || mockPixelCanvas.pixelStorage.pixels.size === 0) {
+                status.innerHTML = '<h3>⚠️ まずピクセル読み込みテストを実行してください</h3>';
+                status.className = 'test-section error';
+                return;
+            }
+            
+            try {
+                status.innerHTML = '<h3>🔄 レンダリングテスト実行中...</h3>';
+                status.className = 'test-section progress';
+                
+                console.log('🎨 Testing rendering system...');
+                
+                // Create test canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = 400;
+                canvas.height = 300;
+                canvas.style.border = '1px solid white';
+                canvas.style.margin = '10px 0';
+                
+                const ctx = canvas.getContext('2d');
+                
+                // Clear canvas
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Render some pixels from storage
+                let rendered = 0;
+                for (const [key, color] of mockPixelCanvas.pixelStorage.pixels) {
+                    if (rendered >= 20) break; // Limit to 20 pixels for test
+                    
+                    const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+                    const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+                    const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+                    
+                    // Simple rendering (just place pixels in a grid for testing)
+                    const testX = 50 + (rendered % 10) * 30;
+                    const testY = 50 + Math.floor(rendered / 10) * 30;
+                    
+                    ctx.fillStyle = CONFIG.PALETTE[color] || '#ffffff';
+                    ctx.fillRect(testX, testY, 20, 20);
+                    
+                    rendered++;
+                }
+                
+                console.log(`🎨 Rendered ${rendered} test pixels`);
+                
+                // Add canvas to page
+                const testDiv = document.createElement('div');
+                testDiv.innerHTML = '<h4>🖼️ テストレンダリング結果:</h4>';
+                testDiv.appendChild(canvas);
+                
+                // Remove any existing test canvas
+                const existing = document.querySelector('#test-canvas-container');
+                if (existing) existing.remove();
+                
+                testDiv.id = 'test-canvas-container';
+                document.body.appendChild(testDiv);
+                
+                status.innerHTML = `<h3>✅ レンダリングテスト成功!</h3><p>描画されたピクセル数: ${rendered}</p>`;
+                status.className = 'test-section success';
+                
+            } catch (error) {
+                console.error('❌ Rendering test failed:', error);
+                status.innerHTML = `<h3>❌ レンダリングテスト失敗</h3><p>${error.message}</p>`;
+                status.className = 'test-section error';
+            }
+        };
+        
+        // Auto-initialize
+        window.addEventListener('load', () => {
+            setTimeout(initializeTest, 1000);
+        });
+        
+        console.log('🧪 Test fix page loaded');
+    </script>
+</body>
+</html>

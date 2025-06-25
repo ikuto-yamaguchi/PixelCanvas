@@ -43,6 +43,7 @@
             </button>
             <button onclick="forceLoadPixels()" style="font-size:10px; padding:2px 4px; background:#ff4444; color:white; border:none; border-radius:3px; margin:0 2px;">🚨 Force DB</button>
             <button onclick="clearTestPixels()" style="font-size:10px; padding:2px 4px; background:#44ff44; color:white; border:none; border-radius:3px; margin:0 2px;">🧹 Clear</button>
+            <button onclick="forceTestRender()" style="font-size:10px; padding:2px 4px; background:#9C27B0; color:white; border:none; border-radius:3px; margin:0 2px;">🧪 Test Render</button>
             <div class="pixel-count" id="pixelCount">0px</div>
             <div class="cooldown-indicator" id="cooldownIndicator"></div>
             <span class="status-indicator" id="status"></span>
@@ -100,6 +101,16 @@
         import { SupabaseTest } from './SupabaseTest.js';
         window.SupabaseTest = SupabaseTest;
         console.log('🧪 Supabase Test initialized');
+    </script>
+    
+    <!-- 🔍 DIAGNOSTIC PANEL: Comprehensive debugging -->
+    <script type="module">
+        import { DiagnosticPanel } from './DiagnosticPanel.js';
+        window.diagnosticPanel = new DiagnosticPanel();
+        console.log('🔍 Diagnostic Panel initialized');
+        
+        // 強制テストレンダリング機能
+        window.forceTestRender = DiagnosticPanel.forceTestRender;
     </script>
     
     <!-- 🔧 CRITICAL: Enhanced Supabase loading with verification -->

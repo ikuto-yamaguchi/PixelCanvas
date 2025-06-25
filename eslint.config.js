@@ -34,7 +34,10 @@ export default [
         requestAnimationFrame: 'readonly',
         getComputedStyle: 'readonly',
         pixelData: 'readonly',
-        confirm: 'readonly'
+        confirm: 'readonly',
+        WebSocket: 'readonly',
+        CONFIG: 'readonly',
+        screen: 'readonly'
       }
     },
     rules: {

@@ -172,15 +172,23 @@ class PixelCanvas {
         
         try {
             console.log('🚀 Starting ULTRA FAST loading system...');
+            console.log('🔍 DEBUG: Initial pixel count:', this.pixelStorage.pixels.size);
             
             // 🚀 CRITICAL: Use UltraFastLoader instead of NetworkManager
             const loadStartTime = performance.now();
             
-            // Start progressive loading (0.5s → 3s → 10s)
-            await this.ultraFastLoader.startProgressiveLoad();
+            // 🚨 FALLBACK: Use NetworkManager if UltraFastLoader fails
+            console.log('🔄 FALLBACK: Using NetworkManager for reliable loading...');
+            try {
+                await this.networkManager.loadPixelsFromSupabase();
+                console.log('✅ NetworkManager loading completed');
+            } catch (networkError) {
+                console.error('❌ NetworkManager loading failed:', networkError);
+            }
             
             const totalLoadTime = performance.now() - loadStartTime;
-            console.log(`🎉 ULTRA FAST loading completed in ${totalLoadTime.toFixed(0)}ms`);
+            console.log(`🎉 Loading completed in ${totalLoadTime.toFixed(0)}ms`);
+            console.log('🔍 DEBUG: Final pixel count:', this.pixelStorage.pixels.size);
             
             // 🚨 CRITICAL: Update display immediately
             if (this.pixelStorage.pixels.size > 0) {
@@ -191,9 +199,20 @@ class PixelCanvas {
                 this.forceViewportToSectorZero();
                 
                 // Multiple renders for progressive enhancement
+                console.log('🎨 Starting rendering sequence...');
                 this.throttledRender();
+                setTimeout(() => {
+                    console.log('🎨 Render attempt 2...');
+                    this.throttledRender();
+                }, 100);
+                setTimeout(() => {
+                    console.log('🎨 Render attempt 3...');
+                    this.throttledRender();
+                }, 500);
+            } else {
+                console.warn('⚠️ No pixels loaded - trying manual test pixels...');
+                this.addTestPixels();
                 setTimeout(() => this.throttledRender(), 100);
-                setTimeout(() => this.throttledRender(), 500);
             }
             
             // Background: Load sector counts (low priority)
@@ -440,22 +459,14 @@ class PixelCanvas {
     render() {
         try {
             const pixelCount = this.pixelStorage.pixels.size;
+            console.log(`🎨 RENDER: Starting render with ${pixelCount} pixels`);
+            console.log(`🎨 RENDER: Scale=${this.scale}, Offset=(${this.offsetX}, ${this.offsetY})`);
             
-            // 🚀 CRITICAL: Use UltraFastRenderer for maximum performance
-            if (this.ultraFastRenderer) {
-                const viewport = {
-                    x: -this.offsetX,
-                    y: -this.offsetY,
-                    width: this.logicalWidth || 800,
-                    height: this.logicalHeight || 600
-                };
-                
-                this.ultraFastRenderer.render(viewport, this.scale);
-            } else {
-                // Fallback to ultra-light rendering
-                console.log(`🎨 FALLBACK: Rendering ${pixelCount} pixels with ultra-light Canvas2D`);
-                this.renderUltraLight();
-            }
+            // 🚨 FORCE: Always use fallback rendering for reliability
+            console.log(`🎨 FALLBACK: Using ultra-light Canvas2D renderer`);
+            this.renderUltraLight();
+            
+            console.log(`✅ RENDER: Completed render operation`);
             
         } catch (error) {
             console.error('❌ RENDER SYSTEM: Render failed:', error);

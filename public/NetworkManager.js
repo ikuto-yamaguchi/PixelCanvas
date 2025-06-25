@@ -278,98 +278,7 @@ export class NetworkManager {
         }
     }
     
-    async loadPixelsFromSupabase() {
-        
-        try {
-            // 🔧 CRITICAL FIX: Load from dense sectors first (0,0) then expand
-            console.log('🎯 Loading pixels from highest density sectors first...');
-            
-            // Load from sector (0,0) first - contains 99% of all pixels
-            const mainResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.0&sector_y=eq.0&limit=100000`, {
-                headers: {
-                    'apikey': CONFIG.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                    'Range': '0-99999', // Request up to 100k rows to get all pixels in sector
-                    'Prefer': 'count=exact' // Also get total count
-                }
-            });
-            
-            if (!mainResponse.ok) {
-                throw new Error(`HTTP ${mainResponse.status}: ${mainResponse.statusText}`);
-            }
-            
-            let allPixels = await mainResponse.json();
-            console.log(`📦 Loaded ${allPixels.length} pixels from sector (0,0)`);
-            
-            // Load from adjacent sectors (-1,-1), (-1,0), (0,-1) etc.
-            const adjacentSectors = [
-                { x: -1, y: -1 }, { x: -1, y: 0 }, { x: 0, y: -1 },
-                { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 },
-                { x: 3, y: -4 }, { x: -2, y: -1 } // High density sectors from data
-            ];
-            
-            for (const sector of adjacentSectors) {
-                try {
-                    const sectorResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&sector_x=eq.${sector.x}&sector_y=eq.${sector.y}&limit=100000`, {
-                        headers: {
-                            'apikey': CONFIG.SUPABASE_ANON_KEY,
-                            'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                            'Range': '0-99999'
-                        }
-                    });
-                    
-                    if (sectorResponse.ok) {
-                        const sectorPixels = await sectorResponse.json();
-                        if (sectorPixels.length > 0) {
-                            allPixels = allPixels.concat(sectorPixels);
-                            console.log(`📦 Added ${sectorPixels.length} pixels from sector (${sector.x},${sector.y})`);
-                        }
-                    }
-                } catch (error) {
-                    console.warn(`Failed to load sector (${sector.x},${sector.y}):`, error);
-                }
-            }
-            
-            // Add each pixel to the pixels map and calculate occupied sectors
-            const occupiedSectors = new Set();
-            
-            for (const pixel of allPixels) {
-                this.pixelCanvas.pixelStorage.addPixel(
-                    pixel.sector_x,
-                    pixel.sector_y,
-                    pixel.local_x,
-                    pixel.local_y,
-                    pixel.color
-                );
-                
-                // Track which sectors have pixels
-                const sectorKey = Utils.createSectorKey(pixel.sector_x, pixel.sector_y);
-                occupiedSectors.add(sectorKey);
-            }
-            
-            // Initialize active sectors: start with (0,0) and add neighbors of any occupied sectors
-            this.initializeActiveSectors(occupiedSectors);
-            
-            // Also save to localStorage for offline access  
-            const pixelsObject = {};
-            for (const [key, color] of this.pixelCanvas.pixelStorage.pixels) {
-                pixelsObject[key] = color;
-            }
-            localStorage.setItem('pixelcanvas_pixels', JSON.stringify(pixelsObject));
-            
-            console.log('✅ Pixels loaded and cached locally');
-            
-            // Force immediate render after loading
-            this.pixelCanvas.render();
-            
-        } catch (error) {
-            console.error('Failed to load pixels from Supabase:', error);
-            this.pixelCanvas.debugPanel.log(`❌ Failed to load pixels: ${error.message}`);
-            
-            // Fallback to localStorage
-            this.loadPixelsFromLocalStorage();
-        }
-    }
+    // 🚨 REMOVED: Duplicate method - using the comprehensive version below (line 497)
     
     /**
      * 🔧 NEW: Layer system data loading
@@ -537,11 +446,11 @@ export class NetworkManager {
             }
             
             // 🚀 CRITICAL FIX: Supabase API has 1000 row limit - use multiple requests
-            console.log('📥 Loading ALL 65,536 pixels via batched requests...');
+            console.log(`📥 Loading ALL ${count} pixels via batched requests...`);
             
             let allPixels = [];
             const batchSize = 1000;
-            const totalExpected = 65536;
+            const totalExpected = count;
             
             // Load in batches to avoid API limits
             for (let offset = 0; offset < totalExpected; offset += batchSize) {
@@ -549,7 +458,7 @@ export class NetworkManager {
                 
                 let restResponse;
                 try {
-                    const url = `${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&sector_x=eq.0&sector_y=eq.0&limit=${batchSize}&offset=${offset}`;
+                    const url = `${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&limit=${batchSize}&offset=${offset}`;
                     console.log(`🌐 Attempting fetch to: ${url}`);
                     
                     restResponse = await fetch(url, {
@@ -637,13 +546,13 @@ export class NetworkManager {
             console.log(`✅ Added ${addedCount} pixels to PixelStorage`);
             console.log(`📊 PixelStorage now contains ${this.pixelCanvas.pixelStorage.pixels.size} pixels`);
             
-            // 🚨 CRITICAL: Verify we have exactly 65,536 pixels
-            if (addedCount === 65536) {
-                console.log('🎉 SUCCESS: All 65,536 pixels loaded!');
-            } else if (addedCount > 60000) {
-                console.log(`✅ SUCCESS: Loaded ${addedCount} pixels (near expected 65,536)`);
+            // 🚨 CRITICAL: Verify we have all expected pixels
+            if (addedCount === totalExpected) {
+                console.log(`🎉 SUCCESS: All ${totalExpected} pixels loaded!`);
+            } else if (addedCount > totalExpected * 0.9) {
+                console.log(`✅ SUCCESS: Loaded ${addedCount} pixels (near expected ${totalExpected})`);
             } else {
-                console.error(`⚠️ WARNING: Expected 65,536 pixels but got ${addedCount}`);
+                console.error(`⚠️ WARNING: Expected ${totalExpected} pixels but got ${addedCount}`);
             }
             
             // ピクセル数カウント表示更新
