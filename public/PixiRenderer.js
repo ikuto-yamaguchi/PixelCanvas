@@ -119,8 +119,6 @@ export class PixiRenderer {
             this.isInitialized = true;
             console.log('✅ PixiJS renderer initialized successfully');
             
-            // 🧪 CRITICAL TEST: Add test sprite to verify rendering works
-            this.addTestSprite();
             
             // 初回LOD生成を開始（非同期）
             this.startInitialLODGeneration();
@@ -188,39 +186,6 @@ export class PixiRenderer {
         return;
     }
     
-    addTestSprite() {
-        try {
-            console.log('🧪 Adding test sprite to verify PixiJS rendering...');
-            
-            // Create a simple colored square as test
-            const graphics = new PIXI.Graphics();
-            graphics.beginFill(0xff0000); // Red color
-            graphics.drawRect(0, 0, 50, 50);
-            graphics.endFill();
-            
-            // Position it in the center of screen
-            graphics.x = 100;
-            graphics.y = 100;
-            
-            this.viewport.addChild(graphics);
-            
-            // Also add a text label
-            const text = new PIXI.Text('PixiJS Test', {
-                fontFamily: 'Arial',
-                fontSize: 16,
-                fill: 0xffffff
-            });
-            text.x = 100;
-            text.y = 160;
-            
-            this.viewport.addChild(text);
-            
-            console.log('✅ Test sprite added successfully');
-            
-        } catch (error) {
-            console.error('❌ Failed to add test sprite:', error);
-        }
-    }
     
     // 🔧 CRITICAL: Main render method called from main.js
     async render() {
@@ -231,11 +196,28 @@ export class PixiRenderer {
         
         console.log('🎨 PixiJS render called');
         
+        // 🚨 CRITICAL FIX: Sync viewport with main PixelCanvas
+        this.syncViewportWithPixelCanvas();
+        
         // 🔧 CRITICAL FIX: Render actual pixels from storage
         await this.renderFromPixelStorage();
         
         // Also load LOD data if available
         this.loadVisibleSectors();
+    }
+    
+    // 🚨 NEW: Sync PixiJS viewport with main PixelCanvas viewport
+    syncViewportWithPixelCanvas() {
+        if (!this.viewport) return;
+        
+        const pixelCanvas = this.pixelCanvas;
+        
+        // Sync position and scale from main PixelCanvas
+        this.viewport.x = pixelCanvas.offsetX;
+        this.viewport.y = pixelCanvas.offsetY;
+        this.viewport.scale.set(pixelCanvas.scale);
+        
+        console.log(`🔄 PixiJS viewport synced: pos(${pixelCanvas.offsetX.toFixed(1)}, ${pixelCanvas.offsetY.toFixed(1)}), scale=${pixelCanvas.scale.toFixed(3)}`);
     }
     
     // 🚨 CRITICAL: Create pixel textures directly from PixelStorage

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>PixelCanvas Integration Test</title>
+    <style>
+        body { background: #1a1a1a; color: white; font-family: monospace; padding: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #333; }
+        .pass { border-color: #4CAF50; background: rgba(76, 175, 80, 0.1); }
+        .fail { border-color: #f44336; background: rgba(244, 67, 54, 0.1); }
+        .running { border-color: #2196F3; background: rgba(33, 150, 243, 0.1); }
+        canvas { border: 1px solid white; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🧪 PixelCanvas Integration Test Suite</h1>
+    
+    <div class="test" id="test1">
+        <h3>Test 1: Database Pixel Loading</h3>
+        <div id="test1-result">Testing...</div>
+    </div>
+    
+    <div class="test" id="test2">
+        <h3>Test 2: Pixel Storage Integration</h3>
+        <div id="test2-result">Testing...</div>
+    </div>
+    
+    <div class="test" id="test3">
+        <h3>Test 3: Viewport Positioning</h3>
+        <div id="test3-result">Testing...</div>
+    </div>
+    
+    <div class="test" id="test4">
+        <h3>Test 4: Pixel Rendering Simulation</h3>
+        <div id="test4-result">Testing...</div>
+        <canvas id="testCanvas" width="400" height="300"></canvas>
+    </div>
+    
+    <div class="test" id="test5">
+        <h3>Test 5: Complete Data Flow</h3>
+        <div id="test5-result">Testing...</div>
+    </div>
+    
+    <script type="module">
+        // Integration test configuration
+        const CONFIG = {
+            SUPABASE_URL: 'https://lgvjdefkyeuvquzckkvb.supabase.co',
+            SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY',
+            PIXEL_SIZE: 4,
+            GRID_SIZE: 256,
+            COLORS: [
+                '#000000', '#FFFFFF', '#FF0000', '#00FF00',
+                '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF',
+                '#800000', '#008000', '#000080', '#808000',
+                '#800080', '#008080', '#C0C0C0', '#808080'
+            ]
+        };
+        
+        function setTestStatus(testId, status, message) {
+            const test = document.getElementById(testId);
+            const result = document.getElementById(testId + '-result');
+            test.className = 'test ' + status;
+            result.innerHTML = message;
+        }
+        
+        async function runIntegrationTests() {
+            console.log('🧪 Starting integration test suite...');
+            
+            // Test 1: Database Pixel Loading
+            setTestStatus('test1', 'running', '⏳ Loading pixels from database...');
+            try {
+                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&limit=100`, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    mode: 'cors',
+                    credentials: 'omit'
+                });
+                
+                if (response.ok) {
+                    const pixels = await response.json();
+                    if (pixels.length > 0) {
+                        setTestStatus('test1', 'pass', `✅ PASS: Loaded ${pixels.length} pixels from database<br>First pixel: (${pixels[0].sector_x},${pixels[0].sector_y}) local (${pixels[0].local_x},${pixels[0].local_y}) color ${pixels[0].color}`);
+                        window.testPixels = pixels; // Store for next tests
+                    } else {
+                        setTestStatus('test1', 'fail', '❌ FAIL: No pixels returned from database');
+                        return;
+                    }
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                setTestStatus('test1', 'fail', `❌ FAIL: ${error.message}`);
+                return;
+            }
+            
+            // Test 2: Pixel Storage Integration
+            setTestStatus('test2', 'running', '⏳ Testing pixel storage...');
+            try {
+                const pixelStorage = new Map();
+                
+                // Simulate the storage process
+                for (const pixel of window.testPixels) {
+                    const pixelKey = `${pixel.sector_x},${pixel.sector_y},${pixel.local_x},${pixel.local_y}`;
+                    pixelStorage.set(pixelKey, pixel.color);
+                }
+                
+                if (pixelStorage.size === window.testPixels.length) {
+                    setTestStatus('test2', 'pass', `✅ PASS: ${pixelStorage.size} pixels stored successfully<br>Sample key: ${Array.from(pixelStorage.keys())[0]}`);
+                    window.testPixelStorage = pixelStorage;
+                } else {
+                    setTestStatus('test2', 'fail', `❌ FAIL: Storage mismatch - expected ${window.testPixels.length}, got ${pixelStorage.size}`);
+                    return;
+                }
+            } catch (error) {
+                setTestStatus('test2', 'fail', `❌ FAIL: ${error.message}`);
+                return;
+            }
+            
+            // Test 3: Viewport Positioning
+            setTestStatus('test3', 'running', '⏳ Testing viewport calculations...');
+            try {
+                // Simulate viewport for sector (0,0)
+                const canvasWidth = 400;
+                const canvasHeight = 300;
+                const scale = 1.0;
+                const offsetX = 20;
+                const offsetY = 20;
+                
+                // Calculate visible area
+                const visibleMinX = -offsetX / (CONFIG.PIXEL_SIZE * scale);
+                const visibleMinY = -offsetY / (CONFIG.PIXEL_SIZE * scale);
+                const visibleMaxX = visibleMinX + canvasWidth / (CONFIG.PIXEL_SIZE * scale);
+                const visibleMaxY = visibleMinY + canvasHeight / (CONFIG.PIXEL_SIZE * scale);
+                
+                // Count pixels that should be visible
+                let visiblePixels = 0;
+                for (const [key, color] of window.testPixelStorage) {
+                    const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+                    const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+                    const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+                    
+                    if (worldX >= visibleMinX && worldX <= visibleMaxX &&
+                        worldY >= visibleMinY && worldY <= visibleMaxY) {
+                        visiblePixels++;
+                    }
+                }
+                
+                setTestStatus('test3', 'pass', `✅ PASS: Viewport calculated<br>Visible area: (${visibleMinX.toFixed(1)}, ${visibleMinY.toFixed(1)}) to (${visibleMaxX.toFixed(1)}, ${visibleMaxY.toFixed(1)})<br>Visible pixels: ${visiblePixels}`);
+                window.testViewport = { scale, offsetX, offsetY, visiblePixels };
+            } catch (error) {
+                setTestStatus('test3', 'fail', `❌ FAIL: ${error.message}`);
+                return;
+            }
+            
+            // Test 4: Pixel Rendering Simulation
+            setTestStatus('test4', 'running', '⏳ Testing pixel rendering...');
+            try {
+                const canvas = document.getElementById('testCanvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Clear canvas
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                let rendered = 0;
+                const { scale, offsetX, offsetY } = window.testViewport;
+                
+                // Render pixels
+                for (const [key, color] of window.testPixelStorage) {
+                    if (rendered >= 50) break; // Limit for test
+                    
+                    const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
+                    const worldX = sectorX * CONFIG.GRID_SIZE + localX;
+                    const worldY = sectorY * CONFIG.GRID_SIZE + localY;
+                    
+                    // Convert to screen coordinates
+                    const screenX = worldX * CONFIG.PIXEL_SIZE * scale + offsetX;
+                    const screenY = worldY * CONFIG.PIXEL_SIZE * scale + offsetY;
+                    
+                    // Skip if outside canvas
+                    if (screenX < 0 || screenX > canvas.width || 
+                        screenY < 0 || screenY > canvas.height) {
+                        continue;
+                    }
+                    
+                    // Draw pixel
+                    ctx.fillStyle = CONFIG.COLORS[color] || '#ffffff';
+                    const pixelSize = Math.max(2, CONFIG.PIXEL_SIZE * scale);
+                    ctx.fillRect(Math.floor(screenX), Math.floor(screenY), 
+                                Math.ceil(pixelSize), Math.ceil(pixelSize));
+                    
+                    rendered++;
+                }
+                
+                if (rendered > 0) {
+                    setTestStatus('test4', 'pass', `✅ PASS: Rendered ${rendered} pixels to canvas<br>Scale: ${scale}, Offset: (${offsetX}, ${offsetY})`);
+                } else {
+                    setTestStatus('test4', 'fail', '❌ FAIL: No pixels rendered to canvas');
+                    return;
+                }
+            } catch (error) {
+                setTestStatus('test4', 'fail', `❌ FAIL: ${error.message}`);
+                return;
+            }
+            
+            // Test 5: Complete Data Flow
+            setTestStatus('test5', 'running', '⏳ Verifying complete data flow...');
+            try {
+                const summary = {
+                    pixelsLoaded: window.testPixels.length,
+                    pixelsStored: window.testPixelStorage.size,
+                    pixelsVisible: window.testViewport.visiblePixels,
+                    pixelsRendered: document.getElementById('test4-result').innerHTML.match(/Rendered (\\d+)/)?.[1] || 0
+                };
+                
+                const allStepsWorking = summary.pixelsLoaded > 0 && 
+                                      summary.pixelsStored > 0 && 
+                                      summary.pixelsRendered > 0;
+                
+                if (allStepsWorking) {
+                    setTestStatus('test5', 'pass', 
+                        `✅ PASS: Complete data flow verified<br>` +
+                        `📥 Loaded: ${summary.pixelsLoaded} pixels<br>` +
+                        `💾 Stored: ${summary.pixelsStored} pixels<br>` +
+                        `👁️ Visible: ${summary.pixelsVisible} pixels<br>` +
+                        `🎨 Rendered: ${summary.pixelsRendered} pixels<br>` +
+                        `<strong>✅ ALL SYSTEMS FUNCTIONAL</strong>`
+                    );
+                    
+                    console.log('🎉 Integration test completed successfully!');
+                    console.log('Summary:', summary);
+                } else {
+                    setTestStatus('test5', 'fail', `❌ FAIL: Data flow broken - ${JSON.stringify(summary)}`);
+                }
+            } catch (error) {
+                setTestStatus('test5', 'fail', `❌ FAIL: ${error.message}`);
+            }
+        }
+        
+        // Start tests
+        runIntegrationTests();
+    </script>
+</body>
+</html>

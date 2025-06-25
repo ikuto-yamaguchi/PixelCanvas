@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>PixelCanvas Debug Test</title>
+    <style>
+        body { background: #1a1a1a; color: white; font-family: monospace; padding: 20px; }
+        .debug { margin: 10px 0; padding: 10px; border: 1px solid #333; }
+        .success { border-color: #4CAF50; background: rgba(76, 175, 80, 0.1); }
+        .error { border-color: #f44336; background: rgba(244, 67, 54, 0.1); }
+        .warning { border-color: #FF9800; background: rgba(255, 152, 0, 0.1); }
+        button { padding: 10px; margin: 5px; background: #333; color: white; border: 1px solid #666; cursor: pointer; }
+        button:hover { background: #555; }
+    </style>
+</head>
+<body>
+    <h1>🔍 PixelCanvas Debug Test</h1>
+    
+    <div class="debug" id="status">
+        <h3>System Status</h3>
+        <div id="status-content">Checking...</div>
+    </div>
+    
+    <div class="debug" id="renderer">
+        <h3>Renderer Status</h3>
+        <div id="renderer-content">Checking...</div>
+    </div>
+    
+    <div class="debug" id="pixels">
+        <h3>Pixel Status</h3>
+        <div id="pixels-content">Checking...</div>
+    </div>
+    
+    <div class="debug" id="canvas">
+        <h3>Canvas Status</h3>
+        <div id="canvas-content">Checking...</div>
+    </div>
+    
+    <div class="debug">
+        <h3>Manual Tests</h3>
+        <button onclick="testPixelLoading()">Test Pixel Loading</button>
+        <button onclick="testRenderer()">Test Renderer</button>
+        <button onclick="testViewport()">Test Viewport</button>
+        <button onclick="checkLogs()">Check Console Logs</button>
+    </div>
+    
+    <div class="debug" id="manual-results">
+        <h3>Manual Test Results</h3>
+        <div id="manual-content">Click buttons above to run tests</div>
+    </div>
+    
+    <script>
+        // Initialize debug tests
+        async function runDebugTests() {
+            console.log('🔍 Starting debug tests...');
+            
+            // System Status Check
+            let statusHtml = '';
+            try {
+                const response = await fetch('Config.js');
+                if (response.ok) {
+                    statusHtml += '✅ Config.js accessible<br>';
+                } else {
+                    statusHtml += '❌ Config.js not accessible<br>';
+                }
+            } catch (error) {
+                statusHtml += '❌ Network error: ' + error.message + '<br>';
+            }
+            
+            // Check main app files
+            const files = ['main.js', 'NetworkManager.js', 'PixiRenderer.js', 'PixelStorage.js'];
+            for (const file of files) {
+                try {
+                    const response = await fetch(file);
+                    if (response.ok) {
+                        statusHtml += `✅ ${file} accessible<br>`;
+                    } else {
+                        statusHtml += `❌ ${file} not accessible<br>`;
+                    }
+                } catch (error) {
+                    statusHtml += `❌ ${file} error: ${error.message}<br>`;
+                }
+            }
+            
+            document.getElementById('status-content').innerHTML = statusHtml;
+            document.getElementById('status').className = 'debug success';
+            
+            // Renderer Status
+            let rendererHtml = '';
+            if (typeof window !== 'undefined') {
+                rendererHtml += `✅ Window object available<br>`;
+                rendererHtml += `PIXI: ${window.PIXI ? '✅ Available' : '❌ Not loaded'}<br>`;
+                rendererHtml += `Supabase: ${window.supabase ? '✅ Available' : '❌ Not loaded'}<br>`;
+                
+                if (window.pixelCanvas) {
+                    rendererHtml += `✅ PixelCanvas instance found<br>`;
+                    if (window.pixelCanvas.pixiRenderer) {
+                        rendererHtml += `✅ PixiJS renderer initialized<br>`;
+                        rendererHtml += `Initialized: ${window.pixelCanvas.pixiRenderer.isInitialized ? '✅ Yes' : '❌ No'}<br>`;
+                    } else {
+                        rendererHtml += `❌ PixiJS renderer not found<br>`;
+                    }
+                    
+                    if (window.pixelCanvas.pixelStorage) {
+                        rendererHtml += `✅ PixelStorage found<br>`;
+                        rendererHtml += `Pixels: ${window.pixelCanvas.pixelStorage.pixels.size}<br>`;
+                    } else {
+                        rendererHtml += `❌ PixelStorage not found<br>`;
+                    }
+                } else {
+                    rendererHtml += `❌ PixelCanvas instance not found<br>`;
+                }
+            }
+            
+            document.getElementById('renderer-content').innerHTML = rendererHtml;
+            document.getElementById('renderer').className = 'debug ' + (rendererHtml.includes('❌') ? 'error' : 'success');
+            
+            // Pixel Status
+            try {
+                const CONFIG = {
+                    SUPABASE_URL: 'https://lgvjdefkyeuvquzckkvb.supabase.co',
+                    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY'
+                };
+                
+                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=count&limit=1`, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const count = data[0]?.count || 0;
+                    document.getElementById('pixels-content').innerHTML = `✅ Database accessible<br>Total pixels: ${count}`;
+                    document.getElementById('pixels').className = 'debug success';
+                } else {
+                    document.getElementById('pixels-content').innerHTML = `❌ Database error: ${response.status}`;
+                    document.getElementById('pixels').className = 'debug error';
+                }
+            } catch (error) {
+                document.getElementById('pixels-content').innerHTML = `❌ Database connection failed: ${error.message}`;
+                document.getElementById('pixels').className = 'debug error';
+            }
+            
+            // Canvas Status
+            const canvas = document.getElementById('mainCanvas');
+            let canvasHtml = '';
+            if (canvas) {
+                canvasHtml += `✅ Main canvas found<br>`;
+                canvasHtml += `Size: ${canvas.width}x${canvas.height}<br>`;
+                canvasHtml += `Display: ${getComputedStyle(canvas).display}<br>`;
+                canvasHtml += `Z-index: ${getComputedStyle(canvas).zIndex}<br>`;
+            } else {
+                canvasHtml += `❌ Main canvas not found<br>`;
+            }
+            
+            const pixiCanvas = document.getElementById('pixiCanvas');
+            if (pixiCanvas) {
+                canvasHtml += `✅ PixiJS canvas found<br>`;
+                canvasHtml += `Display: ${getComputedStyle(pixiCanvas).display}<br>`;
+                canvasHtml += `Z-index: ${getComputedStyle(pixiCanvas).zIndex}<br>`;
+            } else {
+                canvasHtml += `❌ PixiJS canvas not found<br>`;
+            }
+            
+            document.getElementById('canvas-content').innerHTML = canvasHtml;
+            document.getElementById('canvas').className = 'debug ' + (canvasHtml.includes('❌') ? 'error' : 'success');
+        }
+        
+        // Manual test functions
+        async function testPixelLoading() {
+            const CONFIG = {
+                SUPABASE_URL: 'https://lgvjdefkyeuvquzckkvb.supabase.co',
+                SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY'
+            };
+            
+            try {
+                console.log('🧪 Testing pixel loading...');
+                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&limit=10`, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                const pixels = await response.json();
+                document.getElementById('manual-content').innerHTML = `✅ Loaded ${pixels.length} test pixels:<br>${JSON.stringify(pixels.slice(0, 3), null, 2)}`;
+            } catch (error) {
+                document.getElementById('manual-content').innerHTML = `❌ Pixel loading failed: ${error.message}`;
+            }
+        }
+        
+        function testRenderer() {
+            let result = '';
+            if (window.pixelCanvas) {
+                result += `✅ PixelCanvas found<br>`;
+                if (window.pixelCanvas.render) {
+                    result += `✅ Render method exists<br>`;
+                    try {
+                        window.pixelCanvas.render();
+                        result += `✅ Render method called successfully<br>`;
+                    } catch (error) {
+                        result += `❌ Render failed: ${error.message}<br>`;
+                    }
+                } else {
+                    result += `❌ Render method not found<br>`;
+                }
+            } else {
+                result += `❌ PixelCanvas not found<br>`;
+            }
+            document.getElementById('manual-content').innerHTML = result;
+        }
+        
+        function testViewport() {
+            let result = '';
+            if (window.pixelCanvas && window.pixelCanvas.forceViewportToSectorZero) {
+                result += `✅ Viewport method found<br>`;
+                try {
+                    window.pixelCanvas.forceViewportToSectorZero();
+                    result += `✅ Viewport reset to sector (0,0)<br>`;
+                    result += `Scale: ${window.pixelCanvas.scale}<br>`;
+                    result += `Offset: (${window.pixelCanvas.offsetX}, ${window.pixelCanvas.offsetY})<br>`;
+                } catch (error) {
+                    result += `❌ Viewport test failed: ${error.message}<br>`;
+                }
+            } else {
+                result += `❌ Viewport method not found<br>`;
+            }
+            document.getElementById('manual-content').innerHTML = result;
+        }
+        
+        function checkLogs() {
+            document.getElementById('manual-content').innerHTML = `
+                ✅ Check browser console for detailed logs<br>
+                Look for messages like:<br>
+                • "🎨 RENDER: Starting render with X pixels"<br>
+                • "✅ DIRECT REST: Loaded X pixels successfully"<br>
+                • "🎨 PIXI: Using PixiJS renderer" or "🎨 FALLBACK: Using Canvas2D renderer"<br>
+                • "✅ Rendered X pixels with PixiJS"<br>
+            `;
+        }
+        
+        // Auto-run debug tests when page loads
+        document.addEventListener('DOMContentLoaded', runDebugTests);
+        
+        // Also run after a delay to catch late-loading scripts
+        setTimeout(runDebugTests, 2000);
+    </script>
+    
+    <!-- Load main app to test integration -->
+    <script type="module" src="main.js"></script>
+</body>
+</html>

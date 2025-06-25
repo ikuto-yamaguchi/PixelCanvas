@@ -370,14 +370,22 @@ class PixelCanvas {
             console.log(`🎨 RENDER: Starting render with ${pixelCount} pixels`);
             console.log(`🎨 RENDER: Scale=${this.scale}, Offset=(${this.offsetX}, ${this.offsetY})`);
             
-            // 🚨 FORCE: Always use fallback rendering for reliability
-            console.log(`🎨 FALLBACK: Using ultra-light Canvas2D renderer`);
-            this.renderUltraLight();
+            // 🚨 CRITICAL FIX: Use proper renderer based on configuration
+            if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
+                console.log(`🎨 PIXI: Using PixiJS renderer for high performance`);
+                this.pixiRenderer.render();
+            } else {
+                console.log(`🎨 FALLBACK: Using Canvas2D renderer`);
+                this.renderUltraLight();
+            }
             
             console.log(`✅ RENDER: Completed render operation`);
             
         } catch (error) {
             console.error('❌ RENDER SYSTEM: Render failed:', error);
+            // 🚨 EMERGENCY FALLBACK: Always try Canvas2D if PixiJS fails
+            console.log(`🚨 EMERGENCY: Falling back to Canvas2D renderer`);
+            this.renderUltraLight();
         }
     }
     

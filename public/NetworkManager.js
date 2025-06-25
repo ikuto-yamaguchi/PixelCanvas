@@ -363,6 +363,90 @@ export class NetworkManager {
         }
     }
     
+    async loadPixelsDirectREST() {
+        try {
+            console.log('🚀 DIRECT REST: Attempting direct Supabase REST API access...');
+            
+            // Test basic connectivity first
+            const testUrl = `${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=count&limit=1`;
+            console.log('🧪 Testing connectivity:', testUrl);
+            
+            const testResponse = await fetch(testUrl, {
+                method: 'GET',
+                headers: {
+                    'apikey': CONFIG.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                mode: 'cors',
+                credentials: 'omit'
+            });
+            
+            console.log('📊 Test response:', testResponse.status, testResponse.statusText);
+            
+            if (!testResponse.ok) {
+                throw new Error(`Test failed: ${testResponse.status} ${testResponse.statusText}`);
+            }
+            
+            const testData = await testResponse.json();
+            console.log('✅ Connectivity test passed:', testData);
+            
+            // Now load actual pixels
+            console.log('📥 Loading pixels via direct REST...');
+            const pixelUrl = `${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&limit=10000`;
+            
+            const pixelResponse = await fetch(pixelUrl, {
+                method: 'GET',
+                headers: {
+                    'apikey': CONFIG.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                mode: 'cors',
+                credentials: 'omit'
+            });
+            
+            console.log('📊 Pixel response:', pixelResponse.status, pixelResponse.statusText);
+            
+            if (!pixelResponse.ok) {
+                throw new Error(`Pixel load failed: ${pixelResponse.status} ${pixelResponse.statusText}`);
+            }
+            
+            const pixels = await pixelResponse.json();
+            console.log(`✅ DIRECT REST: Loaded ${pixels.length} pixels successfully`);
+            
+            // Add pixels to storage
+            let addedCount = 0;
+            for (const pixel of pixels) {
+                this.pixelCanvas.pixelStorage.setPixel(
+                    pixel.sector_x,
+                    pixel.sector_y,
+                    pixel.local_x,
+                    pixel.local_y,
+                    pixel.color
+                );
+                addedCount++;
+            }
+            
+            console.log(`✅ Added ${addedCount} pixels to storage`);
+            console.log(`📊 Total pixels in storage: ${this.pixelCanvas.pixelStorage.pixels.size}`);
+            
+            // Update display and render
+            this.pixelCanvas.pixelStorage.updateStockDisplay();
+            this.pixelCanvas.render();
+            
+            return true;
+            
+        } catch (error) {
+            console.error('❌ DIRECT REST failed:', error);
+            console.warn('⚠️ Falling back to demo generation...');
+            this.generateDemoPixels();
+            return false;
+        }
+    }
+
     generateDemoPixels() {
         // Generate a small demo pattern to show the app is working
         console.log('🎨 Generating demo pixel pattern...');
@@ -443,24 +527,17 @@ export class NetworkManager {
     
     // 🚨 CRITICAL MISSING METHODS: データベースからピクセル読み込み
     async loadPixelsFromSupabase() {
-        console.log('🚀 loadPixelsFromSupabase called');
-        console.log('🔧 Supabase client status:', !!this.supabaseClient);
+        console.log('🚀 FORCE: Direct pixel loading starting...');
+        console.log('🔧 Environment check:', {
+            windowSupabase: !!window.supabase,
+            supabaseClient: !!this.supabaseClient,
+            configUrl: CONFIG.SUPABASE_URL,
+            configKey: CONFIG.SUPABASE_ANON_KEY ? 'Present' : 'Missing'
+        });
         
-        if (!this.supabaseClient) {
-            console.error('❌ Supabase client not initialized');
-            
-            // 🚨 EMERGENCY: Try to initialize now
-            console.log('🔄 Attempting emergency Supabase initialization...');
-            this.initializeSupabase();
-            
-            // Wait a moment and check again
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            if (!this.supabaseClient) {
-                console.error('❌ Emergency initialization failed');
-                return;
-            }
-        }
+        // 🚨 EMERGENCY: Always try direct REST API first, bypass Supabase client
+        console.log('🚀 BYPASS: Using direct REST API to avoid client issues...');
+        return this.loadPixelsDirectREST();
         
         try {
             console.log('📥 Loading pixels from Supabase...');
@@ -597,8 +674,17 @@ export class NetworkManager {
             }
             
         } catch (error) {
-            // 🚨 SILENT HANDLING: Use localStorage fallback instead of throwing
-            console.warn('⚠️ Supabase unavailable, loading from localStorage');
+            // 🚨 DETAILED ERROR: Show actual error for diagnosis
+            console.error('❌ DETAILED: Supabase loading failed:', {
+                error: error.message,
+                stack: error.stack,
+                supabaseClient: !!this.supabaseClient,
+                windowSupabase: !!window.supabase,
+                configUrl: CONFIG.SUPABASE_URL,
+                configKey: CONFIG.SUPABASE_ANON_KEY ? 'Present' : 'Missing'
+            });
+            
+            console.warn('⚠️ Falling back to localStorage and demo generation');
             this.loadPixelsFromLocalStorage();
         }
     }
