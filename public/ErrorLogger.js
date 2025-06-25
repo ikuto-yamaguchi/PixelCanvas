@@ -81,7 +81,7 @@ export class ErrorLogger {
         this.button.textContent = '🐛0';
         this.button.style.cssText = `
             position: fixed;
-            top: 10px;
+            top: 80px;
             right: 10px;
             z-index: 10000;
             background: #f44336;

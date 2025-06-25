@@ -285,54 +285,130 @@ export class NetworkManager {
      */
     async loadLayeredData() {
         try {
-            console.log('🔧 Loading data via layer system - falling back to direct pixel loading');
+            console.log('🔧 Loading data via progressive loading system to prevent freeze');
             
-            // 🚨 IMMEDIATE FIX: Load actual pixels instead of empty layer data
-            console.log('📊 Loading pixels directly from database...');
+            // 🚨 CRITICAL FIX: Progressive loading to prevent browser freeze
+            console.log('📊 Starting progressive pixel loading...');
             
-            // Load more pixels for proper initialization  
-            const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=*&limit=100000&offset=0`, {
+            return await this.loadPixelsProgressively();
+            
+        } catch (error) {
+            console.error('❌ Progressive data loading failed:', error);
+            
+            // Fallback to minimal legacy loading
+            return this.loadPixelsFromLocalStorage();
+        }
+    }
+    
+    // 🚨 NEW: Progressive loading system to prevent freeze
+    async loadPixelsProgressively() {
+        try {
+            // First, get total count
+            const countResponse = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=count&limit=1`, {
                 headers: {
                     'apikey': CONFIG.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
-                    'Range': '0-99999',  // Request up to 100k rows
-                    'Prefer': 'count=exact'
+                    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
                 }
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            if (!countResponse.ok) {
+                throw new Error(`Count query failed: ${countResponse.status}`);
             }
             
-            const pixels = await response.json();
-            console.log(`📦 Loaded ${pixels.length} pixels from database`);
+            const countData = await countResponse.json();
+            const totalPixels = countData[0]?.count || 0;
+            console.log(`📊 Total pixels in database: ${totalPixels}`);
             
-            // Add all pixels to storage
+            if (totalPixels === 0) {
+                console.warn('⚠️ No pixels found in database');
+                return;
+            }
+            
+            // Progressive loading configuration
+            const batchSize = 1000; // Load 1000 pixels at a time
+            const subBatchSize = 50;  // Process 50 pixels at a time
+            let loadedCount = 0;
             const occupiedSectors = new Set();
-            for (const pixel of pixels) {
-                this.pixelCanvas.pixelStorage.addPixel(
-                    pixel.sector_x,
-                    pixel.sector_y,
-                    pixel.local_x,
-                    pixel.local_y,
-                    pixel.color
-                );
+            
+            // Load in batches to prevent freeze
+            for (let offset = 0; offset < totalPixels; offset += batchSize) {
+                console.log(`📥 Loading batch ${Math.floor(offset/batchSize) + 1}/${Math.ceil(totalPixels/batchSize)} (${offset}-${Math.min(offset + batchSize, totalPixels)})`);
                 
-                const sectorKey = Utils.createSectorKey(pixel.sector_x, pixel.sector_y);
-                occupiedSectors.add(sectorKey);
+                const batchStartTime = performance.now();
+                
+                // Load batch from database
+                const response = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&limit=${batchSize}&offset=${offset}`, {
+                    headers: {
+                        'apikey': CONFIG.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    console.warn(`⚠️ Batch ${Math.floor(offset/batchSize) + 1} failed: ${response.status}`);
+                    continue;
+                }
+                
+                const pixels = await response.json();
+                
+                // Process in sub-batches to prevent freeze
+                for (let i = 0; i < pixels.length; i += subBatchSize) {
+                    const subBatch = pixels.slice(i, i + subBatchSize);
+                    
+                    // Add pixels to storage
+                    for (const pixel of subBatch) {
+                        this.pixelCanvas.pixelStorage.addPixel(
+                            pixel.sector_x,
+                            pixel.sector_y,
+                            pixel.local_x,
+                            pixel.local_y,
+                            pixel.color
+                        );
+                        
+                        const sectorKey = Utils.createSectorKey(pixel.sector_x, pixel.sector_y);
+                        occupiedSectors.add(sectorKey);
+                        loadedCount++;
+                    }
+                    
+                    // Yield control to browser every sub-batch
+                    if (i + subBatchSize < pixels.length) {
+                        await new Promise(resolve => setTimeout(resolve, 1));
+                    }
+                }
+                
+                const batchTime = performance.now() - batchStartTime;
+                console.log(`✅ Batch completed: ${pixels.length} pixels in ${batchTime.toFixed(0)}ms (total: ${loadedCount})`);
+                
+                // Update progress and render periodically
+                if (offset % (batchSize * 5) === 0) { // Every 5 batches
+                    console.log(`🎨 Intermediate render (${loadedCount} pixels loaded)`);
+                    this.pixelCanvas.render();
+                    await new Promise(resolve => setTimeout(resolve, 10)); // Brief pause
+                }
+                
+                // Break if we got fewer pixels than expected
+                if (pixels.length < batchSize) {
+                    console.log(`📊 Reached end of data at ${loadedCount} pixels`);
+                    break;
+                }
+                
+                // Small delay to prevent overwhelming the browser
+                await new Promise(resolve => setTimeout(resolve, 5));
             }
             
             // Initialize active sectors
             this.initializeActiveSectors(occupiedSectors);
             
-            console.log('✅ Layer data loading complete');
+            console.log('✅ Progressive loading complete');
+            console.log(`📊 Successfully loaded ${loadedCount} pixels without freezing`);
             console.log('🔍 Final pixel count in storage:', this.pixelCanvas.pixelStorage.pixels.size);
             
-        } catch (error) {
-            console.error('❌ Layer data loading failed:', error);
+            // Final render
+            this.pixelCanvas.render();
             
-            // Fallback to minimal legacy loading
-            return this.loadPixelsFromLocalStorage();
+        } catch (error) {
+            console.error('❌ Progressive loading failed:', error);
+            throw error;
         }
     }
     
