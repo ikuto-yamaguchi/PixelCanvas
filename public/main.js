@@ -537,7 +537,7 @@ class PixelCanvas {
             
             // Draw pixel
             ctx.fillStyle = CONFIG.PALETTE[color] || '#ffffff';
-            const pixelSize = Math.max(1, CONFIG.PIXEL_SIZE * this.scale);
+            const pixelSize = Math.max(2, CONFIG.PIXEL_SIZE * this.scale); // Minimum 2px for mobile visibility
             ctx.fillRect(Math.floor(screenX), Math.floor(screenY), 
                         Math.ceil(pixelSize), Math.ceil(pixelSize));
             
@@ -866,13 +866,15 @@ class PixelCanvas {
         // その中心は (127.5, 127.5) * PIXEL_SIZE * scale = (510, 510) (scale=1の場合)
         
         // 🚨 CRITICAL: Fixed scale calculation for maximum visibility
-        // Calculate scale to show entire sector (256x256 world pixels = 1024x1024 screen pixels at scale 1)
-        const maxScale = Math.min(canvasWidth / sectorSize, canvasHeight / sectorSize) * 0.8;
-        this.scale = Math.max(0.5, Math.min(3.0, maxScale)); // Better range for visibility
+        // For mobile: Use larger scale to make pixels visible
+        // Calculate scale to show sector content clearly on mobile
+        const mobileOptimalScale = Math.min(canvasWidth / (CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE), canvasHeight / (CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE)) * 0.6;
+        this.scale = Math.max(1.0, Math.min(4.0, mobileOptimalScale)); // Ensure minimum scale 1.0 for visibility
         
-        // オフセットを設定してセクター中心を画面中心に
-        this.offsetX = screenCenterX - sectorCenterX * this.scale;
-        this.offsetY = screenCenterY - sectorCenterY * this.scale;
+        // 🚨 MOBILE FIX: Position sector (0,0) to be fully visible
+        // オフセットを設定してセクター(0,0)全体が見えるように
+        this.offsetX = 20; // Small margin from left
+        this.offsetY = 20; // Small margin from top
         
         console.log(`🎯 Viewport set: scale=${this.scale.toFixed(3)}, offset=(${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)})`);
         console.log(`📐 Sector (0,0) screen bounds: (${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)}) to (${(this.offsetX + sectorSize * this.scale).toFixed(1)}, ${(this.offsetY + sectorSize * this.scale).toFixed(1)})`);

@@ -113,6 +113,12 @@
         window.forceTestRender = DiagnosticPanel.forceTestRender;
     </script>
     
+    <!-- 📱 MOBILE VIEWPORT FIX -->
+    <script type="module">
+        import { createFixViewportButton } from './forceViewportFix.js';
+        console.log('📱 Mobile viewport fix loaded');
+    </script>
+    
     <!-- 🔧 CRITICAL: Enhanced Supabase loading with verification -->
     <script>
         // Supabase loading with retry and verification
