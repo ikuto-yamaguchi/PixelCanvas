@@ -103,7 +103,7 @@ export const CONFIG = {
     // パフォーマンス最適化設定
     TEXTURE_CACHE_SIZE: 500,        // 最大テクスチャキャッシュ数
     PRELOAD_RADIUS: 0,              // 先読みセクター半径 (最適化済み)
-    BATCH_SIZE: 6,                  // バッチ処理サイズ (最適化済み)
+    BATCH_SIZE: 5,                  // バッチ処理サイズ (最適化済み)
     MEMORY_CLEANUP_INTERVAL: 15000, // メモリクリーンアップ間隔(ms)
     LOD_GENERATION_DELAY: 25,      // LOD生成間の遅延(ms)
     VIEWPORT_UPDATE_THROTTLE: 25   // ビューポート更新の制限(ms)
