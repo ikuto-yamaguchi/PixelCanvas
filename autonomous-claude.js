@@ -25,8 +25,8 @@ class AutonomousSystem {
         while (this.isRunning) {
             try {
                 await this.executeCycle();
-                console.log('⏰ Waiting 5 minutes for next cycle...');
-                await this.sleep(300000); // 5 minutes
+                console.log('⏰ Waiting 30 seconds for next cycle...');
+                await this.sleep(30000); // 30 seconds
             } catch (error) {
                 console.error('❌ Cycle error:', error.message);
                 await this.sleep(60000); // 1 minute on error
@@ -61,27 +61,54 @@ class AutonomousSystem {
             
             // Check VIEWPORT_UPDATE_THROTTLE
             const throttleMatch = configContent.match(/VIEWPORT_UPDATE_THROTTLE:\s*(\d+)/);
-            if (throttleMatch && parseInt(throttleMatch[1]) > 50) {
+            if (throttleMatch && parseInt(throttleMatch[1]) > 25) {
                 issues.push({
                     type: 'performance',
                     file: 'Config.js',
                     setting: 'VIEWPORT_UPDATE_THROTTLE',
                     current: parseInt(throttleMatch[1]),
-                    target: 50
+                    target: Math.max(25, parseInt(throttleMatch[1]) - 5)
                 });
             }
 
-            // Check PIXI_MAX_TEXTURES
-            const texturesMatch = configContent.match(/PIXI_MAX_TEXTURES:\s*(\d+)/);
-            if (texturesMatch && parseInt(texturesMatch[1]) < 1000) {
+            // Check RENDER_BATCH_MS
+            const batchMatch = configContent.match(/RENDER_BATCH_MS:\s*(\d+)/);
+            if (batchMatch && parseInt(batchMatch[1]) > 50) {
                 issues.push({
                     type: 'performance',
                     file: 'Config.js',
-                    setting: 'PIXI_MAX_TEXTURES',
-                    current: parseInt(texturesMatch[1]),
-                    target: 1000
+                    setting: 'RENDER_BATCH_MS',
+                    current: parseInt(batchMatch[1]),
+                    target: Math.max(50, parseInt(batchMatch[1]) - 10)
                 });
             }
+
+            // Check MEMORY_CLEANUP_INTERVAL
+            const memoryMatch = configContent.match(/MEMORY_CLEANUP_INTERVAL:\s*(\d+)/);
+            if (memoryMatch && parseInt(memoryMatch[1]) > 15000) {
+                issues.push({
+                    type: 'performance',
+                    file: 'Config.js',
+                    setting: 'MEMORY_CLEANUP_INTERVAL',
+                    current: parseInt(memoryMatch[1]),
+                    target: Math.max(15000, parseInt(memoryMatch[1]) - 2000)
+                });
+            }
+
+            // Check LOD_GENERATION_DELAY
+            const lodMatch = configContent.match(/LOD_GENERATION_DELAY:\s*(\d+)/);
+            if (lodMatch && parseInt(lodMatch[1]) > 25) {
+                issues.push({
+                    type: 'performance',
+                    file: 'Config.js',
+                    setting: 'LOD_GENERATION_DELAY',
+                    current: parseInt(lodMatch[1]),
+                    target: Math.max(25, parseInt(lodMatch[1]) - 10)
+                });
+            }
+
+            // Check DEFAULT_SCALE (skip to prevent floating-point corruption)
+            // Note: DEFAULT_SCALE optimization disabled to prevent value corruption
 
         } catch (error) {
             console.error('Detection error:', error.message);
@@ -173,19 +200,15 @@ if (require.main === module) {
     const system = new AutonomousSystem();
     
     // Process signal handling
-    if (typeof process !== 'undefined') {
-        process.on('SIGINT', () => {
-            console.log('📴 Stopping...');
-            system.stop();
-            process.exit(0);
-        });
-    }
+    process.on('SIGINT', () => {
+        console.log('📴 Stopping...');
+        system.stop();
+        process.exit(0);
+    });
 
     system.startLoop().catch(error => {
         console.error('💥 System crashed:', error);
-        if (typeof process !== 'undefined') {
-            process.exit(1);
-        }
+        process.exit(1);
     });
 }
 

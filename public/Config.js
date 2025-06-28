@@ -37,14 +37,14 @@ export const CONFIG = {
     // Viewport settings
     MIN_SCALE: 0.1,
     MAX_SCALE: 16,
-    DEFAULT_SCALE: 2.0, // 🔧 FIXED: セクター(0,0)のピクセルが確実に見えるスケール
+    DEFAULT_SCALE: 2.5, // 🔧 FIXED: セクター(0,0)のピクセルが確実に見えるスケール
     VIEWPORT_MARGIN: 0.1, // 10% margin for centering
     PADDING_SECTORS: 1, // Padding around active sectors
     
     // Performance settings
     EXPANSION_DEBOUNCE_MS: 1000,
     WHEEL_DEBOUNCE_MS: 1500,
-    RENDER_BATCH_MS: 100,
+    RENDER_BATCH_MS: 50,
     MAX_GRID_LINES: 1000,
     
     // Touch settings
@@ -104,9 +104,9 @@ export const CONFIG = {
     TEXTURE_CACHE_SIZE: 500,        // 最大テクスチャキャッシュ数
     PRELOAD_RADIUS: 1,              // 先読みセクター半径
     BATCH_SIZE: 10,                 // バッチ処理サイズ
-    MEMORY_CLEANUP_INTERVAL: 30000, // メモリクリーンアップ間隔(ms)
-    LOD_GENERATION_DELAY: 100,      // LOD生成間の遅延(ms)
-    VIEWPORT_UPDATE_THROTTLE: 50   // ビューポート更新の制限(ms)
+    MEMORY_CLEANUP_INTERVAL: 15000, // メモリクリーンアップ間隔(ms)
+    LOD_GENERATION_DELAY: 25,      // LOD生成間の遅延(ms)
+    VIEWPORT_UPDATE_THROTTLE: 25   // ビューポート更新の制限(ms)
 };
 
 // Utility functions
