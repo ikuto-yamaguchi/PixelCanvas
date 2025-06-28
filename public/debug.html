@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelCanvas Debug - アプリケーション診断</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+        }
+        .debug-section {
+            background: #2a2a2a;
+            margin: 10px 0;
+            padding: 15px;
+            border: 1px solid #444;
+            border-radius: 5px;
+        }
+        .debug-title {
+            color: #ffff00;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .error { color: #ff4444; }
+        .success { color: #44ff44; }
+        .warning { color: #ffaa44; }
+        .info { color: #4444ff; }
+        #console-output {
+            background: #000;
+            color: #00ff00;
+            font-family: monospace;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            border: 1px solid #444;
+        }
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #666;
+            padding: 5px 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #444;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 PixelCanvas Debug Console</h1>
+    
+    <div class="debug-section">
+        <div class="debug-title">📋 Initial Checks</div>
+        <div id="initial-checks"></div>
+    </div>
+    
+    <div class="debug-section">
+        <div class="debug-title">📦 Dependencies Status</div>
+        <div id="dependencies-status"></div>
+    </div>
+    
+    <div class="debug-section">
+        <div class="debug-title">🌐 Network & Database</div>
+        <div id="network-status"></div>
+    </div>
+    
+    <div class="debug-section">
+        <div class="debug-title">🎨 Canvas & Rendering</div>
+        <div id="canvas-status"></div>
+    </div>
+    
+    <div class="debug-section">
+        <div class="debug-title">📊 Module Loading Status</div>
+        <div id="module-status"></div>
+    </div>
+    
+    <div class="debug-section">
+        <div class="debug-title">🖥️ Console Output</div>
+        <div id="console-output"></div>
+        <button onclick="clearConsole()">Clear Console</button>
+        <button onclick="runDiagnostics()">Run Full Diagnostics</button>
+        <button onclick="testDatabase()">Test Database</button>
+    </div>
+
+    <script>
+        // コンソール出力をキャプチャ
+        const consoleOutput = document.getElementById('console-output');
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        function addToConsole(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = {
+                'log': '📝',
+                'error': '❌',
+                'warn': '⚠️',
+                'info': 'ℹ️'
+            }[type] || '📝';
+            
+            consoleOutput.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addToConsole(args.join(' '), 'log');
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addToConsole(args.join(' '), 'error');
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            addToConsole(args.join(' '), 'warn');
+        };
+        
+        function clearConsole() {
+            consoleOutput.textContent = '';
+        }
+        
+        // 初期チェック
+        function runInitialChecks() {
+            const checks = document.getElementById('initial-checks');
+            let html = '';
+            
+            // DOM要素チェック
+            const mainCanvas = document.getElementById('mainCanvas');
+            const canvasContainer = document.getElementById('canvasContainer');
+            
+            html += `<div class="${mainCanvas ? 'success' : 'error'}">Canvas Element: ${mainCanvas ? '✅ Found' : '❌ Missing'}</div>`;
+            html += `<div class="${canvasContainer ? 'success' : 'error'}">Canvas Container: ${canvasContainer ? '✅ Found' : '❌ Missing'}</div>`;
+            
+            // ブラウザ機能チェック
+            html += `<div class="${typeof WebGL2RenderingContext !== 'undefined' ? 'success' : 'warning'}">WebGL2: ${typeof WebGL2RenderingContext !== 'undefined' ? '✅ Supported' : '⚠️ Not Supported'}</div>`;
+            html += `<div class="${typeof indexedDB !== 'undefined' ? 'success' : 'warning'}">IndexedDB: ${typeof indexedDB !== 'undefined' ? '✅ Supported' : '⚠️ Not Supported'}</div>`;
+            html += `<div class="${navigator.onLine ? 'success' : 'warning'}">Network: ${navigator.onLine ? '✅ Online' : '⚠️ Offline'}</div>`;
+            
+            checks.innerHTML = html;
+        }
+        
+        // 依存関係チェック
+        function checkDependencies() {
+            const deps = document.getElementById('dependencies-status');
+            let html = '';
+            
+            // PixiJS
+            html += `<div class="${window.PIXI ? 'success' : 'error'}">PixiJS: ${window.PIXI ? '✅ Loaded v' + (window.PIXI.VERSION || 'unknown') : '❌ Not Loaded'}</div>`;
+            
+            // Supabase
+            html += `<div class="${window.supabase ? 'success' : 'error'}">Supabase: ${window.supabase ? '✅ Loaded' : '❌ Not Loaded'}</div>`;
+            
+            // IDB
+            html += `<div class="${window.idb ? 'success' : 'warning'}">IDB Library: ${window.idb ? '✅ Loaded' : '⚠️ Not Loaded'}</div>`;
+            
+            // アプリケーション
+            html += `<div class="${window.pixelCanvas ? 'success' : 'error'}">PixelCanvas App: ${window.pixelCanvas ? '✅ Initialized' : '❌ Not Initialized'}</div>`;
+            
+            deps.innerHTML = html;
+        }
+        
+        // ネットワーク・データベーステスト
+        async function testDatabase() {
+            const network = document.getElementById('network-status');
+            network.innerHTML = '<div class="info">🔄 Testing database connection...</div>';
+            
+            try {
+                // Supabaseテスト
+                if (window.supabase) {
+                    const { createClient } = window.supabase;
+                    const supabaseUrl = 'https://lgvjdefkyeuvquzckkvb.supabase.co';
+                    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY';
+                    
+                    const supabase = createClient(supabaseUrl, supabaseKey);
+                    
+                    console.log('Testing Supabase connection...');
+                    const { data, error } = await supabase.from('pixels').select('count').limit(1);
+                    
+                    if (error) {
+                        console.error('Supabase test error:', error);
+                        network.innerHTML = `<div class="error">❌ Database Error: ${error.message}</div>`;
+                    } else {
+                        console.log('Supabase test successful:', data);
+                        network.innerHTML = '<div class="success">✅ Database connection successful</div>';
+                        
+                        // ピクセル数取得テスト
+                        const { count } = await supabase.from('pixels').select('*', { count: 'exact', head: true });
+                        network.innerHTML += `<div class="info">📊 Total pixels in database: ${count || 0}</div>`;
+                    }
+                } else {
+                    network.innerHTML = '<div class="error">❌ Supabase not loaded</div>';
+                }
+            } catch (error) {
+                console.error('Database test failed:', error);
+                network.innerHTML = `<div class="error">❌ Database test failed: ${error.message}</div>`;
+            }
+        }
+        
+        // Canvas状態チェック
+        function checkCanvas() {
+            const canvas = document.getElementById('canvas-status');
+            let html = '';
+            
+            const mainCanvas = document.getElementById('mainCanvas');
+            if (mainCanvas) {
+                const rect = mainCanvas.getBoundingClientRect();
+                html += `<div class="info">Canvas Size: ${rect.width}x${rect.height}</div>`;
+                html += `<div class="info">Canvas Context: ${mainCanvas.getContext ? '✅ Available' : '❌ Not Available'}</div>`;
+                
+                if (mainCanvas.getContext) {
+                    const ctx2d = mainCanvas.getContext('2d');
+                    html += `<div class="${ctx2d ? 'success' : 'error'}">2D Context: ${ctx2d ? '✅ Available' : '❌ Failed'}</div>`;
+                }
+            } else {
+                html += '<div class="error">❌ Canvas element not found</div>';
+            }
+            
+            canvas.innerHTML = html;
+        }
+        
+        // モジュール読み込み状態チェック
+        async function checkModules() {
+            const modules = document.getElementById('module-status');
+            let html = '';
+            
+            // 重要なモジュールのチェック
+            const moduleTests = [
+                { name: 'Config.js', path: './Config.js' },
+                { name: 'main.js', path: './main.js' },
+                { name: 'PixelCanvasCore', path: './src/core/PixelCanvasCore.js' },
+                { name: 'StateManager', path: './src/core/StateManager.js' },
+                { name: 'RenderStrategy', path: './src/render/RenderStrategy.js' }
+            ];
+            
+            for (const test of moduleTests) {
+                try {
+                    const response = await fetch(test.path);
+                    const status = response.ok ? 'success' : 'error';
+                    const statusText = response.ok ? '✅ Available' : `❌ ${response.status}`;
+                    html += `<div class="${status}">${test.name}: ${statusText}</div>`;
+                } catch (error) {
+                    html += `<div class="error">${test.name}: ❌ Failed to load</div>`;
+                }
+            }
+            
+            modules.innerHTML = html;
+        }
+        
+        // 完全診断実行
+        async function runDiagnostics() {
+            console.log('🔧 Starting full diagnostics...');
+            
+            runInitialChecks();
+            checkDependencies();
+            checkCanvas();
+            await checkModules();
+            await testDatabase();
+            
+            console.log('✅ Diagnostics completed');
+        }
+        
+        // ページ読み込み時に初期診断実行
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                runDiagnostics();
+            }, 1000);
+        });
+        
+        // 定期的に状態更新
+        setInterval(() => {
+            checkDependencies();
+        }, 5000);
+    </script>
+    
+    <!-- 元のindex.htmlの要素を追加（テスト用） -->
+    <div style="position: absolute; top: -9999px;">
+        <canvas id="mainCanvas"></canvas>
+        <div id="canvasContainer"></div>
+    </div>
+    
+    <!-- 依存関係読み込み -->
+    <script src="idb.js"></script>
+    <script src="pixi.min.js"></script>
+    <script>
+        // Supabase読み込み
+        (function loadSupabase() {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+            script.onload = () => {
+                console.log('✅ Supabase loaded in debug mode');
+                checkDependencies();
+            };
+            script.onerror = () => {
+                console.error('❌ Failed to load Supabase in debug mode');
+                checkDependencies();
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
+</body>
+</html>
