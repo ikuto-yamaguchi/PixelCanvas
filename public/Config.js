@@ -93,7 +93,7 @@ export const CONFIG = {
         return true; // デフォルトで有効
     })(),
     
-    PIXI_MAX_TEXTURES: 500,  // 最大テクスチャ数
+    PIXI_MAX_TEXTURES: 1000,  // 最大テクスチャ数
     LOD_THRESHOLDS: [2.0, 0.5, 0.125], // LOD切り替え閾値
     
     // LOD設定
@@ -106,7 +106,7 @@ export const CONFIG = {
     BATCH_SIZE: 10,                 // バッチ処理サイズ
     MEMORY_CLEANUP_INTERVAL: 30000, // メモリクリーンアップ間隔(ms)
     LOD_GENERATION_DELAY: 100,      // LOD生成間の遅延(ms)
-    VIEWPORT_UPDATE_THROTTLE: 100   // ビューポート更新の制限(ms)
+    VIEWPORT_UPDATE_THROTTLE: 50   // ビューポート更新の制限(ms)
 };
 
 // Utility functions
