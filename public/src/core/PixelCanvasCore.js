@@ -148,6 +148,11 @@ export class PixelCanvasCore {
             });
             
             console.log(`📊 Loaded ${loadedCount} pixels`);
+            console.log(`📊 Total pixels in memory: ${this.pixelDataManager.getStats().core.totalPixels}`);
+            
+            // 初回レンダリング実行
+            this.render();
+            console.log(`🎨 Initial render completed`);
             
             this.initializationSteps.data = true;
             console.log('✅ Data systems initialized');
@@ -338,12 +343,16 @@ export class PixelCanvasCore {
      */
     render() {
         if (!this.isInitialized || this.isDestroyed || !this.renderStrategy) {
+            console.log(`🎨 Render skipped: initialized=${this.isInitialized}, destroyed=${this.isDestroyed}, strategy=${!!this.renderStrategy}`);
             return;
         }
         
         try {
             const viewport = this.viewportManager.getState();
+            const totalPixels = this.pixelDataManager.getStats().core.totalPixels;
+            console.log(`🎨 Rendering with ${totalPixels} total pixels, viewport:`, viewport);
             this.renderStrategy.render(viewport);
+            console.log(`🎨 Render completed successfully`);
         } catch (error) {
             console.error('🎯 Render failed:', error);
         }

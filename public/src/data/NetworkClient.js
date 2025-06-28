@@ -111,12 +111,15 @@ export class NetworkClient {
      */
     async getPixelsBatch(offset = 0, limit = 1000) {
         try {
-            return await this.get('/rest/v1/pixels', {
+            console.log(`🌐 Requesting pixels batch: offset=${offset}, limit=${limit}`);
+            const result = await this.get('/rest/v1/pixels', {
                 select: 'sector_x,sector_y,local_x,local_y,color',
                 limit: limit,
                 offset: offset,
                 order: 'created_at'
             });
+            console.log(`🌐 Received ${result?.length || 0} pixels in batch`);
+            return result;
         } catch (error) {
             console.error('🌐 Failed to get pixels batch:', error);
             return [];

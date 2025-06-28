@@ -135,6 +135,7 @@ export class PixelDataLoader {
                 console.log(`📥 Loading batch: offset=${offset}, size=${currentBatchSize}`);
                 
                 const batch = await this.networkClient.getPixelsBatch(offset, currentBatchSize);
+                console.log(`📥 NetworkClient returned:`, batch);
                 
                 if (!batch || batch.length === 0) {
                     console.log('📥 No more data available');
@@ -169,11 +170,13 @@ export class PixelDataLoader {
      * バッチ処理
      */
     processBatch(batch) {
+        console.log(`📥 Processing batch of ${batch?.length || 0} pixels`);
         let processedCount = 0;
         
         for (const pixel of batch) {
             try {
                 const { sector_x, sector_y, local_x, local_y, color } = pixel;
+                console.log(`📥 Setting pixel: (${sector_x},${sector_y},${local_x},${local_y}) = ${color}`);
                 
                 if (this.core.setPixel(sector_x, sector_y, local_x, local_y, color)) {
                     processedCount++;
@@ -183,6 +186,7 @@ export class PixelDataLoader {
             }
         }
         
+        console.log(`📥 Processed ${processedCount} pixels successfully`);
         return processedCount;
     }
     
