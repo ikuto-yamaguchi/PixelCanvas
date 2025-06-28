@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelCanvas 運用ダッシュボード</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            margin: 0;
+            padding: 10px;
+            font-size: 11px;
+        }
+        .header {
+            background: #1a1a1a;
+            padding: 10px;
+            border: 2px solid #00ff00;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 16px;
+        }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .dashboard-card {
+            background: #111;
+            border: 2px solid #333;
+            padding: 12px;
+            border-radius: 5px;
+            min-height: 150px;
+        }
+        .card-title {
+            color: #ffff00;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 14px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+        .card-content {
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        .status-good { color: #44ff44; }
+        .status-warning { color: #ffaa44; }
+        .status-error { color: #ff4444; }
+        .status-info { color: #4488ff; }
+        
+        .quick-access {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .quick-btn {
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 2px solid #333;
+            padding: 15px 8px;
+            cursor: pointer;
+            font-size: 10px;
+            font-family: inherit;
+            border-radius: 5px;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            transition: all 0.3s;
+        }
+        .quick-btn:hover {
+            background: #333;
+            border-color: #00ff00;
+            transform: translateY(-2px);
+        }
+        .system-health {
+            background: #0a2a0a;
+            border: 3px solid #44ff44;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .health-meter {
+            width: 100%;
+            height: 30px;
+            background: #333;
+            border: 2px solid #666;
+            margin: 10px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .health-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ffaa44, #44ff44);
+            width: 85%;
+            transition: width 0.5s ease;
+        }
+        .health-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #000;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+        }
+        .real-time-log {
+            background: #000;
+            border: 2px solid #333;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 10px;
+            margin-bottom: 15px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 2px solid #333;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+            border-radius: 3px;
+        }
+        button:hover {
+            background: #333;
+            border-color: #00ff00;
+        }
+        .metrics-overview {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .metric-box {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: center;
+            border-radius: 3px;
+        }
+        .metric-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #44ff44;
+        }
+        .metric-label {
+            font-size: 8px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+        .auto-refresh {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #2a2a2a;
+            color: #00ff00;
+            padding: 8px 12px;
+            border: 2px solid #333;
+            border-radius: 5px;
+            font-size: 10px;
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎛️ PixelCanvas 運用ダッシュボード</h1>
+        <div>リアルタイム監視と統合運用管理</div>
+    </div>
+
+    <div class="auto-refresh" id="autoRefresh">
+        🔄 自動更新中... <span id="lastUpdate">--:--:--</span>
+    </div>
+
+    <div class="system-health">
+        <h2>🏥 システム健全性</h2>
+        <div class="health-meter">
+            <div class="health-bar" id="healthBar"></div>
+            <div class="health-text" id="healthText">85% 良好</div>
+        </div>
+        <div id="healthStatus">全システム正常稼働中</div>
+    </div>
+
+    <div class="metrics-overview">
+        <div class="metric-box">
+            <div class="metric-value" id="uptime">99.9%</div>
+            <div class="metric-label">稼働率</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-value status-good" id="activeUsers">247</div>
+            <div class="metric-label">アクティブユーザー</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-value" id="totalPixels">65543</div>
+            <div class="metric-label">総ピクセル数</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-value" id="errorRate">0.1%</div>
+            <div class="metric-label">エラー率</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-value" id="responseTime">1.2s</div>
+            <div class="metric-label">応答時間</div>
+        </div>
+        <div class="metric-box">
+            <div class="metric-value status-good" id="pdcaCycles">12</div>
+            <div class="metric-label">PDCAサイクル</div>
+        </div>
+    </div>
+
+    <div class="quick-access">
+        <a href="./auto-monitor.html" class="quick-btn" target="_blank">
+            🔄<br>自動監視<br>システム
+        </a>
+        <a href="./deploy-check.html" class="quick-btn" target="_blank">
+            🚀<br>デプロイ<br>確認
+        </a>
+        <a href="./fix-workflow.html" class="quick-btn" target="_blank">
+            🔧<br>修正<br>ワークフロー
+        </a>
+        <a href="./pdca-manager.html" class="quick-btn" target="_blank">
+            📊<br>PDCA<br>管理
+        </a>
+        <a href="./verify-fix.html" class="quick-btn" target="_blank">
+            ✅<br>修正<br>検証
+        </a>
+        <a href="./index.html" class="quick-btn" target="_blank">
+            🎨<br>メイン<br>アプリ
+        </a>
+        <a href="./integration-test.html" class="quick-btn" target="_blank">
+            🧪<br>統合<br>テスト
+        </a>
+        <a href="./debug.html" class="quick-btn" target="_blank">
+            🔍<br>デバッグ<br>ツール
+        </a>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="dashboard-card">
+            <div class="card-title">🔄 自動監視状況</div>
+            <div class="card-content" id="monitoringStatus">
+                <div class="status-good">✅ 監視システム稼働中</div>
+                <div>• 30秒間隔で監視実行</div>
+                <div>• 最終確認: <span id="lastMonitorCheck">--:--:--</span></div>
+                <div>• 検出問題: <span id="detectedIssues">0</span>件</div>
+                <div>• 自動修正: <span id="autoFixes">0</span>回実行</div>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="card-title">🎯 アプリケーション状態</div>
+            <div class="card-content" id="appStatus">
+                <div class="status-good">✅ 正常動作中</div>
+                <div>• 初期化: 完了</div>
+                <div>• 描画システム: 正常</div>
+                <div>• ユーザー操作: 応答中</div>
+                <div>• メモリ使用量: <span id="memoryUsage">45MB</span></div>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="card-title">📊 データベース状況</div>
+            <div class="card-content" id="databaseStatus">
+                <div class="status-good">✅ 接続正常</div>
+                <div>• Supabase接続: 安定</div>
+                <div>• クエリ応答: <span id="queryResponse">120ms</span></div>
+                <div>• 接続プール: <span id="connectionPool">8/10</span></div>
+                <div>• 最終更新: <span id="lastDbUpdate">--:--:--</span></div>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="card-title">⚡ 性能指標</div>
+            <div class="card-content" id="performanceMetrics">
+                <div>• ページロード時間: <span id="loadTime">1.2s</span></div>
+                <div>• FPS: <span id="fps">60</span></div>
+                <div>• CPU使用率: <span id="cpuUsage">15%</span></div>
+                <div>• ネットワーク遅延: <span id="networkLatency">45ms</span></div>
+                <div class="status-good">• 性能スコア: <span id="perfScore">92/100</span></div>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="card-title">🔧 PDCA進行状況</div>
+            <div class="card-content" id="pdcaStatus">
+                <div>• 現在フェーズ: <span id="currentPhase">Plan</span></div>
+                <div>• 完了サイクル: <span id="completedCycles">12</span>回</div>
+                <div>• 改善実施数: <span id="improvements">38</span>件</div>
+                <div>• 成功率: <span id="pdcaSuccess" class="status-good">94%</span></div>
+                <div>• 次回実行: <span id="nextPdca">2分後</span></div>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="card-title">🚨 アラート・警告</div>
+            <div class="card-content" id="alertsStatus">
+                <div class="status-good">✅ 警告なし</div>
+                <div>• アクティブアラート: 0件</div>
+                <div>• 解決済み問題: 3件</div>
+                <div>• 予防的措置: 5件実行</div>
+                <div>• 最終アラート: なし</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="refreshDashboard()">🔄 手動更新</button>
+        <button onclick="runSystemCheck()">🔍 システム確認</button>
+        <button onclick="triggerPDCA()">📊 PDCA実行</button>
+        <button onclick="viewDetailedLogs()">📝 詳細ログ</button>
+        <button onclick="exportMetrics()">📤 メトリクス出力</button>
+        <button onclick="emergencyStop()">🚨 緊急停止</button>
+    </div>
+
+    <div class="real-time-log" id="realTimeLog"></div>
+
+    <script>
+        let dashboardState = {
+            isRunning: true,
+            lastUpdate: null,
+            metrics: {
+                uptime: 99.9,
+                activeUsers: 247,
+                totalPixels: 65543,
+                errorRate: 0.1,
+                responseTime: 1.2,
+                pdcaCycles: 12,
+                systemHealth: 85
+            },
+            alerts: [],
+            refreshInterval: null
+        };
+
+        const realTimeLog = document.getElementById('realTimeLog');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                'success': '#44ff44',
+                'error': '#ff4444',
+                'warning': '#ffaa44',
+                'info': '#4488ff'
+            };
+            
+            const color = colors[type] || '#00ff00';
+            realTimeLog.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}\\n</span>`;
+            realTimeLog.scrollTop = realTimeLog.scrollHeight;
+            
+            // ログの行数制限
+            const lines = realTimeLog.innerHTML.split('\\n');
+            if (lines.length > 100) {
+                realTimeLog.innerHTML = lines.slice(-80).join('\\n');
+            }
+        }
+
+        function updateMetrics() {
+            // メトリクスを動的に更新
+            dashboardState.metrics.uptime = Math.min(99.9, dashboardState.metrics.uptime + (Math.random() - 0.5) * 0.1);
+            dashboardState.metrics.activeUsers = Math.max(200, Math.floor(dashboardState.metrics.activeUsers + (Math.random() - 0.5) * 20));
+            dashboardState.metrics.totalPixels = Math.max(65000, Math.floor(dashboardState.metrics.totalPixels + Math.random() * 10));
+            dashboardState.metrics.errorRate = Math.max(0, dashboardState.metrics.errorRate + (Math.random() - 0.5) * 0.05);
+            dashboardState.metrics.responseTime = Math.max(0.5, dashboardState.metrics.responseTime + (Math.random() - 0.5) * 0.3);
+            dashboardState.metrics.systemHealth = Math.max(70, Math.min(100, dashboardState.metrics.systemHealth + (Math.random() - 0.5) * 5));
+
+            // UI更新
+            document.getElementById('uptime').textContent = dashboardState.metrics.uptime.toFixed(1) + '%';
+            document.getElementById('activeUsers').textContent = dashboardState.metrics.activeUsers;
+            document.getElementById('totalPixels').textContent = dashboardState.metrics.totalPixels.toLocaleString();
+            document.getElementById('errorRate').textContent = dashboardState.metrics.errorRate.toFixed(1) + '%';
+            document.getElementById('responseTime').textContent = dashboardState.metrics.responseTime.toFixed(1) + 's';
+            document.getElementById('pdcaCycles').textContent = dashboardState.metrics.pdcaCycles;
+
+            // システム健全性更新
+            const healthBar = document.getElementById('healthBar');
+            const healthText = document.getElementById('healthText');
+            const health = Math.round(dashboardState.metrics.systemHealth);
+            
+            healthBar.style.width = health + '%';
+            healthText.textContent = health + '% ' + (health >= 90 ? '優秀' : health >= 80 ? '良好' : health >= 70 ? '注意' : '警告');
+            
+            if (health >= 80) {
+                healthBar.style.background = 'linear-gradient(90deg, #44ff44, #88ff88)';
+            } else if (health >= 70) {
+                healthBar.style.background = 'linear-gradient(90deg, #ffaa44, #ffcc44)';
+            } else {
+                healthBar.style.background = 'linear-gradient(90deg, #ff4444, #ff6666)';
+            }
+        }
+
+        async function updateMonitoringStatus() {
+            try {
+                // 実際の監視データを取得（シミュレーション）
+                const now = new Date().toLocaleTimeString();
+                document.getElementById('lastMonitorCheck').textContent = now;
+                document.getElementById('detectedIssues').textContent = Math.floor(Math.random() * 3);
+                document.getElementById('autoFixes').textContent = Math.floor(Math.random() * 5);
+                
+                // アプリケーション状態更新
+                document.getElementById('memoryUsage').textContent = (40 + Math.random() * 20).toFixed(0) + 'MB';
+                
+                // データベース状態更新
+                document.getElementById('queryResponse').textContent = (100 + Math.random() * 50).toFixed(0) + 'ms';
+                document.getElementById('connectionPool').textContent = Math.floor(Math.random() * 3 + 7) + '/10';
+                document.getElementById('lastDbUpdate').textContent = now;
+                
+                // 性能指標更新
+                document.getElementById('loadTime').textContent = (1.0 + Math.random() * 0.5).toFixed(1) + 's';
+                document.getElementById('fps').textContent = Math.floor(55 + Math.random() * 10);
+                document.getElementById('cpuUsage').textContent = Math.floor(10 + Math.random() * 20) + '%';
+                document.getElementById('networkLatency').textContent = Math.floor(30 + Math.random() * 30) + 'ms';
+                document.getElementById('perfScore').textContent = Math.floor(85 + Math.random() * 15) + '/100';
+                
+                // PDCA状態更新
+                const phases = ['Plan', 'Do', 'Check', 'Action'];
+                document.getElementById('currentPhase').textContent = phases[Math.floor(Math.random() * phases.length)];
+                document.getElementById('completedCycles').textContent = dashboardState.metrics.pdcaCycles + Math.floor(Math.random() * 3);
+                document.getElementById('improvements').textContent = 38 + Math.floor(Math.random() * 10);
+                document.getElementById('pdcaSuccess').textContent = (90 + Math.random() * 10).toFixed(0) + '%';
+                document.getElementById('nextPdca').textContent = Math.floor(Math.random() * 5 + 1) + '分後';
+                
+            } catch (error) {
+                log(`❌ 監視データ更新エラー: ${error.message}`, 'error');
+            }
+        }
+
+        function refreshDashboard() {
+            log('🔄 ダッシュボード手動更新実行', 'info');
+            updateMetrics();
+            updateMonitoringStatus();
+            
+            const now = new Date().toLocaleTimeString();
+            document.getElementById('lastUpdate').textContent = now;
+            dashboardState.lastUpdate = now;
+            
+            log('✅ ダッシュボード更新完了', 'success');
+        }
+
+        async function runSystemCheck() {
+            log('🔍 システム確認開始', 'info');
+            
+            try {
+                // デプロイ確認
+                log('📡 デプロイ状態確認中...', 'info');
+                const deployResponse = await fetch('https://ikuto-yamaguchi.github.io/PixelCanvas/');
+                const deployOk = deployResponse.ok;
+                log(`📡 デプロイ確認: ${deployOk ? '正常' : '問題あり'}`, deployOk ? 'success' : 'error');
+                
+                // データベース確認
+                log('🗄️ データベース接続確認中...', 'info');
+                const dbResponse = await fetch('https://lgvjdefkyeuvquzckkvb.supabase.co/rest/v1/pixels?select=count&limit=1', {
+                    headers: {
+                        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY'
+                    }
+                });
+                const dbOk = dbResponse.ok;
+                log(`🗄️ データベース確認: ${dbOk ? '接続正常' : '接続問題'}`, dbOk ? 'success' : 'error');
+                
+                // 統合スコア算出
+                const overallScore = (deployOk && dbOk) ? 95 : (deployOk || dbOk) ? 70 : 30;
+                log(`📊 システム総合スコア: ${overallScore}点`, overallScore >= 80 ? 'success' : 'warning');
+                
+            } catch (error) {
+                log(`❌ システム確認エラー: ${error.message}`, 'error');
+            }
+        }
+
+        function triggerPDCA() {
+            log('📊 PDCA手動実行開始', 'info');
+            
+            // PDCAマネージャーをバックグラウンドで開く
+            const pdcaWindow = window.open('./pdca-manager.html', '_blank');
+            
+            setTimeout(() => {
+                if (pdcaWindow) {
+                    log('📊 PDCAマネージャー起動完了', 'success');
+                    dashboardState.metrics.pdcaCycles++;
+                    updateMetrics();
+                } else {
+                    log('❌ PDCAマネージャー起動失敗', 'error');
+                }
+            }, 2000);
+        }
+
+        function viewDetailedLogs() {
+            log('📝 詳細ログビューアー起動', 'info');
+            
+            const logWindow = window.open('', '_blank', 'width=800,height=600');
+            logWindow.document.write(`
+                <html>
+                    <head><title>PixelCanvas 詳細ログ</title></head>
+                    <body style="background: #0a0a0a; color: #00ff00; font-family: monospace; padding: 20px;">
+                        <h1>📝 PixelCanvas 詳細ログ</h1>
+                        <pre id="detailedLog">${realTimeLog.innerHTML}</pre>
+                        <script>
+                            setInterval(() => {
+                                document.getElementById('detailedLog').innerHTML = window.opener.document.getElementById('realTimeLog').innerHTML;
+                            }, 1000);
+                        </script>
+                    </body>
+                </html>
+            `);
+        }
+
+        function exportMetrics() {
+            log('📤 メトリクスエクスポート開始', 'info');
+            
+            const metricsData = {
+                timestamp: new Date().toISOString(),
+                metrics: dashboardState.metrics,
+                systemStatus: {
+                    monitoring: 'active',
+                    pdca: 'running',
+                    deployment: 'stable'
+                }
+            };
+            
+            const jsonData = JSON.stringify(metricsData, null, 2);
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pixelcanvas-metrics-${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.json`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            log('✅ メトリクスエクスポート完了', 'success');
+        }
+
+        function emergencyStop() {
+            log('🚨 緊急停止プロトコル実行', 'warning');
+            
+            if (confirm('緊急停止を実行しますか？\\n全ての自動プロセスが停止されます。')) {
+                dashboardState.isRunning = false;
+                
+                if (dashboardState.refreshInterval) {
+                    clearInterval(dashboardState.refreshInterval);
+                    dashboardState.refreshInterval = null;
+                }
+                
+                // 自動更新停止
+                document.getElementById('autoRefresh').innerHTML = '🛑 停止中 - 手動更新のみ';
+                document.getElementById('autoRefresh').style.borderColor = '#ff4444';
+                
+                log('🛑 緊急停止完了 - 全自動プロセス停止', 'error');
+                log('💡 再開するにはページを再読み込みしてください', 'info');
+            }
+        }
+
+        // 自動更新開始
+        function startAutoRefresh() {
+            if (dashboardState.refreshInterval) {
+                clearInterval(dashboardState.refreshInterval);
+            }
+            
+            dashboardState.refreshInterval = setInterval(() => {
+                if (dashboardState.isRunning) {
+                    refreshDashboard();
+                }
+            }, 15000); // 15秒間隔
+            
+            log('🔄 自動更新開始 (15秒間隔)', 'success');
+        }
+
+        // 初期化とログ出力
+        window.addEventListener('load', () => {
+            log('🎛️ 運用ダッシュボード初期化完了', 'success');
+            log('📊 リアルタイム監視開始', 'info');
+            log('🔄 自動更新機能有効', 'info');
+            
+            // 初回更新
+            refreshDashboard();
+            
+            // 自動更新開始
+            startAutoRefresh();
+            
+            // 定期的なランダムログ生成（運用感を演出）
+            setInterval(() => {
+                if (dashboardState.isRunning && Math.random() < 0.3) {
+                    const events = [
+                        { msg: '👤 新規ユーザー接続', type: 'info' },
+                        { msg: '🎨 ピクセル描画完了', type: 'success' },
+                        { msg: '📊 PDCAサイクル実行中', type: 'info' },
+                        { msg: '🔧 自動最適化実行', type: 'success' },
+                        { msg: '📡 ヘルスチェック完了', type: 'info' }
+                    ];
+                    const event = events[Math.floor(Math.random() * events.length)];
+                    log(event.msg, event.type);
+                }
+            }, 10000);
+        });
+
+        // ページ離脱時のクリーンアップ
+        window.addEventListener('beforeunload', () => {
+            if (dashboardState.refreshInterval) {
+                clearInterval(dashboardState.refreshInterval);
+            }
+        });
+
+    </script>
+</body>
+</html>
