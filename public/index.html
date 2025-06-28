@@ -79,19 +79,7 @@
     <!-- 🔧 ENHANCED: Reliable library loading with fallbacks -->
     <script src="idb.js"></script>
     
-    <!-- 🐛 ERROR LOGGER: Must load before other scripts -->
-    <script type="module">
-        import { ErrorLogger } from './ErrorLogger.js';
-        window.errorLogger = new ErrorLogger();
-        console.log('🐛 Error Logger initialized');
-    </script>
-    
-    <!-- 🌐 FETCH HELPER: Load before NetworkManager -->
-    <script type="module">
-        import { FetchHelper } from './FetchHelper.js';
-        window.FetchHelper = FetchHelper;
-        console.log('🌐 Fetch Helper initialized');
-    </script>
+    <!-- 📝 NEW ARCHITECTURE: Error handling and utilities are now integrated into the modular system -->
     
     
     <!-- 🔧 CRITICAL: Enhanced Supabase loading with verification -->

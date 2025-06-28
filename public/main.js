@@ -1,922 +1,306 @@
-// PixelCanvas Main Application - LOD-Only Version
-import { CONFIG, Utils } from './Config.js';
-import { DebugPanel } from './DebugPanel.js';
-import { EventHandlers } from './EventHandlers.js';
-import { ViewportController } from './ViewportController.js';
-import { SectorManager } from './SectorManager.js';
-import { NetworkManager } from './NetworkManager.js';
-import { PixelStorage } from './PixelStorage.js';
-import { PixiRenderer } from './PixiRenderer.js';
-import { UltraFastLoader } from './UltraFastLoader.js';
-import { UltraFastRenderer } from './UltraFastRenderer.js';
-import { BinaryPixelProtocol } from './BinaryPixelProtocol.js';
-import { PerformanceMonitor } from './PerformanceMonitor.js';
+// PixelCanvas Main Application - 新アーキテクチャ版
+import { CONFIG } from './Config.js';
+import { PixelCanvasCore } from './src/core/PixelCanvasCore.js';
 
-class PixelCanvas {
+/**
+ * メインアプリケーション初期化クラス
+ * 新しいモジュラーアーキテクチャを使用
+ */
+class PixelCanvasApp {
     constructor() {
-        // Get DOM elements
-        this.canvas = document.getElementById('mainCanvas');
-        this.ctx = this.canvas.getContext('2d', { alpha: false });
-        this.container = document.getElementById('canvasContainer');
+        this.pixelCanvasCore = null;
+        this.isInitialized = false;
+        this.initializationError = null;
         
-        // Core state
-        this.currentColor = 0;
-        this.scale = CONFIG.DEFAULT_SCALE;
-        this.offsetX = 0;
-        this.offsetY = 0;
-        this.showGrid = false; // 🚨 DISABLED: No grid lines
-        this.activeSectors = new Set(); // Initialize empty, will be populated from database
-        this.sectorPixelCounts = new Map(); // Track pixel count per sector
-        this.isExpansionRunning = false;
-        this.deviceId = Utils.generateDeviceId();
-        
-        // Canvas size tracking
-        this.logicalWidth = 0;
-        this.logicalHeight = 0;
-        
-        // 🚨 EMERGENCY: Ultra-aggressive render throttling
-        this.lastRenderTime = 0;
-        this.renderThrottle = 100; // 10fps maximum
-        this.pendingRender = false;
-        
-        // Initialize debug panel first to catch all errors
-        this.debugPanel = DebugPanel.getInstance();
-        
+        console.log('🎯 PixelCanvas App starting with new architecture...');
+    }
+    
+    /**
+     * アプリケーション初期化
+     */
+    async initialize() {
         try {
-            // Initialize modules
-            this.pixelStorage = new PixelStorage(this);
+            console.log('🚀 Starting PixelCanvas with new modular architecture...');
             
-            // 🚀 CRITICAL: Initialize Ultra Fast Systems
-            this.performanceMonitor = new PerformanceMonitor();
-            this.performanceMonitor.startMonitoring();
-            // Check for mobile optimizations
-            const mobileOpts = this.performanceMonitor.getMobileOptimizations();
-            if (mobileOpts) {
-                console.log('📱 Mobile device detected, applying optimizations:', mobileOpts);
+            // 必要なDOM要素の確認
+            if (!this.validateDOMElements()) {
+                throw new Error('Required DOM elements not found');
             }
             
-            this.ultraFastLoader = new UltraFastLoader(this);
-            this.ultraFastRenderer = new UltraFastRenderer(this.canvas, this.pixelStorage);
-            this.binaryProtocol = new BinaryPixelProtocol();
+            // コアアプリケーション初期化
+            this.pixelCanvasCore = new PixelCanvasCore();
+            await this.pixelCanvasCore.initialize();
             
-            this.viewportController = new ViewportController(this);
+            // グローバルアクセス用
+            window.pixelCanvas = this.pixelCanvasCore;
+            window.pixelCanvasApp = this;
             
-            // 🚀 LOD SYSTEM: Only essential components for LOD rendering
-            this.networkManager = new NetworkManager(this);
-            
-            // 🚀 CRITICAL: Re-enable PixiJS LOD system for proper rendering
-            CONFIG.USE_PIXI_RENDERER = true;
-            
-            // Initialize PixiJS with proper LOD system
-            try {
-                console.log('🚀 Initializing PixiJS LOD system...');
-                this.pixiRenderer = new PixiRenderer(this);
-            } catch (error) {
-                console.error('❌ PixiJS LOD initialization failed:', error);
-                CONFIG.USE_PIXI_RENDERER = false;
+            // デバッグモードの場合は追加情報を表示
+            if (CONFIG.DEBUG_MODE) {
+                this.setupDebugMode();
             }
             
-            // 🚀 LOD SYSTEM: No additional render systems needed
+            this.isInitialized = true;
+            console.log('✅ PixelCanvas initialization completed successfully');
             
-            this.sectorManager = new SectorManager(this);
+            // 初期化成功の通知
+            this.showInitializationSuccess();
             
-            this.eventHandlers = new EventHandlers(this.canvas, this);
-            
-            // Delegate properties for backward compatibility
-            this.pixels = this.pixelStorage.pixels;
-            this.pixelStock = this.pixelStorage.pixelStock;
-            
-            this.init();
         } catch (error) {
-            console.error('Initialization error:', error);
+            this.initializationError = error;
+            console.error('❌ PixelCanvas initialization failed:', error);
+            this.showInitializationError(error);
+            throw error;
         }
     }
     
-    async init() {
-        try {
-            this.setupCanvas();
-            // 🚀 LOD SYSTEM: Color palette handled by PixiJS LOD system
-            this.setupOnlineStatusHandling();
-            this.registerServiceWorker();
-            await this.sectorManager.initializeSectors();
-            this.sectorManager.startPeriodicRefresh();
-            
-            // Await initial data loading
-            await this.loadInitialData();
-            
-            // 🚨 EMERGENCY TEST: Add manual test pixels
-            console.log('🧪 Adding manual test pixels...');
-            this.addTestPixels();
-            
-            // 🚨 CRITICAL: Force display sector (0,0) after everything is loaded
-            setTimeout(() => {
-                console.log('🎯 FORCE: Setting viewport to sector (0,0)...');
-                this.forceViewportToSectorZero();
-                this.render();
-                
-                // Double render to ensure pixels are displayed
-                setTimeout(() => {
-                    console.log('🎯 FORCE: Secondary render...');
-                    this.render();
-                }, 500);
-            }, 1000);
-            
-        } catch (error) {
-            console.error('Init error:', error);
-        }
-    }
-    
-    setupCanvas() {
-        this.resizeCanvas();
-        window.addEventListener('resize', () => this.resizeCanvas());
-    }
-    
-    resizeCanvas() {
-        const rect = this.container.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
+    /**
+     * DOM要素の存在確認
+     */
+    validateDOMElements() {
+        const requiredElements = [
+            'mainCanvas',
+            'canvasContainer'
+        ];
         
-        // Store logical canvas size for viewport calculations
-        this.logicalWidth = rect.width;
-        this.logicalHeight = rect.height;
+        const missingElements = [];
         
-        // Set physical canvas size for sharp rendering
-        this.canvas.width = rect.width * dpr;
-        this.canvas.height = rect.height * dpr;
-        this.canvas.style.width = rect.width + 'px';
-        this.canvas.style.height = rect.height + 'px';
-        
-        this.ctx.scale(dpr, dpr);
-        this.throttledRender();
-    }
-    
-    setupOnlineStatusHandling() {
-        window.addEventListener('online', () => {
-            this.networkManager.updateStatus(true);
-            this.networkManager.flushQueue();
-        });
-        
-        window.addEventListener('offline', () => {
-            this.networkManager.updateStatus(false);
-        });
-    }
-    
-    registerServiceWorker() {
-        // 🚨 DISABLED: Service Worker causing cache errors
-        console.log('🚨 Service Worker disabled to prevent cache errors');
-        // if ('serviceWorker' in navigator) {
-        //     navigator.serviceWorker.register('sw.js').catch(console.error);
-        // }
-    }
-    
-    async loadInitialData() {
-        
-        try {
-            console.log('🚀 Starting ULTRA FAST loading system...');
-            console.log('🔍 DEBUG: Initial pixel count:', this.pixelStorage.pixels.size);
-            
-            // 🚀 CRITICAL: Use UltraFastLoader instead of NetworkManager
-            const loadStartTime = performance.now();
-            
-            // 🚨 RELIABLE: Use NetworkManager with fallback handling
-            console.log('🔄 Loading pixels with automatic fallback...');
-            await this.networkManager.loadPixelsFromSupabase();
-            console.log('✅ Pixel loading completed (Supabase or localStorage)');
-            
-            const totalLoadTime = performance.now() - loadStartTime;
-            console.log(`🎉 Loading completed in ${totalLoadTime.toFixed(0)}ms`);
-            console.log('🔍 DEBUG: Final pixel count:', this.pixelStorage.pixels.size);
-            
-            // 🚨 CRITICAL: Update display immediately
-            if (this.pixelStorage.pixels.size > 0) {
-                console.log(`📊 Loaded ${this.pixelStorage.pixels.size} pixels, updating display...`);
-                this.pixelStorage.updateStockDisplay();
-                
-                // Force viewport to sector (0,0)
-                this.forceViewportToSectorZero();
-                
-                // Multiple renders for progressive enhancement
-                console.log('🎨 Starting rendering sequence...');
-                this.throttledRender();
-                setTimeout(() => {
-                    console.log('🎨 Render attempt 2...');
-                    this.throttledRender();
-                }, 100);
-                setTimeout(() => {
-                    console.log('🎨 Render attempt 3...');
-                    this.throttledRender();
-                }, 500);
-            } else {
-                console.warn('⚠️ No pixels loaded - trying manual test pixels...');
-                this.addTestPixels();
-                setTimeout(() => this.throttledRender(), 100);
+        for (const elementId of requiredElements) {
+            const element = document.getElementById(elementId);
+            if (!element) {
+                missingElements.push(elementId);
             }
-            
-            // Background: Load sector counts (low priority)
-            setTimeout(async () => {
-                try {
-                    console.log('📊 Loading sector counts in background...');
-                    await this.networkManager.loadSectorCounts();
-                } catch (error) {
-                    console.warn('Background sector loading failed:', error);
+        }
+        
+        if (missingElements.length > 0) {
+            console.error('❌ Missing required DOM elements:', missingElements);
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * デバッグモード設定
+     */
+    setupDebugMode() {
+        console.log('🔧 Debug mode enabled');
+        
+        // グローバルデバッグ関数を追加
+        window.debugPixelCanvas = () => {
+            if (this.pixelCanvasCore) {
+                this.pixelCanvasCore.debugInfo();
+            }
+        };
+        
+        window.getPixelCanvasStats = () => {
+            if (this.pixelCanvasCore) {
+                return this.pixelCanvasCore.getStats();
+            }
+            return null;
+        };
+        
+        // デバッグ用のキーボードショートカット
+        document.addEventListener('keydown', (event) => {
+            if (event.ctrlKey && event.shiftKey) {
+                switch (event.key) {
+                    case 'D':
+                        event.preventDefault();
+                        this.pixelCanvasCore.debugInfo();
+                        break;
+                    case 'S':
+                        event.preventDefault();
+                        console.log('📊 Stats:', this.pixelCanvasCore.getStats());
+                        break;
+                    case 'R':
+                        event.preventDefault();
+                        this.pixelCanvasCore.render();
+                        console.log('🎨 Manual render triggered');
+                        break;
                 }
-            }, 2000);
-            
-            // 🚀 CRITICAL: Initialize ultra-low latency updates
-            try {
-                console.log('⚡ Initializing ultra-low latency WebSocket...');
-                await this.binaryProtocol.connect();
-                console.log('✅ Ultra-low latency updates ready');
-            } catch (error) {
-                console.warn('⚠️ Ultra-low latency updates failed, using fallback:', error);
             }
-            
-            console.log('✅ Ultra fast initial data loading completed successfully');
-            
-        } catch (error) {
-            console.error('❌ Ultra fast loading failed:', error);
-            
-            // 🚨 FALLBACK: Try legacy loading
-            console.log('🔄 Falling back to legacy loading...');
-            try {
-                await this.networkManager.loadPixelsFromSupabase();
-                this.throttledRender();
-            } catch (fallbackError) {
-                console.error('❌ Fallback loading also failed:', fallbackError);
-            }
-        }
+        });
+        
+        console.log('🔧 Debug shortcuts enabled:');
+        console.log('  - Ctrl+Shift+D: Debug info');
+        console.log('  - Ctrl+Shift+S: Show stats');
+        console.log('  - Ctrl+Shift+R: Manual render');
     }
     
-    // Pixel interaction
-    async handlePixelClick(x, y) {
-        // Convert screen coordinates to world coordinates
-        const worldX = Math.floor((x - this.offsetX) / (CONFIG.PIXEL_SIZE * this.scale));
-        const worldY = Math.floor((y - this.offsetY) / (CONFIG.PIXEL_SIZE * this.scale));
+    /**
+     * 初期化成功の通知
+     */
+    showInitializationSuccess() {
+        // 簡易的な成功通知
+        console.log('🎉 PixelCanvas is ready!');
         
-        // Convert to sector and local coordinates
-        const local = Utils.worldToLocal(worldX, worldY);
-        
-        // Check if within bounds
-        if (local.localX < 0 || local.localX >= CONFIG.GRID_SIZE || 
-            local.localY < 0 || local.localY >= CONFIG.GRID_SIZE) {
-            console.error('🚫 Click outside valid bounds:', {x, y, worldX, worldY, local});
-            return;
-        }
-        
-        // 🚨 DISABLED: Allow clicking anywhere in sector (0,0)
-        // if (!this.sectorManager.isWithinActiveSectors(worldX, worldY)) {
-        //     console.error('🚫 Click outside active sectors:', {worldX, worldY, activeSectors: Array.from(this.activeSectors)});
-        //     this.showOutOfBoundsWarning();
-        //     return;
-        // }
-        
-        // Check if pixel already exists
-        if (this.pixelStorage.hasPixel(local.sectorX, local.sectorY, local.localX, local.localY)) {
-            return;
-        }
-        
-        
-        // Use optimized pixel drawing system
-        const success = await this.drawPixelOptimized(worldX, worldY, this.currentColor);
-        
-        
-        if (success) {
-            // Check for expansion after successful draw
-            this.checkAndTriggerExpansion(local.sectorX, local.sectorY);
-        }
-    }
-    
-    checkAndTriggerExpansion(sectorX, sectorY) {
-        // Check if we need to expand
-        const actualCount = this.pixelStorage.getSectorPixelCount(sectorX, sectorY);
-        const maxPixelsPerSector = CONFIG.GRID_SIZE * CONFIG.GRID_SIZE;
-        const fillPercentage = actualCount / maxPixelsPerSector;
-        
-        if (fillPercentage >= CONFIG.SECTOR_EXPANSION_THRESHOLD) {
-            this.sectorManager.expandSectorsLocally(sectorX, sectorY);
-        }
-    }
-    
-    // 🚨 EMERGENCY TEST: Manual test pixels
-    addTestPixels() {
-        console.log('🧪 Adding manual test pixels for debugging...');
-        console.log(`🔧 PixelStorage before test: ${this.pixelStorage.pixels.size} pixels`);
-        
-        // Add a few test pixels at sector 0,0
-        for (let i = 0; i < 10; i++) {
-            this.pixelStorage.setPixel(0, 0, i * 10, 10, i % 16);
-        }
-        
-        console.log(`🔧 PixelStorage after test: ${this.pixelStorage.pixels.size} pixels`);
-        console.log('🔧 Test pixels added, forcing render...');
-        
-        // Update display
-        this.pixelStorage.updateStockDisplay();
-        
-        // Force render
-        this.render();
-        
-        setTimeout(() => {
-            console.log('🔧 Secondary render after test pixels...');
-            this.render();
-        }, 1000);
-    }
-    
-    
-    showOutOfBoundsWarning() {
-        let warning = document.getElementById('outOfBoundsWarning');
-        if (!warning) {
-            warning = document.createElement('div');
-            warning.id = 'outOfBoundsWarning';
-            warning.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: rgba(255, 100, 100, 0.95);
-                color: white;
-                padding: 20px;
-                border-radius: 10px;
-                font-family: Arial, sans-serif;
-                font-size: 16px;
-                text-align: center;
-                z-index: 1000;
-                max-width: 300px;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            `;
-            document.body.appendChild(warning);
-        }
-        
-        warning.innerHTML = `
-            <div style="font-size: 24px; margin-bottom: 10px;">🚫</div>
-            <div><strong>Can't Draw Here</strong></div>
-            <div style="margin-top: 10px; font-size: 14px;">
-                You can only draw in active (green) sectors.<br>
-                Fill existing sectors to unlock new areas!
-            </div>
-        `;
-        warning.style.display = 'block';
-        
-        setTimeout(() => {
-            if (warning) {
-                warning.style.display = 'none';
-            }
-        }, 3000);
-    }
-    
-    // 🚀 ULTRA FAST: Ultra-lightweight rendering with intelligent LOD
-    render() {
-        try {
-            const pixelCount = this.pixelStorage.pixels.size;
-            console.log(`🎨 RENDER: Starting render with ${pixelCount} pixels`);
-            console.log(`🎨 RENDER: Scale=${this.scale}, Offset=(${this.offsetX}, ${this.offsetY})`);
-            
-            // 🚨 CRITICAL FIX: Use proper renderer based on configuration
-            if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
-                console.log(`🎨 PIXI: Using PixiJS renderer for high performance`);
-                this.pixiRenderer.render();
-            } else {
-                console.log(`🎨 FALLBACK: Using Canvas2D renderer`);
-                this.renderUltraLight();
-            }
-            
-            console.log(`✅ RENDER: Completed render operation`);
-            
-        } catch (error) {
-            console.error('❌ RENDER SYSTEM: Render failed:', error);
-            // 🚨 EMERGENCY FALLBACK: Always try Canvas2D if PixiJS fails
-            console.log(`🚨 EMERGENCY: Falling back to Canvas2D renderer`);
-            this.renderUltraLight();
-        }
-    }
-    
-    // 🚨 EMERGENCY: Ultra-lightweight Canvas2D renderer
-    renderUltraLight() {
-        const ctx = this.ctx;
-        const pixelStorage = this.pixelStorage;
-        
-        // Clear canvas
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        if (pixelStorage.pixels.size === 0) return;
-        
-        // Ultra-aggressive LOD based on scale
-        let skipFactor, maxPixels;
-        if (this.scale > 4.0) {
-            skipFactor = 1; maxPixels = 2000;
-        } else if (this.scale > 2.0) {
-            skipFactor = 2; maxPixels = 1000;
-        } else if (this.scale > 1.0) {
-            skipFactor = 4; maxPixels = 500;
-        } else if (this.scale > 0.5) {
-            skipFactor = 8; maxPixels = 250;
-        } else {
-            skipFactor = 16; maxPixels = 100;
-        }
-        
-        let rendered = 0;
-        let skipped = 0;
-        
-        // Calculate visible area
-        const canvasWidth = this.logicalWidth || 800;
-        const canvasHeight = this.logicalHeight || 600;
-        const visibleMinX = -this.offsetX / (CONFIG.PIXEL_SIZE * this.scale);
-        const visibleMinY = -this.offsetY / (CONFIG.PIXEL_SIZE * this.scale);
-        const visibleMaxX = visibleMinX + canvasWidth / (CONFIG.PIXEL_SIZE * this.scale);
-        const visibleMaxY = visibleMinY + canvasHeight / (CONFIG.PIXEL_SIZE * this.scale);
-        
-        for (const [key, color] of pixelStorage.pixels) {
-            if (rendered >= maxPixels) break;
-            
-            // LOD skip
-            if (skipped++ % skipFactor !== 0) continue;
-            
-            const [sectorX, sectorY, localX, localY] = key.split(',').map(Number);
-            const worldX = sectorX * CONFIG.GRID_SIZE + localX;
-            const worldY = sectorY * CONFIG.GRID_SIZE + localY;
-            
-            // Aggressive culling
-            if (worldX < visibleMinX - 20 || worldX > visibleMaxX + 20 ||
-                worldY < visibleMinY - 20 || worldY > visibleMaxY + 20) {
-                continue;
-            }
-            
-            // Convert to screen coordinates
-            const screenX = worldX * CONFIG.PIXEL_SIZE * this.scale + this.offsetX;
-            const screenY = worldY * CONFIG.PIXEL_SIZE * this.scale + this.offsetY;
-            
-            // Skip if outside screen
-            if (screenX < -5 || screenX > canvasWidth + 5 || 
-                screenY < -5 || screenY > canvasHeight + 5) {
-                continue;
-            }
-            
-            // Draw pixel
-            ctx.fillStyle = CONFIG.PALETTE[color] || '#ffffff';
-            const pixelSize = Math.max(2, CONFIG.PIXEL_SIZE * this.scale); // Minimum 2px for mobile visibility
-            ctx.fillRect(Math.floor(screenX), Math.floor(screenY), 
-                        Math.ceil(pixelSize), Math.ceil(pixelSize));
-            
-            rendered++;
-        }
-        
-        console.log(`✅ Ultra-light rendered ${rendered} pixels (skip: ${skipFactor}, scale: ${this.scale.toFixed(3)})`);
-    }
-    
-    // 🚨 EMERGENCY: Throttled render to prevent browser freeze
-    throttledRender() {
-        if (this.pendingRender) return;
-        
-        const now = performance.now();
-        if (now - this.lastRenderTime >= this.renderThrottle) {
-            this.pendingRender = true;
-            requestAnimationFrame(() => {
-                this.render();
-                this.lastRenderTime = performance.now();
-                this.pendingRender = false;
+        // 統計情報を表示
+        if (this.pixelCanvasCore) {
+            const stats = this.pixelCanvasCore.getStats();
+            console.log('📊 Application statistics:', {
+                initialized: stats.initialized,
+                pixelCount: stats.data?.totalPixels || 0,
+                renderMode: stats.rendering?.mode || 'unknown'
             });
         }
     }
     
-    // 🚀 LOD SYSTEM: Legacy render method removed
-    
-    // 🚀 LOD SYSTEM: Simplified pixel drawing for LOD system
-    async drawPixelOptimized(worldX, worldY, color) {
-        // Convert to local coordinates 
-        const local = Utils.worldToLocal(worldX, worldY);
+    /**
+     * 初期化エラーの表示
+     */
+    showInitializationError(error) {
+        // エラー表示用のオーバーレイ作成
+        const errorOverlay = document.createElement('div');
+        errorOverlay.id = 'initializationError';
+        errorOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        `;
         
-        // Use legacy PixelStorage.drawPixel method
-        const result = this.pixelStorage.drawPixel(
-            local.sectorX,
-            local.sectorY,
-            local.localX,
-            local.localY,
-            color
-        );
-        
-        // 🚨 DISABLED: LayerManager update causing DB errors
-        // if (this.layerManager && this.layerManager.supabase) {
-        //     try {
-        //         await this.layerManager.updateUpperLayers(
-        //             local.sectorX,
-        //             local.sectorY,
-        //             local.localX,
-        //             local.localY,
-        //             color
-        //         );
-        //         console.log('🔧 Upper layers updated');
-        //     } catch (error) {
-        //         console.error('⚠️ Layer update failed:', error);
-        //     }
-        // }
-        
-        return result;
-    }
-    
-    mobileLog(message) {
-        // PERFORMANCE: Disable mobile logging
-        return;
-        // this.debugPanel.log(message);
-    }
-    
-    constrainViewport() {
-        // Apply viewport constraints based on active sectors
-        const bounds = this.viewportController.getViewportBounds();
-        
-        const originalOffsetX = this.offsetX;
-        const originalOffsetY = this.offsetY;
-        
-        // Apply strict constraints
-        const newOffsetX = Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, this.offsetX));
-        const newOffsetY = Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, this.offsetY));
-        
-        
-        this.offsetX = newOffsetX;
-        this.offsetY = newOffsetY;
-    }
-    
-    
-    showOutOfBoundsWarning() {
-        // Visual feedback when clicking outside active sectors
-        let warning = document.getElementById('outOfBoundsWarning');
-        if (!warning) {
-            warning = document.createElement('div');
-            warning.id = 'outOfBoundsWarning';
-            warning.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: rgba(255, 68, 68, 0.9);
-                color: white;
-                padding: 12px 20px;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                text-align: center;
-                z-index: 1000;
-                pointer-events: none;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            `;
-            warning.textContent = '🙅 このエリアには描けません';
-            document.body.appendChild(warning);
-        }
-        
-        warning.style.display = 'block';
-        
-        // Auto-hide after 2 seconds
-        clearTimeout(this.outOfBoundsWarningTimeout);
-        this.outOfBoundsWarningTimeout = setTimeout(() => {
-            warning.style.display = 'none';
-        }, 2000);
-    }
-    
-    constrainViewport() {
-        this.viewportController.constrainViewport();
-    }
-    
-    updateStockDisplay() {
-        this.pixelStorage.updateStockDisplay();
-    }
-    
-    // Testing and utility methods
-    async testExpansion() {
-        await this.pixelStorage.testExpansion();
-    }
-    
-    // Get application statistics
-    getStats() {
-        const pixelStats = this.pixelStorage.getStats();
-        return {
-            ...pixelStats,
-            activeSectors: this.activeSectors.size,
-            scale: this.scale,
-            deviceId: this.deviceId,
-            isOnline: navigator.onLine,
-            isExpansionRunning: this.isExpansionRunning
-        };
-    }
-    
-    // 🚀 LOD SYSTEM: Performance control methods removed (handled by PixiJS LOD)
-    
-    getPerformanceStats() {
-        // 🚀 LOD SYSTEM: Only PixiJS LOD statistics
-        if (CONFIG.USE_PIXI_RENDERER && this.pixiRenderer && this.pixiRenderer.isInitialized) {
-            return this.pixiRenderer.getPerformanceStats();
-        }
-        
-        return {
-            pixiAvailable: false,
-            message: 'LOD system not ready'
-        };
-    }
-    
-    // 🚀 LOD SYSTEM: Benchmark removed (PixiJS LOD handles performance)
-    
-    // Debug methods
-    logState() {
-        const stats = this.getStats();
-        // this.debugPanel.log(`📊 App State: ${JSON.stringify(stats, null, 2)}`);
-    }
-    
-    logPerformance() {
-        const stats = this.getPerformanceStats();
-        return stats;
-    }
-    
-    // 🚀 CRITICAL: PixiJS LOD system check
-    waitForPixiLibraries() {
-        return new Promise((resolve) => {
-            // Simplified check for PixiJS availability
-            if (window.PIXI) {
-                console.log('✅ PixiJS available for LOD system');
-                resolve();
-            } else {
-                console.log('⚠️ PixiJS not available, will retry...');
-                setTimeout(() => resolve(), 1000);
-            }
-        });
-    }
-    
-    // Add pixel distribution analysis
-    analyzePixelDistribution() {
-        const sectorMap = new Map();
-        
-        // Count pixels per sector
-        for (const [key, color] of this.pixelStorage.pixels) {
-            const [sectorX, sectorY] = key.split(',').map(Number);
-            const sectorKey = `${sectorX},${sectorY}`;
-            sectorMap.set(sectorKey, (sectorMap.get(sectorKey) || 0) + 1);
-        }
-        
-        // Sort by pixel count
-        const sortedSectors = Array.from(sectorMap.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10); // Top 10 sectors
-        
-        console.log('📊 Pixel Distribution Analysis:');
-        console.log(`Total pixels: ${this.pixelStorage.pixels.size}`);
-        console.log(`Active sectors: ${sectorMap.size}`);
-        console.log('Top sectors by pixel count:');
-        sortedSectors.forEach(([sectorKey, count]) => {
-            console.log(`  Sector ${sectorKey}: ${count} pixels`);
-        });
-        
-        return {
-            totalPixels: this.pixelStorage.pixels.size,
-            activeSectors: sectorMap.size,
-            sectorDistribution: sortedSectors,
-            currentViewport: {
-                centerX: Math.floor(-this.offsetX / (CONFIG.PIXEL_SIZE * this.scale) / CONFIG.GRID_SIZE),
-                centerY: Math.floor(-this.offsetY / (CONFIG.PIXEL_SIZE * this.scale) / CONFIG.GRID_SIZE),
-                scale: this.scale
-            }
-        };
-    }
-    
-    // Show hint when user is in empty area
-    showPixelDistributionHint() {
-        const analysis = this.analyzePixelDistribution();
-        
-        if (analysis.totalPixels === 0) return;
-        
-        // Create or update hint overlay
-        let hint = document.getElementById('pixelDistributionHint');
-        if (!hint) {
-            hint = document.createElement('div');
-            hint.id = 'pixelDistributionHint';
-            hint.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: rgba(0, 0, 0, 0.8);
-                color: white;
-                padding: 15px;
-                border-radius: 8px;
-                font-family: monospace;
-                font-size: 12px;
-                z-index: 1000;
-                max-width: 300px;
-                border: 1px solid #333;
-            `;
-            document.body.appendChild(hint);
-        }
-        
-        const topSector = analysis.sectorDistribution[0];
-        if (topSector) {
-            const [sectorKey, pixelCount] = topSector;
-            hint.innerHTML = `
-                <div style="color: #ffaa00; font-weight: bold;">📍 Pixel Distribution</div>
-                <div style="margin-top: 8px;">
-                    <div>Total pixels: ${analysis.totalPixels}</div>
-                    <div>Active sectors: ${analysis.activeSectors}</div>
-                    <div style="margin-top: 8px; color: #44ff44;">
-                        Highest density: Sector ${sectorKey}<br>
-                        ${pixelCount} pixels
-                    </div>
-                    <div style="margin-top: 8px; color: #aaa; font-size: 10px;">
-                        Current: ${analysis.currentViewport.centerX},${analysis.currentViewport.centerY}
-                    </div>
+        errorOverlay.innerHTML = `
+            <div style="max-width: 600px;">
+                <h1 style="color: #ff4444; margin-bottom: 20px;">
+                    ❌ PixelCanvas Initialization Failed
+                </h1>
+                <div style="background: rgba(255, 68, 68, 0.2); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <p style="margin: 0; font-size: 16px;">
+                        <strong>Error:</strong> ${error.message}
+                    </p>
                 </div>
-            `;
-        }
-        
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            if (hint) hint.style.display = 'none';
-        }, 5000);
-    }
-    
-    // vConsole testing methods  
-    testVConsole() {
-        console.error('❌ vConsole Test: Error message');
-        
-        // Test error throwing
-        try {
-            throw new Error('Test error for vConsole debugging');
-        } catch (error) {
-            console.error('📱 vConsole Test: Caught error:', error);
-        }
-        
-        // Test network logging
-        fetch('/test-api-call').catch((error) => {
-            console.error('📱 vConsole Test: Network request failed as expected:', error);
-        });
-        
-        // Test promise rejection
-        Promise.reject('Test promise rejection for vConsole').catch(error => {
-            console.error('📱 vConsole Test: Promise rejection caught:', error);
-        });
-        
-        return 'vConsole test completed - check vConsole panel for results';
-    }
-    
-    // 🚀 PixiJS + LOD デバッグコマンド
-    async generateLODs() {
-        if (!this.pixiRenderer || !this.pixiRenderer.lodGenerator) {
-            return 'PixiJS renderer not available';
-        }
-        
-        console.log('🏗️ Starting LOD generation...');
-        await this.pixiRenderer.lodGenerator.generateAllLODs();
-        return 'LOD generation completed - check console for details';
-    }
-    
-    // 🚨 EMERGENCY: 強制的にビューポートをセクター(0,0)に設定
-    forceViewportToSectorZero() {
-        console.log('🚨 CRITICAL: Forcing viewport to sector (0,0) with maximum visibility...');
-        
-        // セクター(0,0)の中心を計算
-        const sectorSize = CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE; // 256 * 4 = 1024
-        const sectorCenterX = sectorSize / 2; // 512
-        const sectorCenterY = sectorSize / 2; // 512
-        
-        // スクリーンの中心を計算
-        const canvasWidth = this.logicalWidth || 800;
-        const canvasHeight = this.logicalHeight || 600;
-        const screenCenterX = canvasWidth / 2;
-        const screenCenterY = canvasHeight / 2;
-        
-        // セクター(0,0)の中心がスクリーン中心に来るようにオフセットを設定
-        // セクター(0,0)は ワールド座標 (0,0) から (255,255) まで
-        // その中心は (127.5, 127.5) * PIXEL_SIZE * scale = (510, 510) (scale=1の場合)
-        
-        // 🚨 CRITICAL: Fixed scale calculation for maximum visibility
-        // For mobile: Use larger scale to make pixels visible
-        // Calculate scale to show sector content clearly on mobile
-        const mobileOptimalScale = Math.min(canvasWidth / (CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE), canvasHeight / (CONFIG.GRID_SIZE * CONFIG.PIXEL_SIZE)) * 0.6;
-        this.scale = Math.max(1.0, Math.min(4.0, mobileOptimalScale)); // Ensure minimum scale 1.0 for visibility
-        
-        // 🚨 MOBILE FIX: Position sector (0,0) to be fully visible
-        // オフセットを設定してセクター(0,0)全体が見えるように
-        this.offsetX = 20; // Small margin from left
-        this.offsetY = 20; // Small margin from top
-        
-        console.log(`🎯 Viewport set: scale=${this.scale.toFixed(3)}, offset=(${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)})`);
-        console.log(`📐 Sector (0,0) screen bounds: (${this.offsetX.toFixed(1)}, ${this.offsetY.toFixed(1)}) to (${(this.offsetX + sectorSize * this.scale).toFixed(1)}, ${(this.offsetY + sectorSize * this.scale).toFixed(1)})`);
-        
-        // 強制レンダリング
-        this.render();
-    }
-    
-    switchRenderer(type = 'auto') {
-        const oldRenderer = CONFIG.USE_PIXI_RENDERER ? 'PixiJS' : 'Canvas2D';
-        
-        switch (type) {
-            case 'pixi':
-                CONFIG.USE_PIXI_RENDERER = true;
-                break;
-            case 'canvas':
-                CONFIG.USE_PIXI_RENDERER = false;
-                break;
-            case 'auto':
-                CONFIG.USE_PIXI_RENDERER = !CONFIG.USE_PIXI_RENDERER;
-                break;
-        }
-        
-        const newRenderer = CONFIG.USE_PIXI_RENDERER ? 'PixiJS' : 'Canvas2D';
-        this.render();
-        
-        return `Renderer switched: ${oldRenderer} → ${newRenderer}`;
-    }
-    
-    getLODStats() {
-        if (!this.pixiRenderer || !this.pixiRenderer.isInitialized) {
-            return 'PixiJS renderer not available';
-        }
-        
-        return {
-            currentLOD: this.pixiRenderer.currentLOD,
-            scale: this.pixiRenderer.viewport?.scale.x || 1,
-            textureCount: this.pixiRenderer.textureCache.size,
-            lodThresholds: CONFIG.LOD_THRESHOLDS,
-            performance: this.getPerformanceStats()
-        };
-    }
-    
-    async testLODGeneration(sectorX = 0, sectorY = 0) {
-        if (!this.pixiRenderer || !this.pixiRenderer.lodGenerator) {
-            return 'PixiJS renderer not available';
-        }
-        
-        console.log(`🧪 Testing LOD generation for sector (${sectorX}, ${sectorY})`);
-        await this.pixiRenderer.lodGenerator.generateAllLODsForSector(sectorX, sectorY);
-        
-        return `LOD test completed for sector (${sectorX}, ${sectorY})`;
-    }
-    
-    // 🧪 簡単なLODテスト（サンプルデータ使用）
-    async runLODDemo() {
-        console.log('🚀 Starting LOD generation demo...');
-        
-        // SimplePixiRendererでもテスト可能
-        let lodGenerator;
-        if (this.pixiRenderer && this.pixiRenderer.lodGenerator) {
-            lodGenerator = this.pixiRenderer.lodGenerator;
-        } else if (this.pixiRenderer && this.pixiRenderer.constructor.name === 'SimplePixiRenderer') {
-            // SimplePixiRenderer用に新しいLODGeneratorを作成
-            const { LODGenerator } = await import('./LODGenerator.js');
-            lodGenerator = new LODGenerator(this);
-        } else {
-            // フォールバック: 直接LODGeneratorを作成
-            const { LODGenerator } = await import('./LODGenerator.js');
-            lodGenerator = new LODGenerator(this);
-        }
-        
-        if (!lodGenerator) {
-            return 'Failed to initialize LOD generator';
-        }
-        
-        try {
-            await lodGenerator.testLODGeneration();
-            return 'LOD demo completed successfully! Check console for details.';
-        } catch (error) {
-            console.error('❌ LOD demo failed:', error);
-            return `LOD demo failed: ${error.message}`;
-        }
-    }
-    
-    // LOD統計情報を取得
-    getLODGeneratorStats() {
-        let lodGenerator;
-        if (this.pixiRenderer?.lodGenerator) {
-            lodGenerator = this.pixiRenderer.lodGenerator;
-        }
-        
-        if (!lodGenerator) {
-            return 'LOD generator not available';
-        }
-        
-        return lodGenerator.getStats();
-    }
-}
-
-// Initialize when DOM is ready with error catching
-function initializePixelCanvas() {
-    try {
-        window.pixelCanvas = new PixelCanvas();
-        console.log('🔧 PixelCanvas initialized and exposed to window.pixelCanvas');
-        
-        
-    } catch (error) {
-        console.error('❌ Failed to initialize PixelCanvas:', error);
-        document.body.innerHTML = `
-            <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                        background: #ff4444; color: white; padding: 20px; border-radius: 10px; 
-                        font-family: Arial, sans-serif; text-align: center; z-index: 99999;">
-                <h2>❌ PixelCanvas Failed to Load</h2>
-                <p>Error: ${error.message}</p>
-                <p><small>Check console for details</small></p>
+                <div style="font-size: 14px; color: #ccc; line-height: 1.6;">
+                    <p>Possible causes:</p>
+                    <ul style="text-align: left; display: inline-block;">
+                        <li>Missing DOM elements</li>
+                        <li>Network connectivity issues</li>
+                        <li>JavaScript module loading failure</li>
+                        <li>Browser compatibility issues</li>
+                    </ul>
+                    <p style="margin-top: 20px;">
+                        Check the browser console for detailed error information.
+                    </p>
+                </div>
+                <button onclick="window.location.reload()" 
+                        style="margin-top: 20px; padding: 10px 20px; background: #4488ff; 
+                               color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    🔄 Reload Page
+                </button>
             </div>
         `;
+        
+        document.body.appendChild(errorOverlay);
+    }
+    
+    /**
+     * アプリケーション統計取得
+     */
+    getAppStats() {
+        return {
+            isInitialized: this.isInitialized,
+            initializationError: this.initializationError?.message || null,
+            coreStats: this.pixelCanvasCore ? this.pixelCanvasCore.getStats() : null,
+            timestamp: Date.now()
+        };
+    }
+    
+    /**
+     * アプリケーション再初期化
+     */
+    async reinitialize() {
+        if (this.pixelCanvasCore) {
+            console.log('🔄 Destroying existing PixelCanvas instance...');
+            this.pixelCanvasCore.destroy();
+        }
+        
+        this.pixelCanvasCore = null;
+        this.isInitialized = false;
+        this.initializationError = null;
+        
+        // エラーオーバーレイを削除
+        const errorOverlay = document.getElementById('initializationError');
+        if (errorOverlay) {
+            errorOverlay.remove();
+        }
+        
+        console.log('🔄 Reinitializing PixelCanvas...');
+        await this.initialize();
+    }
+    
+    /**
+     * アプリケーション解放
+     */
+    destroy() {
+        if (this.pixelCanvasCore) {
+            this.pixelCanvasCore.destroy();
+        }
+        
+        // グローバル参照を削除
+        if (window.pixelCanvas === this.pixelCanvasCore) {
+            delete window.pixelCanvas;
+        }
+        if (window.pixelCanvasApp === this) {
+            delete window.pixelCanvasApp;
+        }
+        
+        this.pixelCanvasCore = null;
+        this.isInitialized = false;
+        this.initializationError = null;
+        
+        console.log('🗑️ PixelCanvas application destroyed');
     }
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializePixelCanvas);
-} else {
-    initializePixelCanvas();
+/**
+ * DOM準備完了時の初期化
+ */
+async function initializeApp() {
+    try {
+        console.log('🚀 Initializing PixelCanvas App...');
+        
+        // アプリケーション作成と初期化
+        const app = new PixelCanvasApp();
+        await app.initialize();
+        
+        console.log('✅ PixelCanvas App initialization completed');
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize PixelCanvas App:', error);
+        
+        // 致命的エラーの場合でも基本的な操作は可能にする
+        window.pixelCanvasError = error;
+        window.retryInitialization = () => {
+            window.location.reload();
+        };
+    }
 }
 
-// Export for testing
-export default PixelCanvas;
+/**
+ * ページロード時の初期化処理
+ */
+function onDOMReady() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    } else {
+        // DOMが既に準備完了している場合
+        initializeApp();
+    }
+}
+
+// 即座に実行
+onDOMReady();
+
+// モジュールエクスポート（テスト用）
+export { PixelCanvasApp };
+export default PixelCanvasApp;
