@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Canvas Test</title>
+    <style>
+        #testCanvas {
+            border: 1px solid red;
+            background: #000;
+        }
+        body {
+            font-family: monospace;
+            color: white;
+            background: #111;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple Canvas Test</h1>
+    <canvas id="testCanvas" width="400" height="400"></canvas>
+    <div id="log"></div>
+    
+    <script>
+        const log = document.getElementById('log');
+        function addLog(msg) {
+            console.log(msg);
+            log.innerHTML += '<div>' + msg + '</div>';
+        }
+        
+        addLog('🎯 Starting simple canvas test...');
+        
+        const canvas = document.getElementById('testCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+            addLog('✅ Canvas 2D context acquired');
+            
+            // 背景を黒で塗りつぶし
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, 400, 400);
+            addLog('🎨 Black background drawn');
+            
+            // テストピクセルを描画
+            const testPixels = [
+                {x: 0, y: 0, color: '#FF0000'},    // 赤
+                {x: 1, y: 0, color: '#00FF00'},    // 緑
+                {x: 2, y: 0, color: '#0000FF'},    // 青
+                {x: 0, y: 1, color: '#FFFF00'},    // 黄
+                {x: 1, y: 1, color: '#FF00FF'},    // マゼンタ
+                {x: 50, y: 50, color: '#FFFFFF'},  // 白（大きめの位置）
+                {x: 100, y: 100, color: '#FF8800'} // オレンジ（さらに大きめ）
+            ];
+            
+            // ピクセルサイズ4で描画
+            const pixelSize = 4;
+            testPixels.forEach(pixel => {
+                ctx.fillStyle = pixel.color;
+                ctx.fillRect(pixel.x * pixelSize, pixel.y * pixelSize, pixelSize, pixelSize);
+            });
+            
+            addLog(`🎨 Drew ${testPixels.length} test pixels`);
+            addLog('✅ Canvas test completed - check if pixels are visible');
+            
+            // Supabase接続テスト
+            addLog('🌐 Testing Supabase connection...');
+            fetch('https://lgvjdefkyeuvquzckkvb.supabase.co/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&limit=3', {
+                headers: {
+                    'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY',
+                    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            })
+            .then(data => {
+                addLog(`✅ Supabase test successful: ${data.length} pixels received`);
+                addLog(`📊 Sample pixel: ${JSON.stringify(data[0])}`);
+                
+                // 実際のピクセルをCanvasに描画
+                if (data.length > 0) {
+                    addLog('🎨 Drawing real pixels from database...');
+                    data.forEach((pixel, index) => {
+                        const color = ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF', '#800000', '#008000', '#000080', '#808000', '#800080', '#008080', '#C0C0C0', '#808080'][pixel.color] || '#FFFFFF';
+                        
+                        ctx.fillStyle = color;
+                        const x = (pixel.sector_x * 256 + pixel.local_x) * pixelSize + 150; // オフセット
+                        const y = (pixel.sector_y * 256 + pixel.local_y) * pixelSize + 150;
+                        
+                        ctx.fillRect(x, y, pixelSize, pixelSize);
+                        addLog(`🎨 Drew pixel at (${x},${y}) color=${color}`);
+                    });
+                    addLog('✅ Real pixels drawn successfully');
+                }
+            })
+            .catch(error => {
+                addLog(`❌ Supabase test failed: ${error.message}`);
+            });
+            
+        } else {
+            addLog('❌ Failed to get canvas 2D context');
+        }
+    </script>
+</body>
+</html>
