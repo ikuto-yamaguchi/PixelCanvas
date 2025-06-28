@@ -21,6 +21,7 @@ export class RenderStrategy {
         this.currentRenderer = null;
         this.availableRenderers = new Map();
         this.renderMode = CONFIG.RENDER_MODE || RenderMode.AUTO;
+        this.isInitialized = false;
         
         // パフォーマンス監視
         this.performanceStats = {
@@ -29,7 +30,8 @@ export class RenderStrategy {
             lastFrameTime: performance.now()
         };
         
-        this.initialize();
+        // 非同期初期化は外部から明示的に呼び出す
+        console.log('🎨 RenderStrategy constructor completed');
     }
     
     /**
@@ -55,10 +57,15 @@ export class RenderStrategy {
             // 最適なレンダラーを選択
             this.selectOptimalRenderer();
             
+            this.isInitialized = true;
+            console.log('✅ RenderStrategy initialization completed');
+            
         } catch (error) {
             console.error('🎨 Render strategy initialization failed:', error);
             // フォールバック: Canvas2Dを強制使用
             this.setRenderer(RenderMode.CANVAS2D);
+            this.isInitialized = true;
+            console.log('⚠️ RenderStrategy fallback to Canvas2D');
         }
     }
     
@@ -106,6 +113,11 @@ export class RenderStrategy {
      * メイン描画処理
      */
     render(viewport) {
+        if (!this.isInitialized) {
+            console.warn('🎨 RenderStrategy not initialized yet, skipping render');
+            return;
+        }
+        
         if (!this.currentRenderer) {
             console.error('🎨 No renderer available');
             return;

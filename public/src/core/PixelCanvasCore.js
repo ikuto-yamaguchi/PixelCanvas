@@ -85,6 +85,9 @@ export class PixelCanvasCore {
                 this.container.clientHeight
             );
             
+            // デフォルトビューに設定（セクター0,0を中央に）
+            this.viewportManager.initializeDefaultView();
+            
             // PixelDataManager初期化
             const { PixelDataManager } = await import('../data/PixelDataManager.js');
             this.pixelDataManager = new PixelDataManager();
@@ -149,6 +152,9 @@ export class PixelCanvasCore {
             
             console.log(`📊 Loaded ${loadedCount} pixels`);
             console.log(`📊 Total pixels in memory: ${this.pixelDataManager.getStats().core.totalPixels}`);
+            
+            // テスト用ピクセル注入（確実に何かが表示されるように）
+            this.injectTestPixels();
             
             // 初回レンダリング実行
             this.render();
@@ -376,6 +382,42 @@ export class PixelCanvasCore {
         }
     }
     
+    /**
+     * テスト用ピクセル注入（デバッグ・検証用）
+     */
+    injectTestPixels() {
+        try {
+            const testPixels = [
+                // セクター(0,0)の左上角に明確に見えるピクセル
+                { sectorX: 0, sectorY: 0, localX: 0, localY: 0, color: 2 },   // 赤
+                { sectorX: 0, sectorY: 0, localX: 1, localY: 0, color: 3 },   // 緑
+                { sectorX: 0, sectorY: 0, localX: 2, localY: 0, color: 4 },   // 青
+                { sectorX: 0, sectorY: 0, localX: 0, localY: 1, color: 5 },   // 黄
+                { sectorX: 0, sectorY: 0, localX: 1, localY: 1, color: 6 },   // マゼンタ
+                { sectorX: 0, sectorY: 0, localX: 2, localY: 1, color: 7 },   // シアン
+                
+                // セクター中央付近にも配置
+                { sectorX: 0, sectorY: 0, localX: 128, localY: 128, color: 1 }, // 白
+                { sectorX: 0, sectorY: 0, localX: 129, localY: 128, color: 2 }, // 赤
+                { sectorX: 0, sectorY: 0, localX: 128, localY: 129, color: 3 }, // 緑
+                { sectorX: 0, sectorY: 0, localX: 129, localY: 129, color: 4 }, // 青
+            ];
+            
+            let injectedCount = 0;
+            testPixels.forEach(pixel => {
+                if (this.pixelDataManager.setPixel(pixel.sectorX, pixel.sectorY, pixel.localX, pixel.localY, pixel.color)) {
+                    injectedCount++;
+                }
+            });
+            
+            console.log(`🧪 Injected ${injectedCount} test pixels for visualization`);
+            console.log(`🎯 Test pixels placed at sector (0,0) positions: (0,0), (1,0), (2,0), (0,1), (1,1), (2,1) and center area`);
+            
+        } catch (error) {
+            console.warn('⚠️ Failed to inject test pixels:', error);
+        }
+    }
+
     /**
      * アプリケーション統計取得
      */

@@ -165,6 +165,9 @@ export class Canvas2DRenderer {
         let renderedCount = 0;
         const maxPixels = Math.min(this.maxPixelsPerFrame, visiblePixels.size);
         
+        console.log(`🎨 Rendering ${visiblePixels.size} visible pixels (max: ${maxPixels}, LOD: ${lodLevel})`);
+        console.log(`🎨 Viewport: scale=${viewport.scale}, offset=(${viewport.offsetX.toFixed(2)}, ${viewport.offsetY.toFixed(2)})`);
+        
         // 描画順序：画面中央から外側へ
         const sortedPixels = this.sortPixelsByDistance(visiblePixels, viewport);
         

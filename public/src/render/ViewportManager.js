@@ -13,6 +13,7 @@ export class ViewportManager {
         this.offsetY = 0;
         this.canvasWidth = 800;
         this.canvasHeight = 600;
+        this.isInitialized = false;
         
         // 制約設定
         this.minScale = CONFIG.MIN_SCALE || 0.1;
@@ -24,6 +25,25 @@ export class ViewportManager {
         this.lastNotifiedState = null;
         
         console.log('🗺️ ViewportManager initialized');
+    }
+    
+    /**
+     * 初期フォーカス設定（セクター0,0を中央に表示）
+     */
+    initializeDefaultView() {
+        // セクター(0,0)の中央にフォーカス
+        const sectorCenterX = CONFIG.GRID_SIZE / 2;
+        const sectorCenterY = CONFIG.GRID_SIZE / 2;
+        
+        // 画面中央に配置するためのオフセット計算
+        this.offsetX = this.canvasWidth / 2 - sectorCenterX * CONFIG.PIXEL_SIZE * this.scale;
+        this.offsetY = this.canvasHeight / 2 - sectorCenterY * CONFIG.PIXEL_SIZE * this.scale;
+        
+        this.isInitialized = true;
+        this.notifyChange();
+        
+        console.log(`🎯 Viewport focused on sector (0,0) at scale ${this.scale}`);
+        console.log(`🎯 Offset: (${this.offsetX.toFixed(2)}, ${this.offsetY.toFixed(2)})`);
     }
     
     /**

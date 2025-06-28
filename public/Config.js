@@ -37,7 +37,7 @@ export const CONFIG = {
     // Viewport settings
     MIN_SCALE: 0.1,
     MAX_SCALE: 16,
-    DEFAULT_SCALE: 0.8, // 🚨 EMERGENCY: セクター(0,0)が確実に表示されるスケール
+    DEFAULT_SCALE: 2.0, // 🔧 FIXED: セクター(0,0)のピクセルが確実に見えるスケール
     VIEWPORT_MARGIN: 0.1, // 10% margin for centering
     PADDING_SECTORS: 1, // Padding around active sectors
     

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelCanvas - Detailed Render Debug</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .debug-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 400px;
+            z-index: 1000;
+        }
+        .canvas-container {
+            width: 800px;
+            height: 600px;
+            border: 2px solid #444;
+            position: relative;
+            background: #000;
+        }
+        #mainCanvas {
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            background: #333;
+            color: #fff;
+            border: 1px solid #666;
+            padding: 8px 16px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+        button:hover {
+            background: #555;
+        }
+        .log-output {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>PixelCanvas - Detailed Render Debug</h1>
+    
+    <div class="debug-panel" id="debugPanel">
+        <div><strong>Debug Information</strong></div>
+        <div id="debugInfo">Initializing...</div>
+    </div>
+    
+    <div class="canvas-container">
+        <canvas id="mainCanvas" width="800" height="600"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button onclick="testBasicRendering()">Test Basic Rendering</button>
+        <button onclick="testPixelStorage()">Test Pixel Storage</button>
+        <button onclick="testViewportTransform()">Test Viewport Transform</button>
+        <button onclick="testRenderPipeline()">Test Full Render Pipeline</button>
+        <button onclick="injectTestPixels()">Inject Test Pixels</button>
+        <button onclick="manualRender()">Manual Render</button>
+        <button onclick="clearCanvas()">Clear Canvas</button>
+        <button onclick="showPixelCanvasInfo()">Show App Info</button>
+    </div>
+    
+    <div class="log-output" id="logOutput"></div>
+
+    <script type="module">
+        // Global debug utilities
+        window.debugLog = [];
+        window.debugInfo = {};
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            window.debugLog.push(logMessage);
+            console.log(logMessage);
+            
+            const logOutput = document.getElementById('logOutput');
+            if (logOutput) {
+                logOutput.innerHTML = window.debugLog.slice(-20).join('\n');
+                logOutput.scrollTop = logOutput.scrollHeight;
+            }
+        }
+        
+        function updateDebugPanel(info) {
+            const debugPanel = document.getElementById('debugInfo');
+            if (debugPanel) {
+                debugPanel.innerHTML = Object.entries(info)
+                    .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+                    .join('<br>');
+            }
+        }
+        
+        // Test functions
+        window.testBasicRendering = function() {
+            log('=== Testing Basic Canvas Rendering ===');
+            const canvas = document.getElementById('mainCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear and draw test pattern
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw test pixels
+            const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00'];
+            for (let i = 0; i < 4; i++) {
+                ctx.fillStyle = colors[i];
+                ctx.fillRect(100 + i * 50, 100, 20, 20);
+            }
+            
+            log('Basic rendering test completed');
+            updateDebugPanel({
+                canvas_width: canvas.width,
+                canvas_height: canvas.height,
+                context_ready: !!ctx
+            });
+        };
+        
+        window.testPixelStorage = function() {
+            log('=== Testing Pixel Storage ===');
+            
+            if (!window.pixelCanvas) {
+                log('ERROR: PixelCanvas instance not available');
+                return;
+            }
+            
+            const pixelData = window.pixelCanvas.pixelDataManager;
+            if (!pixelData) {
+                log('ERROR: PixelDataManager not available');
+                return;
+            }
+            
+            // Test pixel operations
+            log('Adding test pixels to storage...');
+            pixelData.setPixel(0, 0, 10, 10, 2); // Red pixel
+            pixelData.setPixel(0, 0, 20, 10, 3); // Green pixel
+            pixelData.setPixel(0, 0, 30, 10, 4); // Blue pixel
+            
+            const stats = pixelData.getStats();
+            log(`Pixel storage stats: ${JSON.stringify(stats.core)}`);
+            
+            updateDebugPanel({
+                total_pixels: stats.core.totalPixels,
+                active_sectors: stats.core.activeSectors,
+                dirty_pixels: stats.core.dirtyPixels
+            });
+        };
+        
+        window.testViewportTransform = function() {
+            log('=== Testing Viewport Transform ===');
+            
+            if (!window.pixelCanvas || !window.pixelCanvas.viewportManager) {
+                log('ERROR: ViewportManager not available');
+                return;
+            }
+            
+            const viewport = window.pixelCanvas.viewportManager;
+            const state = viewport.getState();
+            
+            log(`Viewport state: ${JSON.stringify(state, null, 2)}`);
+            
+            // Test coordinate transformation
+            const testPoints = [
+                { screen: { x: 100, y: 100 } },
+                { screen: { x: 400, y: 300 } },
+                { screen: { x: 700, y: 500 } }
+            ];
+            
+            for (const point of testPoints) {
+                const world = viewport.screenToWorld(point.screen.x, point.screen.y);
+                const backToScreen = viewport.worldToScreen(world.x, world.y);
+                log(`Screen (${point.screen.x}, ${point.screen.y}) -> World (${world.x.toFixed(2)}, ${world.y.toFixed(2)}) -> Screen (${backToScreen.x.toFixed(2)}, ${backToScreen.y.toFixed(2)})`);
+            }
+            
+            updateDebugPanel({
+                viewport_scale: state.scale,
+                viewport_offset: `(${state.offsetX.toFixed(1)}, ${state.offsetY.toFixed(1)})`,
+                visible_bounds: state.visibleBounds
+            });
+        };
+        
+        window.testRenderPipeline = function() {
+            log('=== Testing Full Render Pipeline ===');
+            
+            if (!window.pixelCanvas) {
+                log('ERROR: PixelCanvas instance not available');
+                return;
+            }
+            
+            const app = window.pixelCanvas;
+            
+            // Check all components
+            const components = {
+                pixelDataManager: !!app.pixelDataManager,
+                renderStrategy: !!app.renderStrategy,
+                viewportManager: !!app.viewportManager,
+                canvas: !!app.canvas,
+                ctx: !!app.ctx
+            };
+            
+            log(`Component availability: ${JSON.stringify(components)}`);
+            
+            if (app.renderStrategy) {
+                const renderInfo = app.renderStrategy.getInfo();
+                log(`Render strategy info: ${JSON.stringify(renderInfo)}`);
+            }
+            
+            // Test manual render
+            try {
+                log('Attempting manual render...');
+                app.render();
+                log('Manual render completed');
+            } catch (error) {
+                log(`ERROR in render: ${error.message}`);
+                console.error('Render error:', error);
+            }
+            
+            updateDebugPanel(components);
+        };
+        
+        window.injectTestPixels = function() {
+            log('=== Injecting Test Pixels ===');
+            
+            if (!window.pixelCanvas || !window.pixelCanvas.pixelDataManager) {
+                log('ERROR: PixelDataManager not available');
+                return;
+            }
+            
+            const pixelData = window.pixelCanvas.pixelDataManager;
+            
+            // Create a visible pattern in sector (0,0)
+            const testPixels = [
+                // Horizontal line
+                { sectorX: 0, sectorY: 0, localX: 50, localY: 50, color: 2 }, // Red
+                { sectorX: 0, sectorY: 0, localX: 51, localY: 50, color: 2 },
+                { sectorX: 0, sectorY: 0, localX: 52, localY: 50, color: 2 },
+                { sectorX: 0, sectorY: 0, localX: 53, localY: 50, color: 2 },
+                { sectorX: 0, sectorY: 0, localX: 54, localY: 50, color: 2 },
+                
+                // Vertical line
+                { sectorX: 0, sectorY: 0, localX: 60, localY: 50, color: 3 }, // Green
+                { sectorX: 0, sectorY: 0, localX: 60, localY: 51, color: 3 },
+                { sectorX: 0, sectorY: 0, localX: 60, localY: 52, color: 3 },
+                { sectorX: 0, sectorY: 0, localX: 60, localY: 53, color: 3 },
+                { sectorX: 0, sectorY: 0, localX: 60, localY: 54, color: 3 },
+                
+                // Square
+                { sectorX: 0, sectorY: 0, localX: 70, localY: 60, color: 4 }, // Blue
+                { sectorX: 0, sectorY: 0, localX: 71, localY: 60, color: 4 },
+                { sectorX: 0, sectorY: 0, localX: 70, localY: 61, color: 4 },
+                { sectorX: 0, sectorY: 0, localX: 71, localY: 61, color: 4 },
+            ];
+            
+            let addedCount = 0;
+            for (const pixel of testPixels) {
+                if (pixelData.setPixel(pixel.sectorX, pixel.sectorY, pixel.localX, pixel.localY, pixel.color)) {
+                    addedCount++;
+                }
+            }
+            
+            log(`Injected ${addedCount} test pixels`);
+            
+            // Update stats
+            const stats = pixelData.getStats();
+            log(`Updated pixel count: ${stats.core.totalPixels}`);
+            
+            // Force render
+            if (window.pixelCanvas.render) {
+                window.pixelCanvas.render();
+                log('Forced render after pixel injection');
+            }
+            
+            updateDebugPanel({
+                injected_pixels: addedCount,
+                total_pixels: stats.core.totalPixels
+            });
+        };
+        
+        window.manualRender = function() {
+            log('=== Manual Render ===');
+            
+            if (!window.pixelCanvas) {
+                log('ERROR: PixelCanvas instance not available');
+                return;
+            }
+            
+            try {
+                window.pixelCanvas.render();
+                log('Manual render executed');
+            } catch (error) {
+                log(`ERROR: ${error.message}`);
+                console.error('Manual render error:', error);
+            }
+        };
+        
+        window.clearCanvas = function() {
+            log('=== Clearing Canvas ===');
+            const canvas = document.getElementById('mainCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            log('Canvas cleared');
+        };
+        
+        window.showPixelCanvasInfo = function() {
+            log('=== PixelCanvas Application Info ===');
+            
+            const info = {
+                pixelCanvas_available: !!window.pixelCanvas,
+                pixelCanvasApp_available: !!window.pixelCanvasApp
+            };
+            
+            if (window.pixelCanvas) {
+                const stats = window.pixelCanvas.getStats();
+                info.pixelCanvas_stats = stats;
+                log(`PixelCanvas stats: ${JSON.stringify(stats, null, 2)}`);
+            }
+            
+            if (window.pixelCanvasApp) {
+                const appStats = window.pixelCanvasApp.getAppStats();
+                info.app_stats = appStats;
+                log(`App stats: ${JSON.stringify(appStats, null, 2)}`);
+            }
+            
+            updateDebugPanel(info);
+        };
+        
+        // Auto-start basic diagnostics
+        setTimeout(() => {
+            log('=== Auto-starting Diagnostics ===');
+            showPixelCanvasInfo();
+        }, 2000);
+        
+        // Monitor for PixelCanvas availability
+        let checkCount = 0;
+        const checkInterval = setInterval(() => {
+            checkCount++;
+            if (window.pixelCanvas) {
+                log(`PixelCanvas became available after ${checkCount} checks`);
+                clearInterval(checkInterval);
+                setTimeout(showPixelCanvasInfo, 500);
+            } else if (checkCount > 50) {
+                log('PixelCanvas not available after 50 checks, stopping monitor');
+                clearInterval(checkInterval);
+            }
+        }, 200);
+    </script>
+    
+    <!-- Load PixelCanvas after debug setup -->
+    <script>
+        // Redirect to main application with debug enabled
+        setTimeout(() => {
+            if (!window.pixelCanvas) {
+                console.log('Loading PixelCanvas from main application...');
+                // Load the main application
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.src = 'main.js';
+                document.head.appendChild(script);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

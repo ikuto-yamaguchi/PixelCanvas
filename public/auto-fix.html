@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelCanvas 自動修正システム</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            margin: 0;
+            padding: 15px;
+            font-size: 12px;
+        }
+        .system-header {
+            background: #1a1a1a;
+            padding: 10px;
+            border: 2px solid #00ff00;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .status-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .panel {
+            background: #111;
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .panel-title {
+            color: #ffff00;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+        .issue { color: #ff4444; }
+        .warning { color: #ffaa44; }
+        .success { color: #44ff44; }
+        .info { color: #4488ff; }
+        .critical { background: #330000; border-color: #ff0000; }
+        .log-area {
+            background: #000;
+            border: 1px solid #333;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        button {
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 1px solid #333;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+        }
+        button:hover {
+            background: #333;
+            border-color: #00ff00;
+        }
+        button.critical {
+            background: #330000;
+            color: #ff4444;
+            border-color: #ff0000;
+        }
+        .fix-progress {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+        .progress-bar {
+            background: #333;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            background: #00ff00;
+            height: 100%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="system-header">
+        <h1>🤖 PixelCanvas 自動修正システム v2.0</h1>
+        <div>継続的監視・診断・修正システム</div>
+    </div>
+
+    <div class="status-panel">
+        <div class="panel">
+            <div class="panel-title">🎯 アプリケーション状態</div>
+            <div id="app-status"></div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">🎨 描画システム状態</div>
+            <div id="render-status"></div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">📊 データシステム状態</div>
+            <div id="data-status"></div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">⚡ パフォーマンス状態</div>
+            <div id="performance-status"></div>
+        </div>
+    </div>
+
+    <div class="fix-progress">
+        <div>修正進行状況: <span id="fix-status">待機中</span></div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="startContinuousAnalysis()">🔍 継続分析開始</button>
+        <button onclick="stopAnalysis()">⏹️ 分析停止</button>
+        <button onclick="runEmergencyFix()" class="critical">🚨 緊急修正実行</button>
+        <button onclick="testPixelDrawing()">🎨 描画テスト</button>
+        <button onclick="clearLog()">🗑️ ログクリア</button>
+    </div>
+
+    <div class="log-area" id="log-area"></div>
+
+    <script type="module">
+        let analysisInterval = null;
+        let fixAttempts = 0;
+        let lastKnownIssues = new Set();
+        let isFixing = false;
+
+        const logArea = document.getElementById('log-area');
+        const appStatus = document.getElementById('app-status');
+        const renderStatus = document.getElementById('render-status');
+        const dataStatus = document.getElementById('data-status');
+        const performanceStatus = document.getElementById('performance-status');
+        const fixStatus = document.getElementById('fix-status');
+        const progressFill = document.getElementById('progress-fill');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                'issue': '#ff4444',
+                'warning': '#ffaa44', 
+                'success': '#44ff44',
+                'info': '#4488ff',
+                'critical': '#ff0000'
+            };
+            
+            const color = colors[type] || '#00ff00';
+            const entry = `[${timestamp}] ${message}\n`;
+            
+            console.log(message);
+            logArea.innerHTML += `<span style="color: ${color}">${entry}</span>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function clearLog() {
+            logArea.innerHTML = '';
+        }
+
+        function updateProgress(percent, status) {
+            progressFill.style.width = `${percent}%`;
+            fixStatus.textContent = status;
+        }
+
+        // アプリケーション状態分析
+        async function analyzeAppState() {
+            const issues = [];
+            let status = '正常';
+
+            try {
+                // PixelCanvas インスタンス確認
+                if (!window.pixelCanvas) {
+                    issues.push('PixelCanvas未初期化');
+                    status = '異常';
+                } else {
+                    const stats = window.pixelCanvas.getStats();
+                    if (!stats.initialized) {
+                        issues.push('初期化未完了');
+                        status = '異常';
+                    }
+                }
+
+                // DOM要素確認
+                const canvas = document.getElementById('mainCanvas');
+                if (!canvas) {
+                    issues.push('Canvas要素なし');
+                    status = '異常';
+                }
+
+                // 依存関係確認
+                if (!window.PIXI) {
+                    issues.push('PixiJS未ロード');
+                }
+                if (!window.supabase) {
+                    issues.push('Supabase未ロード');
+                }
+
+            } catch (error) {
+                issues.push(`分析エラー: ${error.message}`);
+                status = '異常';
+            }
+
+            appStatus.innerHTML = `
+                <div class="${status === '正常' ? 'success' : 'issue'}">状態: ${status}</div>
+                ${issues.map(issue => `<div class="issue">⚠️ ${issue}</div>`).join('')}
+            `;
+
+            return { status, issues };
+        }
+
+        // 描画システム分析
+        async function analyzeRenderSystem() {
+            const issues = [];
+            let status = '不明';
+
+            try {
+                const canvas = document.getElementById('mainCanvas');
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        // Canvas描画テスト
+                        const imageData = ctx.getImageData(0, 0, 1, 1);
+                        status = '正常';
+                        
+                        // ピクセル描画確認
+                        if (window.pixelCanvas) {
+                            const stats = window.pixelCanvas.getStats();
+                            const pixelCount = stats.data?.totalPixels || 0;
+                            
+                            if (pixelCount === 0) {
+                                issues.push('ピクセル未ロード');
+                                status = '異常';
+                            } else {
+                                log(`メモリ内ピクセル数: ${pixelCount}`, 'success');
+                            }
+                        }
+                    } else {
+                        issues.push('Canvas Context取得失敗');
+                        status = '異常';
+                    }
+                } else {
+                    issues.push('Canvas要素なし');
+                    status = '異常';
+                }
+            } catch (error) {
+                issues.push(`描画分析エラー: ${error.message}`);
+                status = '異常';
+            }
+
+            renderStatus.innerHTML = `
+                <div class="${status === '正常' ? 'success' : 'issue'}">状態: ${status}</div>
+                ${issues.map(issue => `<div class="issue">⚠️ ${issue}</div>`).join('')}
+            `;
+
+            return { status, issues };
+        }
+
+        // データシステム分析
+        async function analyzeDataSystem() {
+            const issues = [];
+            let status = '正常';
+
+            try {
+                // Supabase接続テスト
+                const response = await fetch('https://lgvjdefkyeuvquzckkvb.supabase.co/rest/v1/pixels?select=count&limit=1', {
+                    headers: {
+                        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY',
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY'
+                    }
+                });
+
+                if (!response.ok) {
+                    issues.push(`Supabase接続失敗: ${response.status}`);
+                    status = '異常';
+                }
+
+                // データ読み込み確認
+                if (window.pixelCanvas) {
+                    const stats = window.pixelCanvas.getStats();
+                    if (stats.data?.totalPixels === 0) {
+                        issues.push('データ未ロード');
+                        status = '異常';
+                    }
+                }
+
+            } catch (error) {
+                issues.push(`データ分析エラー: ${error.message}`);
+                status = '異常';
+            }
+
+            dataStatus.innerHTML = `
+                <div class="${status === '正常' ? 'success' : 'issue'}">状態: ${status}</div>
+                ${issues.map(issue => `<div class="issue">⚠️ ${issue}</div>`).join('')}
+            `;
+
+            return { status, issues };
+        }
+
+        // パフォーマンス分析
+        async function analyzePerformance() {
+            const issues = [];
+            let status = '正常';
+
+            try {
+                // メモリ使用量確認
+                if (performance.memory) {
+                    const memoryMB = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+                    if (memoryMB > 200) {
+                        issues.push(`高メモリ使用: ${memoryMB}MB`);
+                        status = '警告';
+                    }
+                }
+
+                // 応答時間テスト
+                const start = performance.now();
+                await new Promise(resolve => setTimeout(resolve, 10));
+                const responseTime = performance.now() - start;
+                
+                if (responseTime > 50) {
+                    issues.push(`応答遅延: ${responseTime.toFixed(2)}ms`);
+                    status = '警告';
+                }
+
+            } catch (error) {
+                issues.push(`パフォーマンス分析エラー: ${error.message}`);
+                status = '異常';
+            }
+
+            performanceStatus.innerHTML = `
+                <div class="${status === '正常' ? 'success' : status === '警告' ? 'warning' : 'issue'}">状態: ${status}</div>
+                ${issues.map(issue => `<div class="warning">⚠️ ${issue}</div>`).join('')}
+            `;
+
+            return { status, issues };
+        }
+
+        // 包括的分析実行
+        async function runComprehensiveAnalysis() {
+            log('🔍 包括的分析を開始...', 'info');
+
+            const results = await Promise.all([
+                analyzeAppState(),
+                analyzeRenderSystem(), 
+                analyzeDataSystem(),
+                analyzePerformance()
+            ]);
+
+            const allIssues = results.flatMap(result => result.issues);
+            const criticalIssues = allIssues.filter(issue => 
+                issue.includes('未初期化') || 
+                issue.includes('未ロード') || 
+                issue.includes('Canvas要素なし')
+            );
+
+            if (criticalIssues.length > 0) {
+                log(`🚨 致命的問題検出: ${criticalIssues.length}件`, 'critical');
+                return await attemptAutomaticFix(criticalIssues);
+            } else if (allIssues.length > 0) {
+                log(`⚠️ 問題検出: ${allIssues.length}件`, 'warning');
+                allIssues.forEach(issue => log(`  - ${issue}`, 'warning'));
+            } else {
+                log('✅ 全システム正常', 'success');
+            }
+
+            return allIssues.length === 0;
+        }
+
+        // 自動修正試行
+        async function attemptAutomaticFix(issues) {
+            if (isFixing) {
+                log('🔧 修正処理中...', 'warning');
+                return false;
+            }
+
+            isFixing = true;
+            fixAttempts++;
+            log(`🔧 自動修正開始 (試行 ${fixAttempts})`, 'info');
+
+            try {
+                updateProgress(10, '修正準備中...');
+
+                // PixelCanvas再初期化
+                if (issues.some(issue => issue.includes('未初期化'))) {
+                    updateProgress(30, 'PixelCanvas再初期化中...');
+                    await reinitializePixelCanvas();
+                }
+
+                updateProgress(50, 'データ再読み込み中...');
+                // データ強制再読み込み
+                if (window.pixelCanvas && window.pixelCanvas.pixelDataManager) {
+                    await window.pixelCanvas.pixelDataManager.forceReload();
+                }
+
+                updateProgress(70, 'レンダリング強制実行中...');
+                // 強制レンダリング
+                if (window.pixelCanvas) {
+                    window.pixelCanvas.render();
+                }
+
+                updateProgress(90, '検証中...');
+                // 修正結果確認
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                const success = await runComprehensiveAnalysis();
+
+                updateProgress(100, success ? '修正完了' : '修正失敗');
+                
+                if (success) {
+                    log('✅ 自動修正成功', 'success');
+                } else {
+                    log('❌ 自動修正失敗 - 手動介入が必要', 'issue');
+                }
+
+                return success;
+
+            } catch (error) {
+                log(`❌ 修正中エラー: ${error.message}`, 'critical');
+                return false;
+            } finally {
+                isFixing = false;
+                setTimeout(() => updateProgress(0, '待機中'), 2000);
+            }
+        }
+
+        // PixelCanvas再初期化
+        async function reinitializePixelCanvas() {
+            try {
+                if (window.pixelCanvasApp) {
+                    await window.pixelCanvasApp.reinitialize();
+                    log('🔄 PixelCanvas再初期化完了', 'success');
+                } else {
+                    // メインスクリプト再読み込み
+                    const script = document.createElement('script');
+                    script.type = 'module';
+                    script.src = 'main.js';
+                    document.head.appendChild(script);
+                    log('🔄 メインスクリプト再読み込み', 'info');
+                }
+            } catch (error) {
+                log(`❌ 再初期化エラー: ${error.message}`, 'issue');
+            }
+        }
+
+        // ピクセル描画テスト
+        async function testPixelDrawing() {
+            log('🎨 描画テストを開始...', 'info');
+
+            try {
+                const canvas = document.getElementById('mainCanvas');
+                if (!canvas) {
+                    log('❌ Canvas要素が見つかりません', 'issue');
+                    return false;
+                }
+
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    log('❌ Canvas Contextが取得できません', 'issue');
+                    return false;
+                }
+
+                // テスト描画
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(10, 10, 20, 20);
+                log('✅ テスト描画完了', 'success');
+
+                // ピクセルデータ確認
+                const imageData = ctx.getImageData(10, 10, 1, 1);
+                const hasData = imageData.data[0] > 0;
+                log(`📊 描画確認: ${hasData ? '成功' : '失敗'}`, hasData ? 'success' : 'issue');
+
+                return hasData;
+
+            } catch (error) {
+                log(`❌ 描画テストエラー: ${error.message}`, 'issue');
+                return false;
+            }
+        }
+
+        // 継続分析開始
+        function startContinuousAnalysis() {
+            if (analysisInterval) {
+                log('⚠️ 既に分析実行中です', 'warning');
+                return;
+            }
+
+            log('🚀 継続分析を開始します', 'info');
+            
+            // 初回実行
+            runComprehensiveAnalysis();
+            
+            // 30秒間隔で継続実行
+            analysisInterval = setInterval(() => {
+                runComprehensiveAnalysis();
+            }, 30000);
+        }
+
+        // 分析停止
+        function stopAnalysis() {
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+                analysisInterval = null;
+                log('⏹️ 継続分析を停止しました', 'info');
+            }
+        }
+
+        // 緊急修正実行
+        async function runEmergencyFix() {
+            log('🚨 緊急修正を開始します', 'critical');
+            
+            const mockIssues = ['PixelCanvas未初期化', 'データ未ロード'];
+            await attemptAutomaticFix(mockIssues);
+        }
+
+        // グローバル関数として公開
+        window.startContinuousAnalysis = startContinuousAnalysis;
+        window.stopAnalysis = stopAnalysis;
+        window.runEmergencyFix = runEmergencyFix;
+        window.testPixelDrawing = testPixelDrawing;
+        window.clearLog = clearLog;
+
+        // ページロード時に自動開始
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                log('🤖 自動修正システム起動', 'success');
+                startContinuousAnalysis();
+            }, 2000);
+        });
+
+    </script>
+</body>
+</html>
