@@ -284,7 +284,7 @@ export class PixelCanvasCore {
             }
             
             // ピクセル存在チェック
-            if (this.pixelDataManager.hasPixel(sectorX, sectorY, localX, localY)) {
+            if (this.pixelDataManager.getPixel(sectorX, sectorY, localX, localY) !== null) {
                 console.log('🎯 Pixel already exists at this position');
                 return;
             }

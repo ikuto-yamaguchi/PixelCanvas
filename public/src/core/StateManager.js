@@ -120,6 +120,34 @@ export class StateManager {
     getValue(path) {
         return this.core.getValue(path);
     }
+
+    /**
+     * 現在選択中の色を設定
+     */
+    setCurrentColor(colorIndex) {
+        return this.setValue('ui.currentColor', colorIndex, 'user');
+    }
+
+    /**
+     * 現在選択中の色を取得
+     */
+    getCurrentColor() {
+        return this.getValue('ui.currentColor') || 0;
+    }
+
+    /**
+     * 設定更新
+     */
+    updateConfig(newConfig) {
+        return this.setSectionState('config', newConfig, 'user');
+    }
+
+    /**
+     * セクション更新
+     */
+    updateSection(section, updates) {
+        return this.setSectionState(section, updates, 'user');
+    }
     
     /**
      * 変更リスナー追加

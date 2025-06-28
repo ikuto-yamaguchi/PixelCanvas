@@ -285,7 +285,7 @@ export class DebugManager {
      */
     clearCache() {
         if (this.pixelCanvasCore.pixelDataManager) {
-            this.pixelCanvasCore.pixelDataManager.clearCache();
+            this.pixelCanvasCore.pixelDataManager.optimizeCache();
             console.log('🔧 Cache cleared');
         }
     }
@@ -295,7 +295,7 @@ export class DebugManager {
      */
     resetViewport() {
         if (this.pixelCanvasCore.viewportManager) {
-            this.pixelCanvasCore.viewportManager.reset();
+            this.pixelCanvasCore.viewportManager.setViewport(0, 0, 1); // x=0, y=0, scale=1にリセット
             console.log('🔧 Viewport reset');
         }
     }

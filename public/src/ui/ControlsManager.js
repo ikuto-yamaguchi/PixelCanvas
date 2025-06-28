@@ -173,7 +173,7 @@ export class ControlsManager {
         // 状態管理に反映
         this.stateManager.updateSection('user', {
             preferences: {
-                ...this.stateManager.getState('user').preferences,
+                ...(this.stateManager.getSectionState('user')?.preferences || {}),
                 showGrid: this.isGridVisible
             }
         });
@@ -240,7 +240,7 @@ export class ControlsManager {
         }
         
         // 状態管理に反映
-        this.stateManager.updateConnection({ isOnline });
+        this.stateManager.setValue('connection.isOnline', isOnline);
         
         console.log(`🎮 Connection status: ${isOnline ? 'online' : 'offline'}`);
     }
@@ -403,10 +403,11 @@ export class ControlsManager {
      */
     triggerSave() {
         // 保存イベントを発火
-        this.stateManager.addNotification({
+        this.stateManager.setValue('ui.notification', {
             type: 'info',
             message: '保存中...',
-            duration: 2000
+            duration: 2000,
+            timestamp: Date.now()
         });
         
         // 実際の保存処理は他のコンポーネントで実行
@@ -417,10 +418,11 @@ export class ControlsManager {
      * 通知表示
      */
     showNotification(message, type = 'info', duration = 3000) {
-        this.stateManager.addNotification({
+        this.stateManager.setValue('ui.notification', {
             type,
             message,
-            duration
+            duration,
+            timestamp: Date.now()
         });
     }
     

@@ -42,9 +42,14 @@ export class RenderStrategy {
             this.availableRenderers.set(RenderMode.CANVAS2D, Canvas2DRenderer);
             
             // PixiJSレンダラー（オプション）
-            if (window.PIXI && CONFIG.ENABLE_PIXI) {
-                const { PixiRenderer } = await import('./PixiRenderer.js');
-                this.availableRenderers.set(RenderMode.PIXI, PixiRenderer);
+            if (window.PIXI && CONFIG.USE_PIXI_RENDERER) {
+                try {
+                    const { PixiRenderer } = await import('./PixiRenderer.js');
+                    this.availableRenderers.set(RenderMode.PIXI, PixiRenderer);
+                } catch (error) {
+                    console.warn('🎨 PixiRenderer not available:', error.message);
+                    // Canvas2Dのみ使用
+                }
             }
             
             // 最適なレンダラーを選択

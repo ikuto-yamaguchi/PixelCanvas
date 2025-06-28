@@ -31,6 +31,7 @@ export const CONFIG = {
     SECTOR_EXPANSION_THRESHOLD: 0.7, // 70% filled (reasonable threshold)
     
     // Debug settings
+    DEBUG_MODE: localStorage.getItem('pixelcanvas_debug') === 'true' || new URLSearchParams(window.location.search).get('debug') === 'true',
     MAX_DEBUG_LOGS: 200,
     
     // Viewport settings
