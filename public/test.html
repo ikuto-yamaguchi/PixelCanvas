@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>PixelCanvas Test - データ取得テスト</title>
+</head>
+<body>
+    <h1>PixelCanvas Data Test</h1>
+    <div id="results"></div>
+    <button onclick="testSupabaseAPI()">Test Supabase API</button>
+    <button onclick="testNetworkClient()">Test NetworkClient</button>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function log(message) {
+            console.log(message);
+            results.innerHTML += '<div>' + message + '</div>';
+        }
+        
+        // Supabase直接テスト
+        async function testSupabaseAPI() {
+            log('🔍 Testing Supabase API directly...');
+            
+            try {
+                const response = await fetch('https://lgvjdefkyeuvquzckkvb.supabase.co/rest/v1/pixels?select=sector_x,sector_y,local_x,local_y,color&limit=5', {
+                    headers: {
+                        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY',
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`✅ Supabase API Success: Received ${data.length} pixels`);
+                    log(`📊 First pixel: ${JSON.stringify(data[0])}`);
+                } else {
+                    log(`❌ Supabase API Error: ${response.status} ${response.statusText}`);
+                }
+            } catch (error) {
+                log(`❌ Supabase API Exception: ${error.message}`);
+            }
+        }
+        
+        // NetworkClient テスト
+        async function testNetworkClient() {
+            log('🔍 Testing NetworkClient...');
+            
+            try {
+                // Configをロード
+                const configModule = await import('./Config.js');
+                const CONFIG = configModule.CONFIG;
+                log(`✅ Config loaded`);
+                
+                // NetworkClientをロード
+                const networkClientModule = await import('./src/data/NetworkClient.js');
+                const NetworkClient = networkClientModule.NetworkClient;
+                log(`✅ NetworkClient class loaded`);
+                
+                // インスタンス作成
+                const client = new NetworkClient();
+                log(`✅ NetworkClient instance created`);
+                
+                // データ取得テスト
+                const pixels = await client.getPixelsBatch(0, 5);
+                log(`✅ NetworkClient test: Received ${pixels?.length || 0} pixels`);
+                if (pixels && pixels.length > 0) {
+                    log(`📊 First pixel from NetworkClient: ${JSON.stringify(pixels[0])}`);
+                }
+                
+            } catch (error) {
+                log(`❌ NetworkClient test failed: ${error.message}`);
+                log(`📝 Stack: ${error.stack}`);
+            }
+        }
+        
+        // 自動実行
+        window.addEventListener('load', () => {
+            log('🚀 Starting automatic tests...');
+            setTimeout(testSupabaseAPI, 1000);
+            setTimeout(testNetworkClient, 3000);
+        });
+    </script>
+</body>
+</html>
