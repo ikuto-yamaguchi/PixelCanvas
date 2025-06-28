@@ -108,7 +108,7 @@ export class PixelCanvasCore {
             
             // RenderStrategy初期化
             const { RenderStrategy } = await import('../render/RenderStrategy.js');
-            this.renderStrategy = new RenderStrategy(this.canvas, this.pixelDataManager);
+            this.renderStrategy = new RenderStrategy(this.canvas, this.pixelDataManager.core);
             await this.renderStrategy.initialize();
             
             // キャンバス設定
