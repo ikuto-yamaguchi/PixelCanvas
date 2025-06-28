@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelCanvas デプロイ版確認システム</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            margin: 0;
+            padding: 10px;
+            font-size: 11px;
+        }
+        .header {
+            background: #1a1a1a;
+            padding: 10px;
+            border: 2px solid #00ff00;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 16px;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            background: #111;
+            border: 2px solid #333;
+            padding: 12px;
+            border-radius: 5px;
+        }
+        .test-title {
+            color: #ffff00;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+        }
+        .status-pass { color: #44ff44; }
+        .status-fail { color: #ff4444; }
+        .status-warning { color: #ffaa44; }
+        .status-info { color: #4488ff; }
+        .result-log {
+            background: #000;
+            border: 1px solid #333;
+            padding: 10px;
+            height: 250px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 10px;
+            margin-bottom: 15px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #1a1a1a;
+            color: #00ff00;
+            border: 2px solid #333;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+            border-radius: 3px;
+        }
+        button:hover {
+            background: #333;
+            border-color: #00ff00;
+        }
+        .summary {
+            background: #1a1a1a;
+            border: 3px solid #666;
+            padding: 15px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .deploy-url {
+            background: #2a2a2a;
+            color: #00ffff;
+            padding: 8px;
+            border: 1px solid #00ffff;
+            text-align: center;
+            margin-bottom: 15px;
+            word-break: break-all;
+        }
+        .iframe-container {
+            border: 2px solid #333;
+            height: 400px;
+            margin-bottom: 15px;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 PixelCanvas デプロイ版確認システム</h1>
+        <div>GitHub Pages デプロイ版の動作確認と品質検証</div>
+    </div>
+
+    <div class="deploy-url">
+        <strong>デプロイURL:</strong> https://nikomori0320.github.io/pixcel_canvas/
+    </div>
+
+    <div class="test-grid">
+        <div class="test-section">
+            <div class="test-title">🌐 デプロイ状態</div>
+            <div id="deploy-results">確認中...</div>
+        </div>
+        <div class="test-section">
+            <div class="test-title">🎯 アプリ初期化</div>
+            <div id="init-results">待機中...</div>
+        </div>
+        <div class="test-section">
+            <div class="test-title">🎨 描画機能</div>
+            <div id="render-results">待機中...</div>
+        </div>
+        <div class="test-section">
+            <div class="test-title">📊 データベース</div>
+            <div id="data-results">待機中...</div>
+        </div>
+        <div class="test-section">
+            <div class="test-title">⚡ 性能測定</div>
+            <div id="performance-results">待機中...</div>
+        </div>
+        <div class="test-section">
+            <div class="test-title">🔧 修正推奨</div>
+            <div id="fix-results">待機中...</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="startFullCheck()">🚀 完全確認開始</button>
+        <button onclick="checkDeployStatus()">🌐 デプロイ状態確認</button>
+        <button onclick="testAppFunctionality()">🎯 機能テスト</button>
+        <button onclick="measurePerformance()">⚡ 性能測定</button>
+        <button onclick="generateFixReport()">🔧 修正レポート</button>
+        <button onclick="openDeployedApp()">📱 アプリを開く</button>
+        <button onclick="clearResults()">🗑️ クリア</button>
+    </div>
+
+    <div class="result-log" id="resultLog"></div>
+
+    <div class="summary" id="summary">
+        確認待機中...
+    </div>
+
+    <div class="iframe-container">
+        <iframe id="deployFrame" src="about:blank"></iframe>
+    </div>
+
+    <script>
+        const resultLog = document.getElementById('resultLog');
+        const summary = document.getElementById('summary');
+        
+        const deployResults = document.getElementById('deploy-results');
+        const initResults = document.getElementById('init-results');
+        const renderResults = document.getElementById('render-results');
+        const dataResults = document.getElementById('data-results');
+        const performanceResults = document.getElementById('performance-results');
+        const fixResults = document.getElementById('fix-results');
+
+        let checkResults = {
+            deploy: { status: 'pending', message: '' },
+            init: { status: 'pending', message: '' },
+            render: { status: 'pending', message: '' },
+            data: { status: 'pending', message: '' },
+            performance: { status: 'pending', message: '' },
+            fixes: []
+        };
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                'pass': '#44ff44',
+                'fail': '#ff4444',
+                'warning': '#ffaa44',
+                'info': '#4488ff'
+            };
+            
+            const color = colors[type] || '#00ff00';
+            resultLog.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}\\n</span>`;
+            resultLog.scrollTop = resultLog.scrollHeight;
+        }
+
+        function updateSummary() {
+            const total = Object.keys(checkResults).filter(k => k !== 'fixes').length;
+            const passed = Object.keys(checkResults).filter(k => k !== 'fixes' && checkResults[k].status === 'pass').length;
+            const failed = Object.keys(checkResults).filter(k => k !== 'fixes' && checkResults[k].status === 'fail').length;
+            
+            const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+            
+            summary.innerHTML = `
+                デプロイ版確認結果: ${passRate}% 成功 
+                (✅${passed} ❌${failed} 📋${checkResults.fixes.length}修正推奨)
+            `;
+            
+            if (passRate >= 80) summary.className = 'summary status-pass';
+            else if (passRate >= 60) summary.className = 'summary status-warning';
+            else summary.className = 'summary status-fail';
+        }
+
+        function clearResults() {
+            resultLog.innerHTML = '';
+            Object.keys(checkResults).forEach(key => {
+                if (key === 'fixes') {
+                    checkResults[key] = [];
+                } else {
+                    checkResults[key] = { status: 'pending', message: '' };
+                }
+            });
+            updateDisplay();
+            log('結果をクリアしました', 'info');
+        }
+
+        function updateDisplay() {
+            deployResults.innerHTML = formatResult(checkResults.deploy);
+            initResults.innerHTML = formatResult(checkResults.init);
+            renderResults.innerHTML = formatResult(checkResults.render);
+            dataResults.innerHTML = formatResult(checkResults.data);
+            performanceResults.innerHTML = formatResult(checkResults.performance);
+            fixResults.innerHTML = checkResults.fixes.length > 0 ? 
+                `<span class="status-warning">${checkResults.fixes.length}件の修正推奨</span>` : 
+                `<span class="status-pass">修正不要</span>`;
+            updateSummary();
+        }
+
+        function formatResult(result) {
+            const status = result.status;
+            const message = result.message || '確認中...';
+            
+            if (status === 'pass') return `<span class="status-pass">✅ ${message}</span>`;
+            if (status === 'fail') return `<span class="status-fail">❌ ${message}</span>`;
+            if (status === 'warning') return `<span class="status-warning">⚠️ ${message}</span>`;
+            return `<span class="status-info">🔄 ${message}</span>`;
+        }
+
+        // デプロイ状態確認
+        async function checkDeployStatus() {
+            log('🌐 デプロイ状態確認開始...', 'info');
+            
+            try {
+                const response = await fetch('https://nikomori0320.github.io/pixcel_canvas/');
+                
+                if (response.ok) {
+                    const html = await response.text();
+                    
+                    // HTML内容チェック
+                    if (html.includes('PixelCanvas') && html.includes('mainCanvas')) {
+                        checkResults.deploy = { status: 'pass', message: 'デプロイ成功' };
+                        log('✅ デプロイ状態: 正常', 'pass');
+                    } else {
+                        checkResults.deploy = { status: 'warning', message: '内容に問題' };
+                        log('⚠️ デプロイ状態: 内容に問題あり', 'warning');
+                    }
+                } else {
+                    checkResults.deploy = { status: 'fail', message: `HTTP ${response.status}` };
+                    log(`❌ デプロイ状態: HTTP ${response.status}`, 'fail');
+                }
+                
+            } catch (error) {
+                checkResults.deploy = { status: 'fail', message: 'アクセス不可' };
+                log(`❌ デプロイ確認エラー: ${error.message}`, 'fail');
+            }
+            
+            updateDisplay();
+        }
+
+        // アプリ機能テスト
+        async function testAppFunctionality() {
+            log('🎯 アプリ機能テスト開始...', 'info');
+            
+            // iframeでアプリを読み込んで確認
+            const iframe = document.getElementById('deployFrame');
+            iframe.src = 'https://nikomori0320.github.io/pixcel_canvas/';
+            
+            // 読み込み完了まで待機
+            await new Promise(resolve => {
+                iframe.onload = resolve;
+                setTimeout(resolve, 10000); // 10秒でタイムアウト
+            });
+            
+            try {
+                const iframeWindow = iframe.contentWindow;
+                const iframeDocument = iframe.contentDocument;
+                
+                // 基本要素の存在確認
+                const canvas = iframeDocument.getElementById('mainCanvas');
+                const controls = iframeDocument.getElementById('colorPalette');
+                
+                if (canvas && controls) {
+                    checkResults.init = { status: 'pass', message: 'UI要素正常' };
+                    log('✅ 初期化: UI要素確認完了', 'pass');
+                    
+                    // PixelCanvasインスタンス確認
+                    setTimeout(() => {
+                        try {
+                            const pixelCanvas = iframeWindow.pixelCanvas;
+                            if (pixelCanvas) {
+                                const stats = pixelCanvas.getStats();
+                                if (stats.initialized) {
+                                    checkResults.render = { status: 'pass', message: '描画システム動作' };
+                                    log('✅ 描画: システム正常動作', 'pass');
+                                } else {
+                                    checkResults.render = { status: 'warning', message: '初期化未完了' };
+                                    log('⚠️ 描画: 初期化が未完了', 'warning');
+                                }
+                            } else {
+                                checkResults.render = { status: 'fail', message: 'インスタンス未生成' };
+                                log('❌ 描画: PixelCanvasインスタンス未生成', 'fail');
+                            }
+                        } catch (error) {
+                            checkResults.render = { status: 'fail', message: 'アクセスエラー' };
+                            log(`❌ 描画確認エラー: ${error.message}`, 'fail');
+                        }
+                        updateDisplay();
+                    }, 3000);
+                    
+                } else {
+                    checkResults.init = { status: 'fail', message: 'UI要素不足' };
+                    log('❌ 初期化: 必要なUI要素が見つかりません', 'fail');
+                }
+                
+            } catch (error) {
+                checkResults.init = { status: 'fail', message: 'iframe アクセス不可' };
+                log(`❌ 機能テストエラー: ${error.message}`, 'fail');
+            }
+            
+            updateDisplay();
+        }
+
+        // データベース確認
+        async function checkDatabase() {
+            log('📊 データベース接続確認...', 'info');
+            
+            try {
+                const response = await fetch('https://lgvjdefkyeuvquzckkvb.supabase.co/rest/v1/pixels?select=count&limit=1', {
+                    headers: {
+                        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY',
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxndmpkZWZreWV1dnF1emNra3ZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MjMxNzEsImV4cCI6MjA2NTI5OTE3MX0.AqXyT6m78-O7X-ulzYdfBsLLMVsRoelpOUvPp9PCqiY'
+                    }
+                });
+                
+                if (response.ok) {
+                    checkResults.data = { status: 'pass', message: 'DB接続正常' };
+                    log('✅ データベース: 接続正常', 'pass');
+                } else {
+                    checkResults.data = { status: 'fail', message: `DB接続失敗 ${response.status}` };
+                    log(`❌ データベース: 接続失敗 ${response.status}`, 'fail');
+                }
+                
+            } catch (error) {
+                checkResults.data = { status: 'fail', message: 'DB接続エラー' };
+                log(`❌ データベースエラー: ${error.message}`, 'fail');
+            }
+            
+            updateDisplay();
+        }
+
+        // 性能測定
+        async function measurePerformance() {
+            log('⚡ 性能測定開始...', 'info');
+            
+            const startTime = performance.now();
+            
+            try {
+                // ページ読み込み時間測定
+                const response = await fetch('https://nikomori0320.github.io/pixcel_canvas/');
+                const endTime = performance.now();
+                const loadTime = endTime - startTime;
+                
+                if (loadTime < 3000) {
+                    checkResults.performance = { status: 'pass', message: `読み込み ${loadTime.toFixed(0)}ms` };
+                    log(`✅ 性能: 読み込み時間 ${loadTime.toFixed(0)}ms (良好)`, 'pass');
+                } else if (loadTime < 5000) {
+                    checkResults.performance = { status: 'warning', message: `読み込み ${loadTime.toFixed(0)}ms` };
+                    log(`⚠️ 性能: 読み込み時間 ${loadTime.toFixed(0)}ms (普通)`, 'warning');
+                } else {
+                    checkResults.performance = { status: 'fail', message: `読み込み ${loadTime.toFixed(0)}ms` };
+                    log(`❌ 性能: 読み込み時間 ${loadTime.toFixed(0)}ms (遅い)`, 'fail');
+                }
+                
+            } catch (error) {
+                checkResults.performance = { status: 'fail', message: '測定失敗' };
+                log(`❌ 性能測定エラー: ${error.message}`, 'fail');
+            }
+            
+            updateDisplay();
+        }
+
+        // 修正レポート生成
+        function generateFixReport() {
+            log('🔧 修正レポート生成中...', 'info');
+            
+            checkResults.fixes = [];
+            
+            // 各結果から修正推奨項目を抽出
+            if (checkResults.deploy.status === 'fail') {
+                checkResults.fixes.push('デプロイの再実行が必要');
+            }
+            
+            if (checkResults.init.status === 'fail') {
+                checkResults.fixes.push('アプリ初期化処理の見直し');
+            }
+            
+            if (checkResults.render.status === 'fail') {
+                checkResults.fixes.push('描画システムの修正');
+            }
+            
+            if (checkResults.data.status === 'fail') {
+                checkResults.fixes.push('データベース接続の確認');
+            }
+            
+            if (checkResults.performance.status === 'fail') {
+                checkResults.fixes.push('性能最適化の実施');
+            }
+            
+            log(`📋 修正レポート: ${checkResults.fixes.length}件の推奨事項`, 'info');
+            checkResults.fixes.forEach((fix, index) => {
+                log(`  ${index + 1}. ${fix}`, 'warning');
+            });
+            
+            updateDisplay();
+        }
+
+        // 完全確認実行
+        async function startFullCheck() {
+            log('🚀 完全確認開始...', 'info');
+            
+            clearResults();
+            
+            await checkDeployStatus();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testAppFunctionality();
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            await checkDatabase();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await measurePerformance();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            generateFixReport();
+            
+            log('✅ 完全確認完了', 'pass');
+        }
+
+        // デプロイ版アプリを開く
+        function openDeployedApp() {
+            window.open('https://nikomori0320.github.io/pixcel_canvas/', '_blank');
+            log('📱 デプロイ版アプリを新しいタブで開きました', 'info');
+        }
+
+        // 初期化
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                log('🔄 デプロイ版確認システム初期化完了', 'info');
+                updateDisplay();
+            }, 1000);
+        });
+
+    </script>
+</body>
+</html>
